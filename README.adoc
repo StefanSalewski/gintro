@@ -1,16 +1,21 @@
+= High level GTK3 bindings for the Nim programming language
+(c) Stefan Salewski                                     
+Version 0.1 2017     
 :experimental:
 :imagesdir: http://ssalewski.de/tmp
 :source-highlighter: pygments
+:pygments-style: monokai
+:icons: font
+
+:GIR: GObject-Introspection
 
 (c) Stefan Salewski +
 2017
 
-= High level GTK3 bindings for the Nim programming language
-
 NOTE: This work is partly based on earlier works of J. Mansour and has been supported by A. Rumpf and other Nim and GTK/Gnome developers.
 The combinatorics module was kindly provided by R. Behrends.
 
-This repository contains bindings from the Nim programming language to the GTK3 GUI library and related libraries. (With minimal fixes
+icon:thumbs-up[] This repository contains bindings from the Nim programming language to the GTK3 GUI library and related libraries. (With minimal fixes
 it should also work for upcoming GTK4.)
 
 https://nim-lang.org/[Nim] is a modern universal programming language.
