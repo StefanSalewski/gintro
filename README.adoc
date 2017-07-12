@@ -17,24 +17,24 @@ NOTE: This work is partly based on earlier works of _J. Mansour_ and has been su
 The `combinatorics` module was kindly provided by _R. Behrends_.
 
 //icon:thumbs-up[]
-This repository contains bindings from the _Nim_ programming language to the _GTK3_ GUI (Graphical User Interface) library and related libraries. (With minimal fixes
+This repository contains bindings from the _Nim_ programming language to the _GTK3_ _GUI_ (_Graphical User Interface_) library and related libraries. (With minimal fixes
 it should also work for upcoming _GTK4_.)
 
 https://nim-lang.org/[Nim] is a modern universal programming language.
 
 https://www.gtk.org/[GTK], also known as the _Gimp Tool Kit_ and now sometimes also called _Gnome Tool Kit_, is a _Graphical User Interface_ library.
 
-NOTE: Later we will insert at this location a nice picture of a fancy Nim GTK3 GUI. Such a picture is fine to attract users and indeed is a good motivation.
-But such pictures are no real evidence for the quality of a GUI toolkit -- the concrete example may look nice, while the toolkit
+NOTE: Later we will insert at this location a nice picture of a fancy _Nim GTK3 GUI_. Such a picture is fine to attract users and indeed is a good motivation.
+But such pictures are no real evidence for the quality of a _GUI_ toolkit -- the concrete example may look nice, while the toolkit
 looks much worse in other environments and offers by far not all that what is needed in real life. 
 
-While _GTK_ was initially designed and advertised as cross platform GUI toolkit, it is currently mostly used on _Linux_ and other _Unix_ like operation systems.
+While _GTK_ was initially designed and advertised as cross platform _GUI_ toolkit, it is currently mostly used on _Linux_ and other _Unix_ like operation systems.
 Most _Linux_ distributions include it, and some use it for their default desktop environment, often with the _Gnome_ environment or other window managers.
 While _GTK2_ applications like _GIMP_ are still used on _Windows_, there seems to exist currently only very few _GTK3_ applications for _Windows_ or _{MAC}_.
-When you develop primary _free open source software_ (FOSS) for _Linux_ or other _Unix_ like operating systems, then _GTK3_ is a good choice for you. With some 
+When you develop primary _free open source software_ (_FOSS_) for _Linux_ or other _Unix_ like operating systems, then _GTK3_ is a good choice for you. With some 
 effort you should be even able to port your application to the proprietary _Windows_ or _{MAC}_ operating systems. But when your primary target platforms
 are _Windows_ and _{MAC}_ and you desire a real native look and feel there, then you may find better suited ones in the _Nim_ software repository.
-Also, when you only need a minimal restricted GUI which is very easy to install on _Windows_ and _{MAC}_, then you may find better suited packages
+Also, when you only need a minimal restricted _GUI_ which is very easy to install on _Windows_ and _{MAC}_, then you may find better suited packages
 in the _Nim_ package repository. _Android OS_ is currently not supported by _GTK_ at all.  
 
 While low level _Nim_ bindings for _GTK3_ are already available since a few years, this one is an attempt to
@@ -160,7 +160,7 @@ it not really easy for beginners to start with _GTK_. _API_ docs and some basic 
 
 TIP: If you should decide to continue developing software with _GTK_, then you may consider installing the so called
 `devhelp` tool. It gives you easy and fast access to the _GTK API_ docs. For example, if you want to use a _Button Widget_ in your
-GUI and wants to learn more about related functions and signals, you just enter _Button_ in that tool and are guided to
+_GUI_ and wants to learn more about related functions and signals, you just enter _Button_ in that tool and are guided to
 all the relevant information. 
 
 We start with a minimal traditional old style example, which should be familiar to most of us:
@@ -252,10 +252,13 @@ window.defaultSize = (width: 200, height: 200) # <6>
 <5> tupel assignment
 <6> tupel assignment with named members
 
-Well, that empty window is really not very interesting. The _GTK_ and _Gnome_ team provides some _GTK_ examples at https://developer.gnome.org/gnome-devel-demos/.
-The https://developer.gnome.org/gnome-devel-demos/3.22/c.html.en[C demos] seems to be most actual and complete, and are easy to port to _Nim_. So we start with these,
-but if you are familiar with the other listed languages, then you can try to port them to _Nim_ as well. Let us start with https://developer.gnome.org/gnome-devel-demos/3.22/button.c.html.en
--- it is still short and easy to understand, but shows already some interesting topics.
+Well, that empty window is really not very interesting. The _GTK_ and _Gnome_ team provides some _GTK_ examples
+at https://developer.gnome.org/gnome-devel-demos/.
+The https://developer.gnome.org/gnome-devel-demos/3.22/c.html.en[C demos] seems to be most actual and complete,
+and are easy to port to _Nim_. So we start with these,
+but if you are familiar with the other listed languages, then you can try to port them to _Nim_ as well.
+Let us start with https://developer.gnome.org/gnome-devel-demos/3.22/button.c.html.en -- it is
+still short and easy to understand, but shows already some interesting topics.
 
 image::NimGTK3Button.png[]
 
