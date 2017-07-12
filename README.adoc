@@ -1,0 +1,494 @@
+:experimental:
+:imagesdir: http://ssalewski.de/tmp
+:source-highlighter: pygments
+
+(c) Stefan Salewski +
+2017
+
+= High level GTK3 bindings for the Nim programming language
+
+NOTE: This work is partly based on earlier works of J. Mansour and has been supported by A. Rumpf and other Nim and GTK/Gnome developers.
+The combinatorics module was kindly provided by R. Behrends.
+
+This repository contains bindings from the Nim programming language to the GTK3 GUI library and related libraries. (With minimal fixes
+it should also work for upcoming GTK4.)
+
+https://nim-lang.org/[Nim] is a modern universal programming language.
+
+https://www.gtk.org/[GTK], also known as the Gimp Tool Kit and now sometimes also called Gnome Tool Kit, is a Graphical User Interface library.
+
+NOTE: Later we will insert at this location a nice picture of a fancy Nim GTK3 GUI. Such a picture is fine to attract users and indeed is a good motivation.
+But such pictures are no real evidence for the quality of a GUI toolkit -- the concrete example may look nice, while the toolkit
+looks much worse in other environments and offers by far not all that what is needed in real life. 
+
+While GTK was initially designed and advertised as cross platform GUI toolkit, it is currently mostly used on Linux and other Unix like operation systems.
+Most Linux distributions include it, and some use it for their default desktop environment, often with the Gnome environment or other window managers.
+While GTK2 applications like GIMP are still used on Windows, there seems to exist currently only very few GTK3 applications for Windows or MacOS.
+When you develop primary free open source software for Linux or other Unix like Operating Systems, then GTK3 is a good choice for you. With some 
+effort you should be even able to port your application to the proprietary Windows or MacOS operating systems. But when your primary target platforms
+are Windows and MacOS and you desire a real native look and feel there, then you may find better suited ones in the Nim software repository.
+Also, when you only need a minimal restricted GUI which is very easy to install on Windows and MacOSX, then you may find better suited packages
+in the Nim package repository. Android OS is currently not supported by GTK at all.  
+
+While low level Nim bindings for GTK3 are already available since a few years, this one is an attempt to
+provide real high level bindings with full type safety, full Garbage Collector (GC) support and an idiomatic
+application interface.
+
+The low level bindings available at https://github.com/ngtk3 where generated with the Nim tool c2nim directly from the C header files, are already tested
+with some applications (https://github.com/ngtk3/NEd[NEd Nim Editor], https://github.com/StefanSalewski/nim-chess3[Chess Game])
+and generally work fine. Indeed missing Garbage Collector support is generally not really a problem, as widgets are generally
+put into containers and were automatically deleted together with its parents due to GTK's reference counting.
+
+Still there can be some demand for really high level bindings -- so this repository tries to provide them.
+
+High level GTK3 bindings, as available for many other programming languages like Python, Ruby or D already,
+would have these advantages:
+
+* full Garbage Collector support -- you should never have to free resources manually
+* Widgets are Nim objects, so inheritance and sub-classing can be used
+* full type safety -- no needs for casts or other unsafe and dangerous operations
+
+These high level bindings are based on GObject-Inrospection, an XML based database like interface description. Compared to the C header
+files this description gives us more and deeper information about data types and function calls, for example ownership transfer of objects and
+in or out direction of procedure variables,  which makes writing the glue code much easier.
+And it should work with no or minimal
+modifications also for the upcoming GTK4.
+
+Unfortunately there are also some drawbacks:
+
+* The Application Programmer Interface (API) will be different from what is known from C API, so using C examples or C tutorials is not really straight forward 
+* The high level source code will differ from available C examples, so there would be a big demand for tutorials
+* We need a lot of glue code, which has much room for bugs. So much testing is necessary.
+* There is some overhead due to indirect calls, leading to some code size increase and minimal
+performance loss.
+
+NOTE: The new package name is "gintro", short for GObject-Introspection. The previous name was nim-gi, but the hyphen is deprecated for package names, as is the
+nim prefix.
+
+== Current state of these bindings
+
+We are still in an early stage, but it is already more than a proof of concept. GTK and related libraries have many thousand of
+callable functions and nearly as many data types. Testing all that is nearly impossible for a small team with limited resources.
+The initial approach was to generate low level
+bindings, which looked similar to the ones generated by the c2nim tool from the C headers. After that was done, we have associated all
+the C structs and GObject data types with Nim proxy objects. A well defined relation between these proxy object and the low level C data types
+should ensure fully automatic garbage collection. This is supported by smart type conversion, for example C strings returned by glib library
+are assigned to newly created Nim strings, while the memory of the C strings is automatically freed. For most cases this seems to work. But there
+exists a few more complicated cases, for example functions may return whole arrays of C strings or other non elementary data types,
+or function arguments or results may be so called glists,
+list structures of glib library. These cases can not be processed automatically but needs carefully manual investigations. And there may be still functions and data
+types missing: GObject Introspection query gives us many thousand lines of Nim interface code, and it is not really obvious if and what is missing.
+Some functions and data types are missing for sure -- at least some low level ones, which are considered unneeded for high level bindings by GObject-Introspection.
+But maybe more is missing, we have to investigate that. Until now these bindings have been tested only for 64 bit Linux systems with GTK 3.22.
+
+These basic libraries are already partly tested:
+
+* GLib
+* GObject
+* GModule
+* xlib
+* Gio
+* Atk
+* Pango
+* cairo
+* GdkPixbuf
+* Rsvg
+* Gdk
+* Gtk
+
+In best case it should be possible to add more GObject based libraries to this list without larger modifications of the generator source code.
+Unfortunately the cairo bindings provided by GObject-Introspectin are only a minimal stub -- later we will have to extend it manually.  
+
+== How to try it out
+
+Of course you will need a working Nim installation with a recent compiler version and you have to ensure that GTK and related libraries are installed on your system. For some Linux
+distributions which provide mainly pre-compiled software you may have to also install some GTK related developer files. 
+
+This package now supports the nimble package manager, so ideally a plain "nimble install gintro" should do. But as this package does not
+only provide some plain text files, but uses GObject-Introspection database query on your local computer to generate
+binding files exactly matching your system, that does not work currently. We have to download the files, compile and execute
+the gen.nim generator program and finally to install the generates binding modules on your computer as a nimble package.
+
+These instructions should be enough  for that:
+
+----
+cd /tmp
+git clone https://github.com/stefansalewski/gintro
+cd gintro
+nimble prepare
+nimble install
+----
+
+NOTE: Nimble prepare should run for about 20 seconds, it compiles and executes the generator program gen.nim.
+Unfortunately we can not guarantee that the generator command  will be able to really build all the
+desired modules. The built process highly depends on your OS and installed GTK version. For 64 bit Linux systems
+with GTK 3.22 and all required dependencies installed it should work. For never GTK versions it may fail, when that GTK
+release introduces for example new unknown data types like array containers. In that case manual fixes may be necessary.
+The GObject Introspection based built process generates bindings customized to the OS where the generator is executed,
+so for older GTK releases or a 32 bit system different files are created. Later we may also provide pre-generated
+files for various OS and GTK versions, but building locally is preferred when possible. 
+
+Now you can built app0 and launch it:
+
+----
+cd /tmp/gintro/examples/
+nim c app0.nim
+./app0
+----
+
+== A few basic examples
+
+GTK3 programs can use still the old GTK2 design, where you first initialize the GTK library, create your widgets and finally enter the GTK main loop.
+This style is still used in many tutorials as in http://zetcode.com/gui/gtk2/[Zetcode tutorial] or in the GTK book of Andrew Krause.
+Or you can use the new GTK3 App style, this is generally recommended by newer original GTK documentation.
+Unfortunately the GTK3 original documentation is mostly restricted to the GTK3 API documentation, which is generally very good, but makes
+it not very easy for beginners to start with GTK. API docs and some basic introduction is available here:
+
+* https://www.gnome.org/
+* https://www.gtk.org/
+* https://developer.gnome.org/
+* https://developer.gnome.org/gtk3/stable/
+* https://developer.gnome.org/gtk3/stable/ch01s04.html#id-1.2.3.12.5
+* https://developer.gnome.org/gnome-devel-demos/stable/c.html.en
+
+TIP: If you should decide to continue developing software with GTK, then you should consider installing the so called
+devhelp tool. It gives you easy and fast access to the API docs. For example, if you want to use a Button Widget in your
+GUI and wants to learn more about related functions and signals, you just enter "Button" in that tool and are guided to
+all the relevant information. 
+
+We start with a minimal traditional old style example, which should be familiar to most of us:
+
+[source,nim]
+----
+# nim c t0.nim
+import gtk
+
+proc bye(w: Window) =
+  mainQuit()
+  echo "Bye..."
+
+proc main =
+  gtk.init()
+  let window = newWindow()
+  window.title = "First Test"
+  window.connect("destroy", bye)
+  window.showAll
+  gtk.main()
+
+main()
+----
+
+This is the traditional layout of GTK2 programs. When using this style then it is important to initialize the GTK library by calling gtk.init()
+at the very beginning. Then we create the desired widgets, connect signals, show all widgets and finally enter the GTK main loop
+by calling gtk.main. About connecting signals we will learn more soon, for now it is only important that we have to connect to
+the destroy signal here to enable the user to terminate program execution by clicking the window close button. 
+
+Now a really minimal but complete App style example, which displays an empty window.
+
+NOTE: The source text of all these examples is contained in the examples directory. Unfortunately github
+seems to not allow to include that sources directly into this document, so there may be minimal
+differences between the source code displayed here and the sources in examples directory.
+
+[source,nim]
+----
+# app0.nim -- minimal application style example
+# nim c app0.nim
+import gtk
+import gio except Application, newApplication # we want to use GTK application
+#from gio import ApplicationFlags, scActivate, run
+
+proc activate(app: Application) =
+  let window = newApplicationWindow(app)
+  window.title = "GTK3 & Nim"
+  window.defaultSize = (200, 200)
+  showAll(window)
+
+proc main =
+  let app = newApplication("org.gtk.example")
+  connect(app, "activate", activate)
+  discard run(app)
+
+main()
+----
+
+In the main proc we create a new application and connect the activate signal to our activate proc, which then creates and displays
+the still empty window. For this program we need the gtk module and also some procs and types from gio module. As both modules
+have a data type called Application (gtk extends indeed the gio.Application) we can either qualify the Application data type and its new proc
+with gtk prefix, or as we did here, exclude that from gio imports. Another solution would be to import from gio only what is really needed. 
+The source code of this  minimal example is stored in the examples directory, you may cd into it and type "nim c app0.nim" to create
+the executable. (Well not yet, as we provide no real nimble install. Copy app0.nim to nim_gi directory where the bindings live, or
+create symlinks for now.)
+
+Various ways to set widget parameters are supported -- the number 1 to 6 refer to the comment below:
+
+//. Setting widget parameters
+[source,nim]
+----
+setDefaultSize(window, 200, 200) # <1>
+gtk.setDefaultSize(window, 200, 200) # <2>
+window.setDefaultSize(200, 200) # <3>
+window.setDefaultSize(width = 200, height = 200) # <4>
+window.defaultSize = (200, 200) # <5>
+window.defaultSize = (width: 200, height: 200) # <6>
+----
+
+<1> proc call syntax
+<2> optional qualified with module name prefix
+<3> method call syntax
+<4> named parameters
+<5> tupel assignment
+<6> tupel assignment with named members
+
+Well, that empty window is really not very interesting. The GTK and Gnome team provides some GTK examples at https://developer.gnome.org/gnome-devel-demos/.
+The https://developer.gnome.org/gnome-devel-demos/3.22/c.html.en[C demos] seems to be most actual and complete, and are easy to port to Nim. So we start with these,
+but if you are familiar with the other listed languages, then you can try to port them to Nim as well. Let us start with https://developer.gnome.org/gnome-devel-demos/3.22/button.c.html.en
+-- it is still short and easy to understand, but shows already some interesting topics.
+
+image::NimGTK3Button.png[]
+
+The C code looks like this:
+
+[source,c]
+----
+#include <gtk/gtk.h>
+
+/*This is the callback function. It is a handler function which 
+reacts to the signal. In this case, it will cause the button label's 
+string to reverse.*/
+static void
+button_clicked (GtkButton *button,
+                gpointer   user_data)
+{
+  const char *old_label;
+  char *new_label;
+
+  old_label = gtk_button_get_label (button);
+  new_label = g_utf8_strreverse (old_label, -1);
+
+  gtk_button_set_label (button, new_label);
+  g_free (new_label);
+}
+
+static void
+activate (GtkApplication *app,
+          gpointer        user_data)
+{
+  GtkWidget *window;
+  GtkWidget *button;
+
+  /*Create a window with a title and a default size*/
+  window = gtk_application_window_new (app);
+  gtk_window_set_title (GTK_WINDOW (window), "GNOME Button");
+  gtk_window_set_default_size (GTK_WINDOW (window), 250, 50);
+
+  /*Create a button with a label, and add it to the window*/
+  button = gtk_button_new_with_label ("Click Me");
+  gtk_container_add (GTK_CONTAINER (window), button);
+
+  /*Connecting the clicked signal to the callback function*/
+  g_signal_connect (GTK_BUTTON (button),
+                    "clicked", 
+                    G_CALLBACK (button_clicked), 
+                    G_OBJECT (window));
+
+  gtk_widget_show_all (window);
+}
+
+int
+main (int argc, char **argv)
+{
+  GtkApplication *app;
+  int status;
+
+  app = gtk_application_new ("org.gtk.example", G_APPLICATION_FLAGS_NONE);
+  g_signal_connect (app, "activate", G_CALLBACK (activate), NULL);
+  status = g_application_run (G_APPLICATION (app), argc, argv);
+  g_object_unref (app);
+
+  return status;
+}
+
+----
+
+Converting it to Nim is straight forward with some basic C and Nim knowledge, and Nim does not force us
+to convert its shape into all the classes known from pure object orientated languages. We can either use the
+Nim tool c2nim to help us with the conversion, or do it manually. Indeed c2nim can be very helpful by
+converting C sources to Nim. Most of the time it works well. Personally I generally pre-process C files, for example
+by removing too strange macros and defines, or by replacing strange constructs, like C for loops, to simpler
+ones like while loops. Then I apply c2nim to the C file and finally manually compare the result line by line and
+fine tune the Nim code. But for this short source text we may do all that manually and finally get something like
+this:
+
+[source,nim]
+----
+# nim c button.nim
+import gtk, glib
+import gio except Application, newApplication
+
+proc buttonClicked (button: Button) =
+  button.label = utf8Strreverse(button.label, -1)
+
+proc activate (app: Application) =
+  let window = newApplicationWindow(app)
+  window.title = "GNOME Button"
+  window.defaultSize = (250, 50)
+  let button = newButton("Click Me")
+  window.add(button)
+  button.connect("clicked",  buttonClicked)
+  window.showAll
+
+proc main =
+  let app = newApplication("org.gtk.example")
+  connect(app, "activate", activate)
+  discard app.run
+
+main()
+----
+
+Again we have the basic shape already known from app0.nim example: Main proc creates the application, connect
+to the activate signal and finally runs the application. When GTK launches the application and emits the activate signal, then
+our activate proc is called, which creates a main window containing a button widget. That button is again connected with a
+signal, in this case named clicked. That signal is emitted by GTK whenever that button is clicked with the mouse and results
+in a call of our provided buttonClicked() proc. The procs connected to signals are called callbacks and generally got the widget
+on which the signal was emitted as first parameter. They can also get a second optional parameter of arbitrary type -- we will
+see that in a later example. This callback here gets only the button itself as parameter, and it's task is to reverse the
+text displayed by the button. Not very interesting basically, but we are indeed using the glib function utf8Strreverse()
+for this task. While that function internally works with cstrings, and in C we have to free the memory of the returned cstring,
+in our Nim example that is done automatically by Nim's Garbage Collector. When you compare our example carefully with the C code,
+then you may notice a difference. The C code passes the window containing the button as an additional parameter to the
+callback function, but that parameter is not really used. We simple ignore it here, as it is not used at all.
+//and I assume that passing a widget in this way in our nim code
+//may not work already currently. Fortunately widgets as optional parameter are not often needed, and we will try to make that
+//working soon...
+In one of the following examples you will learn how passing (nearly) arbitrary parameters in a type safe way is done.  
+Another difference is, that  the C code returns an integer status value returned by g_application_run() to the OS. We
+could do the same by using the quit() proc of Nim's OS module, but as that would give us no additional benefit, we simply ignore it.
+
+TIP: The command nim c sourcetext.nim generates an executable which contains code for runtime checks and debugging,
+which increases executable size and decreases performance.
+After you have tested your software carefully, you may give the additional parameter -d:release to avoid this. For the gcc backend
+you may additional enable link time optimization (LTO), which reduces executable size further. To enable LTO. you may put
+a nim.cfg file in your sources directory with content like
+
+----
+path:"$projectdir"
+nimcache:"/tmp/$projectdir"
+gcc.options.speed = "-march=native -O3 -flto -fstrict-aliasing"
+----   
+
+With that optimization, your executable sizes should be in the range of about 50 kilobyte only!
+
+=== Optional, type safe parameters for callbacks
+
+The next example shows, how we can pass (nearly) arbitrary parameters to our connect procs.
+We pass a string, an object from the stack, a reference to an object allocated on the heap
+and finally a widget (in this case the application window itself, you may also try passing
+another button). As the main window itself is a so called GTK bin and can contain only one
+child widget, we create a container widget, a vertical box in this case, fill that box with
+some buttons, and add that button to the window.
+
+Compile and start this example from the command line and watch what
+happens when you click on the buttons.
+
+[source,nim]
+----
+# nim c connect_args.nim
+import gtk, glib
+import gio except Application, newApplication
+
+type
+  O = object
+    i: int
+
+proc b1Callback(button: Button; str: string) =
+  echo str
+
+proc b2Callback(button: Button; o: O) =
+  echo "Value of field i in object o = ", o.i
+
+proc b3Callback(button: Button; r: ref O) =
+  echo "Value of field i in ref to object O = ", r.i
+
+proc b4Callback(button: Button; w: ApplicationWindow) =
+  if w.title == "Nim with GTK3":
+    w.title = "GTK3 with Nim"
+  else:
+    w.title = "Nim with GTK3"
+
+proc activate (app: Application) =
+  var o: O
+  var r: ref O
+  new r
+  o.i = 1234567
+  r.i = 7654321
+  let window = newApplicationWindow(app)
+  let box = newBox(Orientation.vertical, 0)
+  window.title = "Parameters for callbacks"
+  let b1 = newButton("Nim with GTK3")
+  let b2 = newButton("Passing an object from stack")
+  let b3 = newButton("Passing an object from heap")
+  let b4 = newButton("Passing a Widget")
+  b1.connect("clicked",  b1Callback, "is much fun.")
+  b2.connect("clicked",  b2Callback, o)
+  b3.connect("clicked",  b3Callback, r)
+  b4.connect("clicked",  b4Callback, window)
+  box.add(b1)
+  box.add(b2)
+  box.add(b3)
+  box.add(b4)
+  window.add(box)
+  window.showAll
+
+proc main =
+  let app = newApplication("org.gtk.example")
+  connect(app, "activate", activate)
+  discard app.run
+
+main()
+----
+
+To prove type safety, we may modify one of the callback procs and watch the compiler output:
+
+[source,c]
+----
+proc b1Callback(button: Button; str: int) =
+  discard # echo str
+----
+
+----
+connect_args.nim(37, 5) template/generic instantiation from here
+gtk.nim(-15021, 10) Error: type mismatch: got (ref Button:ObjectType, string)
+but expected one of: 
+proc b1Callback(button: Button; str: int)
+----
+
+It may be not always really obvious what the compiler wants to tell us, but at least we
+are told that it got a string and expected an int.
+
+Currently the connect function is realized by a Nim type safe macro. Connect accepts two or three
+arguments -- the widget, the signal name and the optional argument. When the optional argument
+is a ref (reference to objects on the heap) then it is passed as a reference, otherwise a deep copy
+of the argument is passed. For the above code this means, that r and the window are passed
+as references, while the string and the stack object are deep copied. Currently it is not possible
+to release the memory of passed arguments again. This should be no real problem, as in most
+cases no arguments are passed at all, and when arguments are passed, then they are general
+small in size like plain numbers or strings, or maybe references to widgets which could not be freed
+at all, as they are part of the GUI. Later we may add more variants of that connect macro.
+
+NOTE: Navigation can be hard for beginners. You may have basic knowledge of GTK and want
+to build a GUI for your application. But how to find what you need. Well, we offer no separate 
+automatically generated API documentation currently, as that is not really helpful. In most cases
+it is easy to just guess Nim symbol names, proc parameters and all that. Using a smart editor
+with good nimsuggest support further supports navigation -- for example NEd shows us
+all the needed proc parameters when we move the cursor on a proc name, or we press CTRL-W and jump
+to the definition of that symbol. For unknown stuff the original C function name is often a good starting point.
+Assume you don't know much about GTK's buttons, but you know that you want to have a Button in 
+your GUI application. GTK generally offers generator functions containing the string "new" in their name.
+So it is easy to guess that there exists a C function named "gtk_button_new". That name is also
+contained in the bindings files, in this case in gtk.nim. So we open that file in a text editor and search for
+that term. So it is really easy to find first starting points for related procs and data types. Most data types
+are located near by their related functions, so you should be able to find all relevant information fast.
+Remember the GTK devhelp tool, and use also grep or the nim-grep variant.
+
+NOTE: Related work: https://github.com/jdmansour/nim-smartgi
+
