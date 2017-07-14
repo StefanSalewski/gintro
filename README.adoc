@@ -32,7 +32,7 @@ looks much worse in other environments and offers by far not all that what is ne
 
 While GTK was initially designed and advertised as cross platform GUI toolkit, it is currently mostly used on _Linux_ and other _Unix_ like operation systems.
 Most Linux distributions include it, and some use it for their default desktop environment, often with the Gnome environment or other window managers.
-While GTK2 applications like _GIMP_ are still used on _Windows_, there seems to exist currently only very few GTK3 applications for Windows or {MAC}.
+While GTK2 applications like _GIMP_ are still used on _Windows_, there seems to exist currently only very few GTK3 applications for Windows or _{MAC}_.
 When you develop primary _free open source software_ (_FOSS_) for Linux or other Unix like operating systems, then GTK3 is a good choice for you. With some 
 effort you should be even able to port your application to the proprietary Windows or {MAC} operating systems. But when your primary target platforms
 are Windows and {MAC} and you desire a real native look and feel there, then you may find better suited ones in the Nim software repository.
@@ -87,7 +87,7 @@ exists a few more complicated cases, for example functions may return whole arra
 or function arguments or results may be so called _glists_,
 list structures of `glib` library. These cases can not be processed automatically but needs carefully manual investigations. And there may be still functions and data
 types missing: {GIR} query gives us many thousand lines of Nim interface code, and it is not really obvious if and what is missing.
-Some functions and data types are missing for sure -- at least some low level ones, which are considered unneeded for high level bindings by _{GIR}_.
+Some functions and data types are missing for sure -- at least some low level ones, which are considered unneeded for high level bindings by {GIR}.
 But maybe more is missing, we have to investigate that. Until now these bindings have been tested only for 64 bit Linux systems with GTK 3.22.
 
 These basic libraries are already partly tested:
@@ -147,7 +147,7 @@ nim c app0.nim
 
 == A few basic examples
 
-GTK3 programs can use still the old GTK2 design, where you first initialize the GTK library, create your widgets and finally enter the GTK main loop.
+GTK3 programs can use still the old _GTK2_ design, where you first initialize the GTK library, create your widgets and finally enter the GTK main loop.
 This style is still used in many tutorials as in http://zetcode.com/gui/gtk2/[Zetcode tutorial] or in the GTK book of A. Krause.
 Or you can use the new _GTK3 App style_, this is generally recommended by newer original GTK documentation.
 Unfortunately the GTK3 original documentation is mostly restricted to the GTK3 API documentation, which is generally very good, but makes
@@ -513,6 +513,57 @@ contained in the bindings files, in this case in `gtk.nim`. So we open that file
 that term. So it is really easy to find first starting points for related procs and data types. Most data types
 are located near by their related functions, so you should be able to find all relevant information fast.
 Remember the GTK `devhelp` tool, and use also `grep` or the `nimgrep` variant.
+
+== Extending or sub-classing Widgets
+
+I may occur that we want to attach additional information to GTK widgets
+by extending or subclassing them. Doing this is supported
+by providing for each widget class not only a corresponding new() proc which returns 
+the newly created widget, but also
+a init() proc, which gets an uninitialized variable of the (extended) widget type as argument and
+initializes that variable with a newly created
+GTK widget . Initializing the added fields is
+done separately by the user. The following code shows a GTK button, which is
+extended with a counter member field. That counter is decreased for
+each button click. The amount of decrease (5) is passed to the callback as a int parameter.
+
+[[count_button.nim]]
+[source,nim]
+.count_button.nim
+----
+# nim c count_button.nim
+import gintro/[gtk, glib]
+import gintro/gio except Application, newApplication
+
+type
+  CountButton = ref object of Button
+    counter: int
+
+proc buttonClicked (button: CountButton; decrement: int) =
+  dec(button.counter, decrement)
+  button.label = "Counter: " & $button.counter 
+  echo "Counter is now: ", button.counter
+
+proc activate (app: Application) =
+  var button: CountButton
+  let window = newApplicationWindow(app)
+  window.title = "Count Button"
+  initButton(button, "Counting down from 100 by 5")
+  button.counter = 100
+  window.add(button)
+  button.connect("clicked",  buttonClicked, 5)
+  window.showAll
+
+proc main =
+  let app = newApplication("org.gtk.example")
+  connect(app, "activate", activate)
+  discard app.run
+
+main()
+----
+
+In this example we have to define our new widget type first, then we have to
+declare a variable of that type and pass that variable to the init() proc. 
 
 NOTE: Related work: https://github.com/jdmansour/nim-smartgi
 
