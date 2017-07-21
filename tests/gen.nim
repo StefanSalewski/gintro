@@ -1,5 +1,5 @@
 # High level gobject-introspection based GTK3 bindings for the Nim programming language
-# v 0.1 2017-JUL-12
+# v 0.1 2017-JUL-21
 # (c) S. Salewski 2017
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -108,6 +108,8 @@ var fixedProcNames = newTable[string, string]()
 var mangledNames = newTable[string, string]()
 var gdkKeys = newTable[string, seq[string]]()
 var allSyms: HashSet[string]
+var provInt = newTable[string, seq[string]]()
+var interfaceProvider = newTable[string, seq[string]]()
 var priList: seq[string]
 var knownSyms: HashSet[string]
 var suppressType = false
@@ -352,6 +354,17 @@ proc genP(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil): (str
     if  callerAlloc.contains(genRec(t, true, true)):
       userAlloc = true
       str = genRec(t, true)
+
+    if genProxy:
+      let tag = gTypeInfoGetTag(t)
+      if tag == GITypeTag.INTERFACE:
+        let iface = gTypeInfoGetInterface(t)
+        if gBaseInfoGetType(iface) == GIInfoType.INTERFACE:
+          if interfaceProvider.contains(str):
+            let provider = interfaceProvider[str]
+            for i in provider: discard mangleType(i)
+            str = str & " | " & provider.join(" | ")
+
     let name = mangleName(gBaseInfoGetName(arg))
     if isProxyCandidate(t) and not gArgInfoIsCallerAllocates(arg) and not userAlloc:
       arglist.add("cast[" & genRec(t, false) & "](" & name & ".impl)")
@@ -385,7 +398,7 @@ proc genP(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil): (str
         resul.add("\n    ")
   if not genProxy and gCallableInfoCanThrowGerror(info):
     if resul[^1] != '(': resul.add("; ")
-    resul.add("error: GError = nil")
+    resul.add("error: ptr ptr Error00 = nil")
   resul.add(')')
   arglist.add(')')
   var ret = gCallableInfoGetReturnType(info)
@@ -412,6 +425,7 @@ proc genP(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil): (str
 proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
   assert(isCallableInfo(mInfo))
   assert(isFunctionInfo(mInfo))
+
   var plist, arglist: string
   var replist: TableRef[string, string]
   let p = methodBuffer.getPosition
@@ -464,6 +478,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
           if gBaseInfoGetType(iface) == GIInfoType.Object:
             isGObject = true
         (plist, arglist, replist) = genP(mInfo, true, info)
+
         if (gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) != 0:
           if info != nil:
             asym = asym.replace("new", "new" & manglename(gBaseInfoGetName(info)))
@@ -478,6 +493,9 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
               hhh = hhh.replace("new", "init")
               hhh = hhh.replace("*(", "*[T](result: var T" & semi)
             methodBuffer.writeLine(hhh & " =")
+            if gCallableInfoCanThrowGerror(minfo):
+              methodBuffer.writeLine("  var gerror: ptr Error00")
+              if i == 0: arglist.insert(", addr gerror", arglist.high)
             if i > 0:
               methodBuffer.writeLine("  assert(result is $1)" % [manglename(gBaseInfoGetName(info))])
             assert(replist.len == 0)
@@ -503,6 +521,9 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
           if info != nil:
             asym = asym.replace("new", "new" & manglename(gBaseInfoGetName(info)))
           methodBuffer.writeLine("\nproc " & asym & EM & plist & " =")
+          if gCallableInfoCanThrowGerror(minfo):
+            methodBuffer.writeLine("  var gerror: ptr Error00")
+            arglist.insert(", addr gerror", arglist.high)
           for k, v in replist:
             let kk = if k[0] == '`': k[1 .. ^2] else: k
             methodBuffer.writeLine("  var $1_00 = $2($3)" % [kk, v, k])
@@ -533,6 +554,9 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
           if asym == "newFromStreamAsync" and sym.contains("gdk_pixbuf_animation_new"):
             asym = "newAnimationFromStreamAsync"
           methodBuffer.writeLine("\nproc " & asym & EM & plist & " =")
+          if gCallableInfoCanThrowGerror(minfo):
+            methodBuffer.writeLine("  var gerror: ptr Error00")
+            arglist.insert(", addr gerror", arglist.high)
           for k, v in replist:
             let kk = if k[0] == '`': k[1 .. ^2] else: k
             methodBuffer.writeLine("  var $1_00 = $2($3)" % [kk, v, k])
@@ -543,7 +567,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
             assert(gCallableInfoGetCallerOwns(minfo) in {GITransfer.EVERYTHING, GITransfer.NOTHING})
             if gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING:
               methodBuffer.writeLine("  cogfree(resul0)")
-          elif replist.len > 0 and genRec(ret2) != "void":
+          elif (replist.len > 0 or gCallableInfoCanThrowGerror(minfo)) and genRec(ret2) != "void":
             methodBuffer.write("  result = ")
             if ct2nt.contains(genRec(ret2)):
               methodBuffer.writeLine(ct3nt(genRec(ret2)) & '('  & sym & arglist & ')')
@@ -555,7 +579,14 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
             methodBuffer.writeLine("  " & sym & arglist)
           for k, v in replist:
             let kk = if k[0] == '`': k[1 .. ^2] else: k
-            methodBuffer.writeLine("  $1 = $2($3_00)" % [k, ct3nt(v), kk]) 
+            methodBuffer.writeLine("  $1 = $2($3_00)" % [k, ct3nt(v), kk])
+
+        if gCallableInfoCanThrowGerror(minfo):
+          methodBuffer.writeLine("  if gerror != nil:")
+          methodBuffer.writeLine("    let msg = $gerror.message")
+          methodBuffer.writeLine("    g_error_free(gerror)")
+          methodBuffer.writeLine("    raise newException(GException, msg)")
+
       else:
         (plist, arglist, replist) = genP(mInfo, genProxy, info)
         if asym != "errorQuark" and asym != "getPlugin" and asym != "quark":
@@ -564,9 +595,9 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
     if sym == "gtk_window_set_default_size":
       methodBuffer.writeLine("\nproc `defaultSize=`*(self: Window; dim: tuple[width: int; height: int]) =")
       methodBuffer.writeLine("  gtk_window_set_default_size(cast[ptr Window00](self.impl), int32(dim[0]), int32(dim[1]))")
-
   except UndefEx:
-    echo "delay ", sym
+    echo "delay ", sym#, delayedMethods.len
+    processedFunctions.excl(sym)
     delayedMethods.add((info, minfo))
     methodBuffer.cut(p)
 
@@ -687,6 +718,15 @@ proc writeEnum(info: GIEnumInfo) =
 
 proc writeObj(info: GIObjectInfo) =
   assert(gBaseInfoGetType(info) == GIInfoType.OBJECT)
+
+  let ninterfaces = info.gObjectInfoGetNInterfaces
+  #if ninterfaces > 0:
+  #  stdout.write "||| ", gBaseInfoGetName(info), " has ", ninterfaces, " interf: "
+  # for i in 0 .. < ninterfaces:
+  #    stdout.write " ", gBaseInfoGetName(info.gObjectInfoGetInterface(i)), ","
+  #  stdout.writeLine("")
+  #  stdout.flushFile
+
   let class = gObjectInfoGetClassStruct(info)
   let n = info.gObjectInfoGetNFields
   let parent = gObjectInfoGetParent(info) # nil for Object of module gobject!
@@ -759,9 +799,9 @@ proc writeObj(info: GIObjectInfo) =
     ###output.writeLine("    echo \"GC_unref(cast[RootRef](data)\"")
     ###output.writeLine("  echo \"toggleNotify\"")
     ###output.writeLine("  echo obj.ref_count")
-    methodBuffer.writeLine("\nproc finalizeGObject*[T](o: T) =")
+    output.writeLine("\nproc finalizeGObject*[T](o: T) =")
     ###methodBuffer.writeLine("  echo(\"finalizeGObject\")")
-    methodBuffer.writeLine("  g_object_remove_toggle_ref(o.impl, toggleNotify, addr(o[]))")
+    output.writeLine("  g_object_remove_toggle_ref(o.impl, toggleNotify, addr(o[]))")
 
   let numsig = info.gObjectInfoGetNSignals
   if numsig > 0: output.writeLine("")
@@ -897,6 +937,9 @@ proc init* =
   var argv: cstringArray = nil
   gtk_init(argc,  argv)
 
+proc loadFromData*(self: CssProvider; data: cstring): bool =
+  loadFromData(self, uint8Array(data), -1)
+
 import macros, strutils
 
 var ProcID: int
@@ -961,6 +1004,8 @@ proc main(namespace: string) =
   ct = initCountTable[string]()
   var delayedSyms = newSeq[GIBaseInfo]()
   allSyms = initSet[string]()
+  provInt.clear
+  interfaceProvider.clear
   var ig = initSet[string]()
   knownSyms = initSet[string]()
   let gi = gIrepositoryGetDefault()
@@ -1008,7 +1053,7 @@ proc main(namespace: string) =
     output.writeLine("type\n  VaClosureMarshal* = pointer")
     output.writeLine("type\n  TypePlugin00* = object")
   elif namespace == "GLib":
-    output.writeLine("type\n  GError* = pointer")
+    output.writeLine("type\n  GException* = object of Exception")
     output.writeLine("type\n  OptionEntry00Array* = pointer")
     output.writeLine("type\n  int8Array* = pointer")
     output.writeLine("type\n  uintArray* = pointer")
@@ -1091,6 +1136,36 @@ proc main(namespace: string) =
   for i in s:
     if gBaseInfoGetType(i) == GIInfoType.OBJECT or gBaseInfoGetType(i) == GIInfoType.INTERFACE or gBaseInfoGetType(i) == GIInfoType.STRUCT or  gBaseInfoGetType(i) == GIInfoType.UNION or   isEnumInfo(i) or isCallbackInfo(i):
       allSyms.incl(mangleName(gBaseInfoGetName(i)))
+
+  for i in 0 .. s.high:
+    if namespace == "GLib" and gBaseInfoGetType(s[i]) == GIInfoType.STRUCT and gBaseInfoGetName(s[i]) == "Error":
+      let h = s[i]
+      s.delete(i, i)
+      s.insert([h])
+      break
+
+  for info in s:
+    if gBaseInfoGetType(info) == GIInfoType.OBJECT:
+      let ninterfaces = info.gObjectInfoGetNInterfaces
+      if ninterfaces > 0:
+        var interf = newSeq[string]()
+        let name = $gBaseInfoGetName(info)
+
+        for i in 0 .. < ninterfaces:
+          interf.add($gBaseInfoGetName(info.gObjectInfoGetInterface(i)))
+
+        if provInt.contains(name):
+          assert false
+        else:
+          provInt[name] = interf
+
+  for obj, ifaces in provInt:
+    for i in ifaces:
+      if not interfaceProvider.contains(i):
+        interfaceProvider[i] = @[obj]
+      else:
+        interfaceProvider[i].add(obj)
+
   if namespace == "Gdk": # special care for gdk keys due to nim's style insensitivity!
     for i in s:
       var h = $gBaseInfoGetName(i)
@@ -1173,6 +1248,7 @@ proc main(namespace: string) =
               for k in t:
                 knownSyms.excl(mangleName(gBaseInfoGetName(k)))
               output.setPosition(pos)
+              assert delayedMethods.len >= x
               delayedMethods.setLen(x)
           suppressType = false
 

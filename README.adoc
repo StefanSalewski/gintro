@@ -563,7 +563,84 @@ main()
 ----
 
 In this example we have to define our new widget type first, then we have to
-declare a variable of that type and pass that variable to the init() proc. 
+declare a variable of that type and pass that variable to the init() proc.
+
+== CSS styles, GErrors and Exceptions
+
+image::NimGTK3Label.png[]
+
+Often GTK beginners ask how one can apply custom styles to GTK widgets, for example custom colors.
+While in most cases the use of custom colors gives just ugly results, as the custom colors generally do
+not match well with the default color scheme, it is good to know how we can do it. For GTK3 styles are
+applied to widgets by using _Cascading Style Sheets_ (_CSS_). You may find C example code similar to this:
+
+[[label.c]]
+[source,c]
+.label.c
+----
+// https://stackoverflow.com/questions/30791670/how-to-style-a-gtklabel-with-css
+// gcc `pkg-config gtk+-3.0 --cflags` test.c -o test `pkg-config --libs gtk+-3.0`
+#include <gtk/gtk.h>
+int main(int argc, char *argv[]) {
+    gtk_init(&argc, &argv);
+    GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    GtkWidget *label = gtk_label_new("Label");
+    GtkCssProvider *cssProvider = gtk_css_provider_new();
+    char *data = "label {color: green;}";
+    gtk_css_provider_load_from_data(cssProvider, data, -1, NULL);
+    gtk_style_context_add_provider(gtk_widget_get_style_context(window),
+                                   GTK_STYLE_PROVIDER(cssProvider),
+                                   GTK_STYLE_PROVIDER_PRIORITY_USER);
+    g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
+    gtk_container_add(GTK_CONTAINER(window), label);
+    gtk_widget_show_all(window);
+    gtk_main();
+}
+----
+
+Converting that to Nim is again straight forward:
+
+[[label.nim]]
+[source,nim]
+.label.nim
+----
+# nim c label.nim
+import gintro/[gtk, glib]
+import gintro/gio except Application, newApplication
+
+proc activate(app: Application) =
+  let window = newApplicationWindow(app)
+  let label = newLabel("Yellow text on green background")
+  let cssProvider = newCssProvider()
+  let data = "label {color: yellow; background: green;}"
+  #discard cssProvider.loadFromPath("doesnotexist")
+  discard cssProvider.loadFromData(data)
+  let styleContext = label.getStyleContext
+  assert styleContext != nil
+  addProvider(styleContext, cssProvider, STYLE_PROVIDER_PRIORITY_USER)
+  window.add(label)
+  showAll(window)
+
+proc main =
+  let app = newApplication("org.gtk.example")
+  connect(app, "activate", activate)
+  discard run(app)
+
+main()
+----
+
+For this example we create a plain label widget with some text. To colorize it, we generate a
+CssProvider and load it with a textual description of of our desired colors. Then we extract the
+style context from the label and add our CssProvider to it.
+
+The last parameter of the _C_ function gtk_css_provider_load_from_data() is of type GError and can
+be used in _C_ code to detect runtime errors. The _C_ code above just passes NULL to ignore this error.
+For Nim we map that GError argument to _exceptions_. To test what happens in Nim when an GError would
+report an error condition, you may uncomment  function loadFromPath() in the code above. As the specified path
+does not exist, we should get an exeption with a message telling us the problem. Of course in your real
+code you may catch such exceptions with Nim's `try:` blocks. (You may also modify the data variable above to
+an illegal CSS statement -- if the statement is seriously wrong, then you should get an exception from
+loadFromData().
 
 NOTE: Related work: https://github.com/jdmansour/nim-smartgi
 
