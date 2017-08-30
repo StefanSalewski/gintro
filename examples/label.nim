@@ -1,5 +1,5 @@
 # nim c label.nim
-import gintro/[gtk, glib]
+import gintro/[gtk, glib, gobject]
 import gintro/gio except Application, newApplication
 
 proc activate(app: Application) =

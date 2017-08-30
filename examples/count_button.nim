@@ -1,5 +1,5 @@
 # nim c count_button.nim
-import gintro/[gtk, glib]
+import gintro/[gtk, glib, gobject]
 import gintro/gio except Application, newApplication
 
 type
