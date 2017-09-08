@@ -642,5 +642,67 @@ code you may catch such exceptions with Nim's `try:` blocks. (You may also modif
 an illegal CSS statement -- if the statement is seriously wrong, then you should get an exception from
 loadFromData().
 
+== Drawing with Cairo graphics library
+
+The next example shows how we can use the cairo graphics library for drawing on a DrawingArea widget,
+and at the same time uses glib timeoutAdd() function to create a timer which periodically calls the
+drawing function to create some animations. The code is based on a recent post to the cairo mailing list
+and shows a sine wave which is continuously moving to the left.
+
+NOTE: The gobject-introspection generated cairo module was only a minimal stub, because cairo
+library does not really support introspection. Now we are using a cairo module which is generated 
+directly from the cairo C header files with the tool c2nim and then modified to support an high level
+API. That modification is still work in progress, so not all cairo functionality is available already. 
+
+[[cairo_anim.nim]]
+[source,nim]
+.cairo_anim.nim
+----
+# nim c cairo_anim.nim
+# https://lists.cairographics.org/archives/cairo/2016-October/027791.html
+# Nim version of that plain cairo animation example
+
+import gintro/[gtk, glib, gobject, gio, cairo]
+import math
+
+const
+  NumPoints = 1000
+  Period = 100.0
+
+proc invalidateCb(w: Widget): bool =
+  queueDraw(w)
+  return SOURCE_CONTINUE
+
+proc sineToPoint(x, width, height: int): float =
+  math.sin(x.float * math.TAU / Period) * height.float * 0.5 + height.float * 0.5
+
+proc drawingAreaDrawCb(widget: DrawingArea; context: Context): bool =
+  var redrawNumber {.global.} : int
+  let width = getAllocatedWidth(widget)
+  let height = getAllocatedHeight(widget)
+  for i in 1 .. < NumPoints:
+    context.lineTo(i.float , sineToPoint(i + redrawNumber, width, height))
+  context.stroke
+  inc(redrawNumber)
+  return true # TRUE to stop other handlers from being invoked for the event. FALSE to propagate the event further.
+
+proc activate(app: Application) =
+  let window = newApplicationWindow(app)
+  window.title = "Drawing example"
+  window.defaultSize = (400, 400)
+  let drawingArea = newDrawingArea()
+  window.add(drawingArea)
+  showAll(window)
+  discard timeoutAdd(1000 div 60, invalidateCb, drawingArea)
+  connect(drawingArea, "draw", drawingAreaDrawCb)
+
+proc main =
+  let app = newApplication("org.gtk.example")
+  connect(app, "activate", activate)
+  discard run(app)
+
+main()
+----
+
 NOTE: Related work: https://github.com/jdmansour/nim-smartgi
 

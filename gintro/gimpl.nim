@@ -26,14 +26,12 @@ proc findSignal(name, obj: NimNode): string =
         n = getType(n)[1]
 
 var ProcID: int
-
-macro mconnect(widget: gobject.Object; signal: string; p: untyped; arg: typed; ignoreArg: bool): typed =
+#
+macro mconnect(widget: gobject.Object; signal: string; p: untyped; arg: typed; ignoreArg: bool): untyped =
   inc(ProcID)
   let wt = getType(widget)
-  #echo "@@@", $(getTypeInst(widget).toStrLit)
   let at = getTypeInst(arg)
   let wts = ($(wt[1].toStrLit)).replace(":ObjectType")
-  #echo wts
   let ats = $at.toStrLit
   let signalName = ($signal).replace("-", "_") # maybe we should just use plain proc names
   let procNameCdecl = "connect_for_signal_cdecl_" & signalName & $ProcID
@@ -53,14 +51,12 @@ proc $1$2 {.cdecl.} =
     r1s.add(")\n")
   else:
     (sn, wid, num, ahl, all) = sci.split("|")
-    #echo ahl, all
     var resl: string
     if ahl.contains("): "):
       resl = all.rsplit("): ", 1)[1]
     var resu = "  $3(cast[$4](h)"
     if all.find(";") > 0:
       var largs = all.split("; ")
-      #if largs.len > 0:
       largs.delete(0)
       largs[^1] = largs[^1].split(")")[0] 
       var names, types: array[10, string]
@@ -76,7 +72,6 @@ proc $1$2 {.cdecl.} =
           if h.len > 0:
             a1 = h & "(" & a1 & ")"
           plainArgs.add(a1)
-      #var resu = "  $3(cast[$4](h)"
       for i in 0 .. 9:
         if names[i].isNil: break
         resu.add(", " & names[i] & "1")
@@ -93,27 +88,23 @@ proc $1$2 {.cdecl.} =
     r1s.add(resu & "\n")
     all = all.replace(")", "; data: pointer)")
   r1s = r1s % [$procNameCdecl, all, $p, wts, ats]
-  #echo r1s
   result = parseStmt(r1s)
   if not ignoreArg.boolVal:
     ahl = ahl.replace(")", "; arg: " & ats & ")")
-  #echo ahl
   if ahl.find(";") > 0:
     ahl = "(self: " & wts & ";" & ahl.split(";", 1)[1]
   else:
     ahl = "(self: " & wts & ")" & ahl.split(")", 1)[1]
-    #ahl = "(self: " & wts & ")"
-
   let r2s =
     if ignoreArg.boolVal:
       """
-proc $1(self: $2;  p: proc $3) =
+proc $1(self: $2;  p: proc $3): culong {.discardable.} =
   sc$4(self, $5, nil)
 $1($6, $7)
 """ % [$procName, wts, ahl, signalName,  $procNameCdecl, $(widget.toStrLit), $p]
     else:
       """
-proc $1(self: $2;  p: proc $3; a: $4) =
+proc $1(self: $2;  p: proc $3; a: $4): culong {.discardable.} =
   when a is RootRef:
     GC_ref(a)
     sc$5(self, $6, cast[pointer](a))
@@ -125,13 +116,71 @@ proc $1(self: $2;  p: proc $3; a: $4) =
     sc$5(self, $6, cast[pointer](ar[]))
 $1($7, $8, $9)
 """ % [$procName, wts,  ahl, ats, signalName,  $procNameCdecl, $(widget.toStrLit), $p, $(arg.toStrLit)]
-  #echo r2s
   result.add(parseStmt(r2s))
 
-template connect*(widget: gobject.Object; signal: string; p: untyped; arg: typed): typed =
+template connect*(widget: gobject.Object; signal: string; p: untyped; arg: typed): untyped =
   mconnect(widget, signal, p, arg, false)
 
-template connect*(widget: gobject.Object; signal: string; p: untyped): typed =
+template connect*(widget: gobject.Object; signal: string; p: untyped): untyped =
   mconnect(widget, signal, p, "", true)
 
+var TimeoutID: int
+#
+macro timeoutAdd*(interval: Natural; p: untyped; arg: typed): untyped =
+  inc(TimeoutID)
+  let ats = $getTypeInst(arg).toStrLit
+  let procName = "timeoutfunc_" & $TimeoutID
+  let procNameCdecl = "timeoutfunc_cdecl_" & $TimeoutID
+  var r1s = """
+proc $1(p: pointer): gboolean {.cdecl.} =
+  let a = cast[$3](p)
+  result = $2(a).gboolean
+  #when (a is ref object) or (a is seq):
+  GC_unref(a)
+""" % [$procNameCdecl, $p, ats]
+ 
+  let r2s ="""
+proc $1(a: $2): culong {.discardable.} =
+  when (a is ref object) or (a is seq):
+    GC_ref(a)
+    return g_timeout_add_full(PRIORITY_DEFAULT, $3, $4, cast[pointer](a), nil)
+  else:
+    var ar: ref $2
+    new(ar)
+    deepCopy(ar[], a)
+    GC_ref(ar)
+    return g_timeout_add_full(PRIORITY_DEFAULT, $3, $4, cast[pointer](ar), nil)
+$1($5)
+""" % [$procName, ats, $interval.toStrLit, $procNameCdecl, $arg]
+  result = parseStmt(r1s & r2s)
+
+var IdleID: int
+#
+macro idleAdd*(p: untyped; arg: typed): untyped =
+  inc(IdleID)
+  let ats = $getTypeInst(arg).toStrLit
+  let procName = "idlefunc_" & $IdleID
+  let procNameCdecl = "idlefunc_cdecl_" & $IdleID
+  var r1s = """
+proc $1(p: pointer): gboolean {.cdecl.} =
+  let a = cast[$3](p)
+  result = $2(a).gboolean
+  #when (a is ref object) or (a is seq):
+  GC_unref(a)
+""" % [$procNameCdecl, $p, ats]
+ 
+  let r2s ="""
+proc $1(a: $2): culong {.discardable.} =
+  when (a is ref object) or (a is seq):
+    GC_ref(a)
+    return g_idle_add_full(PRIORITY_DEFAULT_IDLE, $3, cast[pointer](a), nil)
+  else:
+    var ar: ref $2
+    new(ar)
+    deepCopy(ar[], a)
+    GC_ref(ar)
+    return g_idle_add_full(PRIORITY_DEFAULT_IDLE, $3, cast[pointer](ar[]), nil)
+$1($4)
+""" % [$procName, ats, $procNameCdecl, $arg]
+  result = parseStmt(r1s & r2s)
 
