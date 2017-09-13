@@ -1,5 +1,5 @@
 # High level gobject-introspection based GTK3 bindings for the Nim programming language
-# v 0.2 2017-SEP-08
+# v 0.2 2017-SEP-13
 # (c) S. Salewski 2017
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -200,6 +200,7 @@ gtk.TextIter
 pango.Weight
 gdk.Rectangle
 gtk.AccelKey
+gtksource.RegionIter
 gtk.TextAttributes
 gobject.Value
 gobject.SignalQuery
@@ -289,7 +290,6 @@ proc genRec(t: GITypeInfo; genProxy = false; fullQualified: bool = false): strin
   result = mangleType(result)
   if p and (not proxyResult):# or callerAlloc.contains(result)):
     result = "ptr " & result
-  var xxx = result
   result = mangleType(result) & rawmark
 
 proc isProxyCandidate(t: GITypeInfo): bool =
@@ -368,6 +368,10 @@ proc genP(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil): (str
     if gArgInfoIsCallerAllocates(arg):
       callerAllocCollector.incl(genRec(t, true, true))
     var str = genRec(t, genProxy and not gArgInfoIsCallerAllocates(arg))
+
+    if (sym.startsWith("gtk_widget_set_events") or sym.startsWith("gtk_widget_add_events")) and str == "int32":
+      str = "gdk.EventMask"
+
     if isSignalInfo(info) and isProxyCandidate(t) and not genProxy:
       str.insert("ptr ")
     var userAlloc: bool
@@ -567,6 +571,35 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
                 methodBuffer.writeLine("    g_object_unref(result.impl)")
                 methodBuffer.writeLine("    assert(g_object_get_qdata(result.impl, Quark) == nil)")
                 methodBuffer.writeLine("    g_object_set_qdata(result.impl, Quark, addr(result[]))")
+            elif gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING:
+              if sym == "g_closure_new_simple": 
+                let nMethods = gStructInfoGetNMethods(info)
+                for j in 0 .. <nMethods:
+                  echo "yes there is unref method! ", $gBaseInfoGetName(gStructInfoGetMethod(info, j))
+                #assert(gStructInfoFindMethod(info, "unref") != nil) # TODO GI bug?
+              assert info != nil
+              var freeMe: GIFunctionInfo
+              if gBaseInfoGetType(info) == GIInfoType.UNION:
+                freeMe = gUnionInfoFindMethod(info, "free")
+                if freeMe.isNil:
+                  freeMe = gUnionInfoFindMethod(info, "unref")
+              else:
+                assert gBaseInfoGetType(info) == GIInfoType.STRUCT
+                freeMe = gStructInfoFindMethod(info, "free")
+                if freeMe.isNil:
+                  freeMe = gStructInfoFindMethod(info, "unref")
+              var freeMeName: string
+              if freeMe == nil:
+                echo "Caution: No free/unref found for ", ' ', " (", sym, ')' # Mostly missing cairo functions...
+              else:
+                freeMeName = $gBaseInfoGetName(freeMe)
+              if sym == "g_closure_new_simple" or sym == "g_closure_new_object": freeMeName = "unref" # TODO GI bug?
+              assert(gCallableInfoGetCallerOwns(minfo) in {GITransfer.EVERYTHING, GITransfer.NOTHING})
+              if freeMeName.isNil:
+                methodBuffer.writeLine("  new(result)")
+              else:
+                methodBuffer.writeLine("  new(result, $1)" % freeMeName)
+              methodBuffer.writeLine("  result.impl = " & sym & arglist)
             else:
               methodBuffer.writeLine("  new(result)")
               methodBuffer.writeLine("  result.impl = " & sym & arglist)
@@ -576,7 +609,6 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
         elif isProxyCandidate(ret2):
           if info != nil:
             asym = asym.replace("new", "new" & manglename(gBaseInfoGetName(info)))
-            #asym = asym.replace("get", "get" & manglename(gBaseInfoGetName(info)))
           if fixedProcNames.contains(sym):
             asym = fixedProcNames[sym]
           methodBuffer.writeLine("\nproc " & asym & EM & plist & " =")
@@ -603,6 +635,33 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
               methodBuffer.writeLine("    g_object_unref(result.impl)")
               methodBuffer.writeLine("    assert(g_object_get_qdata(result.impl, Quark) == nil)")
               methodBuffer.writeLine("    g_object_set_qdata(result.impl, Quark, addr(result[]))")
+          elif gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING:
+            let tag = gTypeInfoGetTag(ret2)
+            assert tag == GITypeTag.INTERFACE
+            var iface = gTypeInfoGetInterface(ret2)
+            if gBaseInfoGetType(iface) == GIInfoType.INTERFACE:
+              iface = gInterfaceInfoGetIfaceStruct(iface)
+              methodBuffer.writeLine("  new(result, gobject.genericGObjectUnref)")
+              methodBuffer.writeLine("  result.impl = " & sym & arglist)
+            else:
+              #if gBaseInfoGetType(iface) == GIInfoType.Struct:
+              let nMethods = gStructInfoGetNMethods(iface)
+              var freeMeName: string
+              for j in 0 .. <nMethods:
+                let h = $gBaseInfoGetName(gStructInfoGetMethod(iface, j))
+                if h.endsWith("free"):
+                  freeMeName = "free"
+                  break
+                elif h.endsWith("unref"):
+                  freeMeName = "unref"
+                  break
+              if freeMeName.isNil:
+                # assert false # TODO we have to fix this case manually
+                echo "Caution: No free/unref found for ", ' ', gBaseInfoGetName(iface), " (", sym, ')'
+                methodBuffer.writeLine("  new(result)")
+              else:
+                methodBuffer.writeLine("  new(result, $1)" % freeMeName)
+              methodBuffer.writeLine("  result.impl = " & sym & arglist)
           else:
             methodBuffer.writeLine("  new(result)")
             methodBuffer.writeLine("  result.impl = " & sym & arglist)
@@ -652,6 +711,11 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
     if sym == "gtk_window_set_default_size":
       methodBuffer.writeLine("\nproc `defaultSize=`*(self: Window; dim: tuple[width: int; height: int]) =")
       methodBuffer.writeLine("  gtk_window_set_default_size(cast[ptr Window00](self.impl), int32(dim[0]), int32(dim[1]))")
+
+    if sym == "g_object_unref":
+      methodBuffer.writeLine("\nproc genericGObjectUnref*[T](self: T) =")
+      methodBuffer.writeLine("  g_object_unref(cast[ptr Object00](self.impl))")
+
   except UndefEx:
     echo "delay ", sym#, delayedMethods.len
     processedFunctions.excl(sym)
@@ -676,15 +740,27 @@ proc writeUnion(info: GIUnionInfo) =
     output.writeLine("  SomeEvent* = Event | EventButton | EventMotion | EventTouch | EventScroll | EventCrossing | EventTouchpadSwipe | EventTouchpadPinch")
 
   let nMethods = gUnionInfoGetNMethods(info)
+  #for j in 0 .. <nMethods:
+  #  let mInfo =  gUnionInfoGetMethod(info, j)
+  #  writeMethod(info, minfo)
+
+  var mseq = newSeq[GIFunctionInfo]()
+  var freePos = -1
   for j in 0 .. <nMethods:
-    let mInfo =  gUnionInfoGetMethod(info, j)
+    mseq.add(gUnionInfoGetMethod(info, j))
+    if freePos < 0 and gBaseInfoGetName(gUnionInfoGetMethod(info, j)) == "free":
+      freePos = j
+    if freePos < 0 and gBaseInfoGetName(gUnionInfoGetMethod(info, j)) == "unref":
+      freePos = j
+  if freePos > 0: swap(mseq[0], mseq[freePos])
+  for mInfo in mseq:
     writeMethod(info, minfo)
 
 proc writeStruct(info: GIStructInfo) =
   if not suppressType:
     output.writeLine("type")
   if callerAlloc.contains(($gBaseInfoGetNamespace(info)).toLowerAscii & '.' & mangleName(gBaseInfoGetName(info))):
-    output.writeLine("  ", mangleName(gBaseInfoGetName(info)) & EM & " {.pure, byCopy.} = object")
+    output.writeLine("  ", mangleName(gBaseInfoGetName(info)) & EM & " {.pure, byRef.} = object")
   else:
     output.writeLine("  ", mangleName(gBaseInfoGetName(info)) & "00" & EM & " {.pure.} = object")
   let n = info.gStructInfoGetNFields()
@@ -702,22 +778,93 @@ proc writeStruct(info: GIStructInfo) =
     output.writeLine("  ", mangleName(gBaseInfoGetName(info))  & EM & " = ref object")
     output.writeLine("    impl*: ptr " & mangleName(gBaseInfoGetName(info)) & "00")
   let nMethods = gStructInfoGetNMethods(info)
+  var mseq = newSeq[GIFunctionInfo]()
+  var freePos = -1
   for j in 0 .. <nMethods:
-    let mInfo =  gStructInfoGetMethod(info, j)
+    mseq.add(gStructInfoGetMethod(info, j))
+    if freePos < 0 and gBaseInfoGetName(gStructInfoGetMethod(info, j)) == "free":
+      freePos = j
+    if freePos < 0 and gBaseInfoGetName(gStructInfoGetMethod(info, j)) == "unref":
+      freePos = j
+  if freePos > 0: swap(mseq[0], mseq[freePos])
+  for mInfo in mseq:
     writeMethod(info, minfo)
 
 proc writeInterface(info: GIInterfaceInfo) =
   if not suppressType:
     output.writeLine("type")
-  output.writeLine("  ", mangleName(gBaseInfoGetName(info)) & "00" & EM & " {.pure.} = object")
-  output.writeLine("  ", mangleName(gBaseInfoGetName(info))  & EM & " = ref object")
-  output.writeLine("    impl*: ptr " & mangleName(gBaseInfoGetName(info)) & "00")
+  # we made interfaces a gobject now...
+  output.writeLine("  ", mangleName(gBaseInfoGetName(info)) & "00" & EM & " = object of gobject.Object00")
+  output.writeLine("  ", mangleName(gBaseInfoGetName(info))  & EM & " = ref object of gobject.Object")
+  #output.writeLine("  ", mangleName(gBaseInfoGetName(info)) & "00" & EM & " {.pure.} = object")
+  #output.writeLine("  ", mangleName(gBaseInfoGetName(info))  & EM & " = ref object")
+  #output.writeLine("    impl*: ptr " & mangleName(gBaseInfoGetName(info)) & "00")
   let nMethods = gInterfaceInfoGetNMethods(info)
   for j in 0 .. <nMethods:
     let mInfo =  gInterfaceInfoGetMethod(info, j)
     writeMethod(info, minfo)
 
+# the EventMask enum is very special, so we use a separate proc for it
+proc writeEventMask(info: GIEnumInfo) =
+  type T = tuple[v: int64; n: string]
+  var s = newSeq[T]()
+  var alias = newSeq[string]()
+  var flags = ($gBaseInfoGetName(info)).endsWith("Mask")
+  output.writeLine("type")
+  let n = info.gEnumInfoGetNValues()
+  for j in 0 .. <n:
+    let value = info.gEnumInfoGetValue(j)
+    let name = ($mangleName(gBaseInfoGetName(value)))[0 .. ^5]
+    let v = gValueInfoGetValue(value)
+    if bitops.popCount(v) == 1:
+      s.add((v, name))
+  s.sort do (x, y: T) -> int:
+    result = cmp(x.v, y.v)
+    if result == 0:
+      result = cmp(x.n, y.n)
+  for j in 0 .. s.high:
+    if s[j].v < 0: flags = false
+    if j == 0 and s[j].v == 0: continue
+    #if bitops.popCount(s[j].v) != 1:  flags = false
+  if s.len <= 1:  flags = false
+  var tname = mangleName(gBaseInfoGetName(info))
+  if flags: tname = tname[0 .. ^5]
+  if flags:
+    #output.writeLine("  ", tname & "Flag" & EM, " {.size: sizeof(cint), pure.} = enum")
+    output.writeLine("  ", tname & "Flag" & EM, " {.size: sizeof(cint), pure.} = enum")
+    if s[0].v != 1 and s[1].v != 1:
+      output.writeLine("    ignoreThisDummyValue = 0")
+  else:
+    output.writeLine("  ", tname & EM, " {.size: sizeof(cint), pure.} = enum")
+  var k: T
+  for j in 0 .. s.high:
+    let i = s[j]
+    var val = i.v
+    if flags and j == 0 and val == 0: continue
+    if j > 0 and i.v == k.v:
+      if i.n != k.n:
+        alias.add("  " & tname & i.n.capitalizeAscii  & EM & " = " & tname  & '.' & k.n)
+      continue
+    if flags: val = countTrailingZeroBits(val) # firstSetBit(val)
+    output.writeLine("    ", i.n, " = ", val)
+    k = i
+  if alias.len > 0:
+    output.writeLine("\nconst")
+    for i in alias:
+      output.writeLine(i)
+  if flags:
+    output.writeLine("\n  ", tname & "Mask" & EM, " {.size: sizeof(cint).} = set[$1Flag]" % [tname])
+  let nMethods = gEnumInfoGetNMethods(info)
+  ###assert(nMethods <= 0)
+  assert(flags)
+  for j in 0 .. <nMethods:
+    let mInfo =  gEnumInfoGetMethod(info, j)
+    writeMethod(info, minfo)
+
 proc writeEnum(info: GIEnumInfo) =
+  if mangleName(gBaseInfoGetName(info)) == "EventMask":
+    writeEventMask(info)
+    return
   type T = tuple[v: int64; n: string]
   var s = newSeq[T]()
   var alias = newSeq[string]()
@@ -752,6 +899,8 @@ proc writeEnum(info: GIEnumInfo) =
   if flags: tname = tname[0 .. ^6]
   if flags:
     output.writeLine("  ", tname & "Flag" & EM, " {.size: sizeof(cint), pure.} = enum")
+    if s[0].v != 1 and s[1].v != 1:
+      output.writeLine("    ignoreThisDummyValue = 0")
   else:
     output.writeLine("  ", tname & EM, " {.size: sizeof(cint), pure.} = enum")
   var k: T
@@ -763,7 +912,8 @@ proc writeEnum(info: GIEnumInfo) =
       if i.n != k.n:
         alias.add("  " & tname & i.n.capitalizeAscii  & EM & " = " & tname  & '.' & k.n)
       continue
-    if flags: val = firstSetBit(val)
+    if flags:
+      val = countTrailingZeroBits(val) # firstSetBit(val)
     output.writeLine("    ", i.n, " = ", val)
     k = i
   if alias.len > 0:
@@ -1368,7 +1518,7 @@ main("xlib")
 main("Gio")
 main("Atk")
 main("Pango")
-# main("cairo") # that file is now hand crafted
+## main("cairo") # that file is now hand crafted
 main("GdkPixbuf")
 main("Rsvg")
 main("Gdk")
@@ -1383,3 +1533,4 @@ o.close()
 supmod.close
 
 #for i in callerAllocCollector: echo i
+# 1530 lines
