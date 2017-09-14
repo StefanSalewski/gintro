@@ -1,5 +1,5 @@
 # High level gobject-introspection based GTK3 bindings for the Nim programming language
-# v 0.2 2017-SEP-13
+# v 0.2 2017-SEP-14
 # (c) S. Salewski 2017
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -1285,7 +1285,22 @@ proc main(namespace: string) =
     output.writeLine("type\n  ucstringArray* = pointer")
     output.writeLine("type\n  ucstring* = distinct cstring")
     output.writeLine("type\n  gboolean* = distinct cint")
-    output.writeLine("type\n  GType* = distinct cint")
+    output.writeLine("const\n  GLIB_SIZEOF_VOID_P = sizeof(pointer)")
+    output.writeLine("const\n  GLIB_SIZEOF_SIZE_T* = GLIB_SIZEOF_VOID_P")
+    output.writeLine("const\n  GLIB_SIZEOF_LONG* = sizeof(clong)")
+    output.writeLine("type\n  Gssize* = csize")
+    output.writeLine("type\n  Gsize* = csize # note: csize is signed in Nim!")
+    #output.writeLine("type\n  GType* = distinct cint") # wrong
+    #stefan@nuc ~/Downloads/glib-2.53.3/gobject $ grep -A5 GLIB_SIZEOF_S *.h
+    #gtype.h:#if     GLIB_SIZEOF_SIZE_T != GLIB_SIZEOF_LONG || !defined __cplusplus
+    #gtype.h-typedef gsize                           GType;
+    #gtype.h-#else   /* for historic reasons, C++ links against gulong GTypes */
+    #gtype.h-typedef gulong                          GType;
+    #gtype.h-#endif
+    output.writeLine("when GLIB_SIZEOF_SIZE_T != GLIB_SIZEOF_LONG or not defined(cpp):")
+    output.writeLine("  type\n    GType* = Gsize")
+    output.writeLine("else:")
+    output.writeLine("  type\n    GType* = culong")
     output.writeLine("type\n  gunichar* = uint32")
     output.writeLine("type\n  utf8* = char")
     output.writeLine("const GFalse = gboolean(0)")
