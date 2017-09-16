@@ -1,5 +1,5 @@
 # High level gobject-introspection based GTK3 bindings for the Nim programming language
-# v 0.2 2017-SEP-14
+# v 0.2 2017-SEP-17
 # (c) S. Salewski 2017
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -126,9 +126,9 @@ var ct: CountTable[string]
 fixedProcNames.add("gtk_button_new_with_label", "newButton")
 fixedProcNames.add("pango_font_description_from_string", "newFontDescription")
 fixedProcNames.add("pango_language_from_string", "languageFromString")
-fixedProcNames.add("gdk_event_get", "getEvent")
-fixedProcNames.add("gdk_display_manager_get", "getDisplayManager")
-fixedProcNames.add("gdk_display_get_default", "getDefaultDisplay")
+#fixedProcNames.add("gdk_event_get", "getEvent")
+#fixedProcNames.add("gdk_display_manager_get", "getDisplayManager")
+#fixedProcNames.add("gdk_display_get_default", "getDefaultDisplay")
 
 defaultParameters.add("gtk_window_new", "`type` WindowType WindowType.toplevel")
 defaultParameters.add("gtk_application_new", "flags gio.ApplicationFlags {}")
@@ -365,6 +365,7 @@ proc genP(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil): (str
   for j in 0 .. m:
     let arg = gCallableInfoGetArg(info, j)
     let t = gArgInfoGetType(arg)
+    let mayBeNil = gArgInfoMayBeNull(arg)
     if gArgInfoIsCallerAllocates(arg):
       callerAllocCollector.incl(genRec(t, true, true))
     var str = genRec(t, genProxy and not gArgInfoIsCallerAllocates(arg))
@@ -395,7 +396,10 @@ proc genP(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil): (str
         let kk = if name[0] == '`': name[1 .. ^2] else: name
         arglist.add(kk & "_00")
       elif ct2nt.contains(str):
-       arglist.add(str & '(' & name & ')')
+       if str == "cstring":
+         arglist.add("safeStringToCString" & '(' & name & ')')
+       else:
+         arglist.add(str & '(' & name & ')')
       else:
         arglist.add(name)
     if not genProxy and ct2nt.contains(str) and str != "cstring":
@@ -411,6 +415,10 @@ proc genP(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil): (str
       (h1, h2, h3) = defaultParameters[sym].split
       if name == h1 and str == h2:
         str.add(" = " & h3)
+
+    ############################
+    if genProxy and str == "string" and mayBeNil:
+      str.add(" = nil")
 
     if (sym.startsWith("gdk_events_get_") or sym.startsWith("gdk_event_get_")) and str == "Event":
       str = "SomeEvent"
@@ -476,6 +484,8 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
     if sym.contains("gtk_widget_class_find_style_property") or sym.contains("gtk_container_class_find_child_property"): return
     if sym.contains("gtk_cell_area_class_find_cell_property"): return
     var asym = manglename(gBaseInfoGetName(mInfo))
+    if asym == "get" or asym == "getDefault" or asym == "from" or asym == "fromString": # maybe we should relax this later a bit for the case that first parameter type == gBaseInfoGetName(info)
+      asym.add($manglename(gBaseInfoGetName(info)))
     if keywords.split.contains(asym) or nims.split.contains(asym): asym.add('P')
     var ret2 = gCallableInfoGetReturnType(minfo)
     var ret22 = gCallableInfoGetReturnType(minfo)
@@ -737,7 +747,11 @@ proc writeUnion(info: GIUnionInfo) =
 
   if mangleName(gBaseInfoGetName(info)) == "Event" and moduleNamespace == "gdk":
     output.writeLine("type")
-    output.writeLine("  SomeEvent* = Event | EventButton | EventMotion | EventTouch | EventScroll | EventCrossing | EventTouchpadSwipe | EventTouchpadPinch")
+    #output.writeLine("  SomeEvent* = Event | EventButton | EventMotion | EventTouch | EventScroll | EventCrossing | EventTouchpadSwipe | EventTouchpadPinch")
+
+    output.writeLine("  SomeEvent* = Event | EventAny | EventKey | EventButton | EventTouch | EventScroll | EventMotion | EventExpose | EventVisibility |")
+    output.writeLine("    EventCrossing | EventFocus | EventConfigure | EventProperty | EventSelection | EventDND | EventProximity | EventWindowState | EventSetting |")
+    output.writeLine("    EventOwnerChange | EventGrabBroken | EventTouchpadSwipe | EventTouchpadPinch | EventPadButton | EventPadAxis | EventPadGroupMode")
 
   let nMethods = gUnionInfoGetNMethods(info)
   #for j in 0 .. <nMethods:
@@ -1307,6 +1321,7 @@ proc main(namespace: string) =
     output.writeLine("const GTrue = gboolean(1)")
     output.writeLine("proc cogfree*(mem: pointer) {.importc: \"g_free\", libprag.}")
     output.writeLine("proc toBool*(g: gboolean): bool = g.int != 0")
+    output.writeLine("proc safeStringToCString*(s: string): cstring = (if s.isNil: nil else: cstring(s))")
   elif namespace == "Gdk":
     output.writeLine("type\n  AtomArray* = pointer")
     output.writeLine("type\n  KeymapKey00Array* = pointer")
