@@ -1,5 +1,5 @@
 # High level gobject-introspection based GTK3 bindings for the Nim programming language
-# v 0.2 2017-SEP-17
+# v 0.2 2017-SEP-18
 # (c) S. Salewski 2017
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -390,7 +390,12 @@ proc genP(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil): (str
             str = str & " | " & provider.join(" | ")
     let name = mangleName(gBaseInfoGetName(arg))
     if isProxyCandidate(t) and not gArgInfoIsCallerAllocates(arg) and not userAlloc:
-      arglist.add("cast[" & genRec(t, false) & "](" & name & ".impl)")
+      ##############
+      if mayBeNil:
+        #arglist.add("if $1.isNil: nil else: cast[" & genRec(t, false) & "]($1.impl)" % name)
+        arglist.add("if " & name & ".isNil: nil else: cast[" & genRec(t, false) & "](" & name & ".impl)")
+      else:
+        arglist.add("cast[" & genRec(t, false) & "](" & name & ".impl)")
     else:
       if ct2nt.contains(str) and (gArgInfoGetDirection(arg) == GIDirection.OUT  or gArgInfoGetDirection(arg) == GIDirection.INOUT):
         let kk = if name[0] == '`': name[1 .. ^2] else: name
@@ -419,6 +424,10 @@ proc genP(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil): (str
     ############################
     if genProxy and str == "string" and mayBeNil:
       str.add(" = nil")
+
+    if genProxy and isProxyCandidate(t) and mayBeNil:
+      str.add(" = nil")
+
 
     if (sym.startsWith("gdk_events_get_") or sym.startsWith("gdk_event_get_")) and str == "Event":
       str = "SomeEvent"
