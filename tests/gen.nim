@@ -822,6 +822,58 @@ proc writeInterface(info: GIInterfaceInfo) =
   #output.writeLine("  ", mangleName(gBaseInfoGetName(info)) & "00" & EM & " {.pure.} = object")
   #output.writeLine("  ", mangleName(gBaseInfoGetName(info))  & EM & " = ref object")
   #output.writeLine("    impl*: ptr " & mangleName(gBaseInfoGetName(info)) & "00")
+
+  ################################
+
+  let numsig = info.gInterfaceInfoGetNSignals
+  if numsig > 0: output.writeLine("")
+  for j in 0 .. <numsig:
+    let signalInfo = gInterfaceInfoGetSignal(info, j)
+    #let c = gSignalInfoGetClassClosure(signalInfo)
+    #if not c.isNil: echo "maybe we should process class closures!"
+    #if gBaseInfoGetName(signalInfo) == "notify":
+    #  continue # XXX fix later
+    var h = genP(signalInfo, false)[0][1..^1]
+    let zzzu = gCallableInfoGetReturnType(signalinfo)
+    if gCallableInfoGetNArgs(signalInfo) > 0 or gTypeInfoGetTag(zzzu) != GITypeTag.VOID:
+      var memo = ""
+      memo.add(gCallableInfoGetNArgs(signalInfo))
+      memo.add('|')
+      var plist, arglist: string
+      var replist: TableRef[string, string]
+      (plist, arglist, replist) = genP(signalInfo, true, info)
+      memo.add(plist)
+      memo.add('|')
+      (plist, arglist, replist) = genP(signalInfo, false, info)
+      memo.add(plist)
+      memo = memo.replace("\n  ", "")
+      supmod.writeLine("    \"" & ($gBaseInfoGetName(signalInfo)).replace("-", "_") & "|" & $gBaseInfoGetName(info) & "|" & memo & "\",")
+    if gCallableInfoGetNArgs(signalInfo) > 0:
+      var plist, arglist: string
+      var replist: TableRef[string, string]
+      (plist, arglist, replist) = genP(signalInfo, false, nil)
+      echo plist
+      echo arglist
+      if replist.len > 0:
+        for k, v in replist:
+          stdout.write(k & "--" & v & " ")
+        stdout.writeLine("")
+      echo "PPP ", gBaseInfoGetName(signalInfo), gCallableInfoGetNArgs(signalInfo)
+      h = h.replace(")", "; xdata: pointer)")
+    else:
+      h = h.replace(")", "xdata: pointer)")
+    var xxx = mangleName(gBaseInfoGetName(info))
+    output.write("proc " & mangleName("sc_" & $gBaseInfoGetName(signalInfo)) & EM & "(self: " & xxx & "; ")
+    if gCallableInfoGetNArgs(signalInfo) > 0 or gTypeInfoGetTag(zzzu) != GITypeTag.VOID:
+      output.writeLine(" p: proc (self: ptr " & xxx & "00; " & h & " {.cdecl.}, xdata: pointer = nil): culong =")
+    else:
+      output.writeLine(" p: proc (self: ptr gobject.Object00; " & h & " {.cdecl.}, xdata: pointer = nil): culong =")
+    output.write("  g_signal_connect_data(self.impl, \"")
+    output.write($gBaseInfoGetName(signalInfo))
+    output.writeLine("\", cast[GCallback](p), xdata, nil, cast[ConnectFlags](0))")
+
+  ################################
+
   let nMethods = gInterfaceInfoGetNMethods(info)
   for j in 0 .. <nMethods:
     let mInfo =  gInterfaceInfoGetMethod(info, j)
