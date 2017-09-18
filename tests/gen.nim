@@ -431,7 +431,10 @@ proc genP(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil): (str
     # ------------------
     if isFunctionInfo(info) and (gFunctionInfoGetFlags(info).int and GIFunctionInfoFlags.WRAPS_VFUNC.ord) == 0:
       if userAlloc and mayBeNil:
-        str.add(" | ptr " & str & " = nil")
+        #str.add(" | ptr " & str & " = nil")
+        var h = str
+        if h.startsWith("var "): h = h[4 .. ^1]
+        str.add(" = cast[ptr " & h & "](nil)[]")
     # ------------------
 
     if (sym.startsWith("gdk_events_get_") or sym.startsWith("gdk_event_get_")) and str == "Event":
