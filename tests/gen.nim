@@ -429,7 +429,7 @@ proc genP(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil): (str
       str.add(" = nil")
 
     # ------------------
-    if isFunctionInfo(info) and (gFunctionInfoGetFlags(info).int and GIFunctionInfoFlags.WRAPS_VFUNC.ord) == 0:
+    if (genProxy or sym == "pango_extents_to_pixels") and isFunctionInfo(info) and (gFunctionInfoGetFlags(info).int and GIFunctionInfoFlags.WRAPS_VFUNC.ord) == 0:
       if userAlloc and mayBeNil:
         #str.add(" | ptr " & str & " = nil")
         var h = str
