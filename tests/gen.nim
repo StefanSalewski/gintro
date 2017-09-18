@@ -428,6 +428,11 @@ proc genP(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil): (str
     if genProxy and isProxyCandidate(t) and mayBeNil:
       str.add(" = nil")
 
+    # ------------------
+    if isFunctionInfo(info) and (gFunctionInfoGetFlags(info).int and GIFunctionInfoFlags.WRAPS_VFUNC.ord) == 0:
+      if userAlloc and mayBeNil:
+        str.add(" | ptr " & str & " = nil")
+    # ------------------
 
     if (sym.startsWith("gdk_events_get_") or sym.startsWith("gdk_event_get_")) and str == "Event":
       str = "SomeEvent"
