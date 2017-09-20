@@ -1,5 +1,5 @@
 # High level gobject-introspection based GTK3 bindings for the Nim programming language
-# v 0.2 2017-SEP-18
+# v 0.2 2017-SEP-19
 # (c) S. Salewski 2017
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -49,6 +49,7 @@ template isFunctionInfo(info: untyped): untyped =
       (gBaseInfoGetType(cast[GIBaseInfo](info)) == GIInfoType.Function)
 
 const EM = "*"
+const RecSep = "!" # Record separator for entries in gisup.nim, also defined in gimpl.nim
 
 # hope that will work reliable
 proc cut(s: var StringStream; pos: int) =
@@ -846,16 +847,16 @@ proc writeInterface(info: GIInterfaceInfo) =
     if gCallableInfoGetNArgs(signalInfo) > 0 or gTypeInfoGetTag(zzzu) != GITypeTag.VOID:
       var memo = ""
       memo.add(gCallableInfoGetNArgs(signalInfo))
-      memo.add('|')
+      memo.add(RecSep)
       var plist, arglist: string
       var replist: TableRef[string, string]
       (plist, arglist, replist) = genP(signalInfo, true, info)
       memo.add(plist)
-      memo.add('|')
+      memo.add(RecSep)
       (plist, arglist, replist) = genP(signalInfo, false, info)
       memo.add(plist)
-      memo = memo.replace("\n  ", "")
-      supmod.writeLine("    \"" & ($gBaseInfoGetName(signalInfo)).replace("-", "_") & "|" & $gBaseInfoGetName(info) & "|" & memo & "\",")
+      memo = memo.replace("\n    ", "")
+      supmod.writeLine("    \"" & ($gBaseInfoGetName(signalInfo)).replace("-", "_") & RecSep & $gBaseInfoGetName(info) & RecSep & memo & "\",")
     if gCallableInfoGetNArgs(signalInfo) > 0:
       var plist, arglist: string
       var replist: TableRef[string, string]
@@ -1110,16 +1111,16 @@ proc writeObj(info: GIObjectInfo) =
     if gCallableInfoGetNArgs(signalInfo) > 0 or gTypeInfoGetTag(zzzu) != GITypeTag.VOID:
       var memo = ""
       memo.add(gCallableInfoGetNArgs(signalInfo))
-      memo.add('|')
+      memo.add(RecSep)
       var plist, arglist: string
       var replist: TableRef[string, string]
       (plist, arglist, replist) = genP(signalInfo, true, info)
       memo.add(plist)
-      memo.add('|')
+      memo.add(RecSep)
       (plist, arglist, replist) = genP(signalInfo, false, info)
       memo.add(plist)
-      memo = memo.replace("\n  ", "")
-      supmod.writeLine("    \"" & ($gBaseInfoGetName(signalInfo)).replace("-", "_") & "|" & $gBaseInfoGetName(info) & "|" & memo & "\",")
+      memo = memo.replace("\n    ", "")
+      supmod.writeLine("    \"" & ($gBaseInfoGetName(signalInfo)).replace("-", "_") & RecSep & $gBaseInfoGetName(info) & RecSep & memo & "\",")
     if gCallableInfoGetNArgs(signalInfo) > 0:
       var plist, arglist: string
       var replist: TableRef[string, string]

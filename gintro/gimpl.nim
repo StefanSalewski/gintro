@@ -1,8 +1,11 @@
+const RecSep = "!" # Record separator for entries in gisup.nim, also defined in gen.nim
+
+# caution: $$ due to string interpolation
 let ct4nt = [
   "int32|int",
   "uint32|int",
   "gboolean|toBool",
-  "cstring|$"]
+  "cstring|$$"]
 
 proc ct5nt(s: string): string =
   for i in ct4nt:
@@ -10,10 +13,10 @@ proc ct5nt(s: string): string =
       return i[s.len + 1 .. ^1]
 
 proc findSignal(name, obj: NimNode): string =
-  let str = ($name).replace("-", "_") & "|"
+  let str = ($name).replace("-", "_") & RecSep
   for i in SCA:
     if i.startsWith(str):
-      let t = i.split("|", 2)[1]
+      let t = i.split(RecSep, 2)[1]
       var n = obj
       while true:
         if n.kind != nnkBracketExpr: break
@@ -50,7 +53,7 @@ proc $1$2 {.cdecl.} =
       r1s.add(", cast[$5](xdata)")
     r1s.add(")\n")
   else:
-    (sn, wid, num, ahl, all) = sci.split("|")
+    (sn, wid, num, ahl, all) = sci.split(RecSep)
     var resl: string
     if ahl.contains("): "):
       resl = all.rsplit("): ", 1)[1]
