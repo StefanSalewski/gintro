@@ -41,6 +41,7 @@ macro mconnect(widget: gobject.Object; signal: string; p: untyped; arg: typed; i
   let procName = "connect_for_signal_" & signalName & $ProcID
   var sn, wid, num, all, ahl: string
   let sci = findSignal(signal, wt)
+  var xfaces = newSeq[string]()
   var r1s = """
 proc $1$2 {.cdecl.} =
   let h: pointer = g_object_get_qdata(self, Quark)
@@ -98,15 +99,32 @@ proc $1$2 {.cdecl.} =
     ahl = "(self: " & wts & ";" & ahl.split(";", 1)[1]
   else:
     ahl = "(self: " & wts & ")" & ahl.split(")", 1)[1]
-  let r2s =
-    if ignoreArg.boolVal:
-      """
+
+  var bp = ahl.find("|") # barPosition
+  if bp >= 0:
+    bp = ahl.rfind(" ", bp - 1)
+    ahl.insert(" | ", bp + 1)
+    bp = ahl.rfind("|")
+    bp = ahl.find({';', ')'}, bp + 1)
+    ahl.insert(" | ", bp)
+    #echo ahl
+    let h = ahl.split(" | ")
+    for i in 1  ..< h.high:
+      xfaces.add(h[0] & h[i] & h[^1])
+  else:
+    xfaces.add(ahl)
+
+  #for i in xfaces: echo i
+
+  for ahlface in xfaces:
+    let r2s =
+      if ignoreArg.boolVal:
+        """
 proc $1(self: $2;  p: proc $3): culong {.discardable.} =
   sc$4(self, $5, nil)
-$1($6, $7)
-""" % [$procName, wts, ahl, signalName,  $procNameCdecl, $(widget.toStrLit), $p]
-    else:
-      """
+""" % [$procName, wts, ahlface, signalName,  $procNameCdecl, $(widget.toStrLit), $p]
+      else:
+        """
 proc $1(self: $2;  p: proc $3; a: $4): culong {.discardable.} =
   when a is RootRef:
     GC_ref(a)
@@ -117,9 +135,22 @@ proc $1(self: $2;  p: proc $3; a: $4): culong {.discardable.} =
     deepCopy(ar[], a)
     GC_ref(ar)
     sc$5(self, $6, cast[pointer](ar[]))
+
+""" % [$procName, wts,  ahlface, ats, signalName,  $procNameCdecl, $(widget.toStrLit), $p, $(arg.toStrLit)]
+    result.add(parseStmt(r2s))
+    #echo r2s
+
+  let r2s =
+    if ignoreArg.boolVal:
+      """
+$1($6, $7)
+""" % [$procName, wts, ahl, signalName,  $procNameCdecl, $(widget.toStrLit), $p]
+    else:
+      """
 $1($7, $8, $9)
 """ % [$procName, wts,  ahl, ats, signalName,  $procNameCdecl, $(widget.toStrLit), $p, $(arg.toStrLit)]
   result.add(parseStmt(r2s))
+  #echo r2s
 
 template connect*(widget: gobject.Object; signal: string; p: untyped; arg: typed): untyped =
   mconnect(widget, signal, p, arg, false)
