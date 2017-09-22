@@ -29,8 +29,21 @@ proc findSignal(name, obj: NimNode): string =
         n = getType(n)[1]
 
 var ProcID: int
-#
-macro mconnect(widget: gobject.Object; signal: string; p: untyped; arg: typed; ignoreArg: bool): untyped =
+# from file gisup.nim we have:
+# "remove_editable!CellArea!2!(self: CellArea; renderer: CellRenderer; editable: CellEditable | SpinButton | ComboBox | ...
+# so for signal remove_editable third parameter of handler proc can be CellEditable OR SpinButton OR ComboBox OR ...
+# This is because SpinButton, ComboBox provides the CellEditable interface!
+# https://mail.gnome.org/archives/gtk-list/2017-July/msg00018.html
+# This interface parameter is in most cases the second parameter of handler proc, but can be the third also.
+macro mconnect(widget: gobject.Object; signal: string; p: typed; arg: typed; ignoreArg: bool): untyped =
+  #echo p.symbol.getImpl().toStrLit
+  #echo p.symbol.getImpl().params.toStrLit
+  #echo p.symbol.getImpl().params[2][1].toStrLit
+
+  var # position and actual type of interface provider, if any
+    ipos = -1
+    ipro: string = nil
+
   inc(ProcID)
   let wt = getType(widget)
   let at = getTypeInst(arg)
@@ -41,49 +54,70 @@ macro mconnect(widget: gobject.Object; signal: string; p: untyped; arg: typed; i
   let procName = "connect_for_signal_" & signalName & $ProcID
   var sn, wid, num, all, ahl: string
   let sci = findSignal(signal, wt)
-  var xfaces = newSeq[string]()
   var r1s = """
 proc $1$2 {.cdecl.} =
   let h: pointer = g_object_get_qdata(self, Quark)
 """
-  if sci.isNil:
+  if sci.isNil: # the simple signals
     all = "(self: ptr gobject.Object00; xdata: pointer)"
     ahl = "(self: gobject.Object)"
     r1s.add("  $3(cast[$4](h)")
     if not ignoreArg.boolVal:
       r1s.add(", cast[$5](xdata)")
     r1s.add(")\n")
-  else:
+  else: # signals with multiple arguments and maybe using interface providers
     (sn, wid, num, ahl, all) = sci.split(RecSep)
+    if ahl.contains("|"): # we have to handle interface providers
+      var hargs = ahl.split(";") # handler arguments
+      for i in 0 .. hargs.high: # find the position of the providers, should be second or third argument
+        if hargs[i].contains("|"):
+          ipos = i
+          break
+      assert(ipos >= 0) # indeed assert(ipos > 0) as first parameter should be plain widget/gobject
+      let ipronode = p.symbol.getImpl().params[ipos + 1][1] # the actual data type for interface providers
+      if ipronode.isNil:
+        quit("Error: Signal-Handler has too few parameters: " & $(p.symbol.getImpl().name.toStrLit) & $(p.symbol.getImpl().params.toStrLit))
+      else:
+        ipro = $(ipronode.toStrLit)
+      var ipros = hargs[ipos].split(" | ")
+      ipros[0] = ipros[0].split()[^1]
+      ipros[^1] = ipros[^1].split({';', ')'})[0]
+      if ipros.contains(ipro): # select actual provider -- otherwise handler parameter list does not match, so compile error
+        let ret = hargs[ipos].split("):") # there may be a return value
+        assert(ret.len < 3)
+        hargs[ipos] = hargs[ipos].split(":")[0] & ": " & ipro
+        if ret.len > 1: hargs[ipos].add("):" & ret[1])
+        ahl = hargs.join(";")
     var resl: string
     if ahl.contains("): "):
       resl = all.rsplit("): ", 1)[1]
     var resu = "  $3(cast[$4](h)"
-    if all.find(";") > 0:
+    if all.find(";") > 0: # more than one argument
       var largs = all.split("; ")
       largs.delete(0)
       largs[^1] = largs[^1].split(")")[0] 
       var names, types: array[10, string]
-      var plainArgs = newSeq[string]()
       for i in 0 .. largs.high:
         if largs[i].endsWith("00"):
           (names[i], types[i]) = largs[i].split(": ptr ")
           types[i].setLen(types[i].len - 2)
         else:
+          types[i] = nil # plain arg, no object
           var a1, a2: string
           (a1, a2) = largs[i].split(": ")
           let h = ct5nt(a2)
           if h.len > 0:
             a1 = h & "(" & a1 & ")"
-          plainArgs.add(a1)
-      for i in 0 .. 9:
-        if names[i].isNil: break
-        resu.add(", " & names[i] & "1")
-        r1s.add("  var " & names[i] & "1: " & types[i] & "\n")
-        r1s.add("  new " & names[i] & "1" & "\n")
-        r1s.add("  " & names[i] & "1.impl = " & names[i] & "\n")
-      for i in plainArgs:
-        resu.add(", " & i)
+          names[i] = a1
+      if ipro != nil: types[ipos - 1] = ipro
+      for i in 0 .. largs.high:
+        if types[i] == nil:
+          resu.add(", " & names[i])
+        else:
+          resu.add(", " & names[i] & "1")
+          r1s.add("  var " & names[i] & "1: " & types[i] & "\n")
+          r1s.add("  new " & names[i] & "1" & "\n")
+          r1s.add("  " & names[i] & "1.impl = " & names[i] & "\n")
     if not ignoreArg.boolVal:
       resu.add(", cast[$5](data)")
     resu.add(")")
@@ -92,6 +126,7 @@ proc $1$2 {.cdecl.} =
     r1s.add(resu & "\n")
     all = all.replace(")", "; data: pointer)")
   r1s = r1s % [$procNameCdecl, all, $p, wts, ats]
+  echo r1s
   result = parseStmt(r1s)
   if not ignoreArg.boolVal:
     ahl = ahl.replace(")", "; arg: " & ats & ")")
@@ -99,32 +134,15 @@ proc $1$2 {.cdecl.} =
     ahl = "(self: " & wts & ";" & ahl.split(";", 1)[1]
   else:
     ahl = "(self: " & wts & ")" & ahl.split(")", 1)[1]
-
-  var bp = ahl.find("|") # barPosition
-  if bp >= 0:
-    bp = ahl.rfind(" ", bp - 1)
-    ahl.insert(" | ", bp + 1)
-    bp = ahl.rfind("|")
-    bp = ahl.find({';', ')'}, bp + 1)
-    ahl.insert(" | ", bp)
-    #echo ahl
-    let h = ahl.split(" | ")
-    for i in 1  ..< h.high:
-      xfaces.add(h[0] & h[i] & h[^1])
-  else:
-    xfaces.add(ahl)
-
-  #for i in xfaces: echo i
-
-  for ahlface in xfaces:
-    let r2s =
-      if ignoreArg.boolVal:
-        """
+  let r2s =
+    if ignoreArg.boolVal:
+      """
 proc $1(self: $2;  p: proc $3): culong {.discardable.} =
   sc$4(self, $5, nil)
-""" % [$procName, wts, ahlface, signalName,  $procNameCdecl, $(widget.toStrLit), $p]
-      else:
-        """
+$1($6, $7)
+""" % [$procName, wts, ahl, signalName,  $procNameCdecl, $(widget.toStrLit), $p]
+    else:
+      """
 proc $1(self: $2;  p: proc $3; a: $4): culong {.discardable.} =
   when a is RootRef:
     GC_ref(a)
@@ -135,27 +153,15 @@ proc $1(self: $2;  p: proc $3; a: $4): culong {.discardable.} =
     deepCopy(ar[], a)
     GC_ref(ar)
     sc$5(self, $6, cast[pointer](ar[]))
-
-""" % [$procName, wts,  ahlface, ats, signalName,  $procNameCdecl, $(widget.toStrLit), $p, $(arg.toStrLit)]
-    result.add(parseStmt(r2s))
-    #echo r2s
-
-  let r2s =
-    if ignoreArg.boolVal:
-      """
-$1($6, $7)
-""" % [$procName, wts, ahl, signalName,  $procNameCdecl, $(widget.toStrLit), $p]
-    else:
-      """
 $1($7, $8, $9)
 """ % [$procName, wts,  ahl, ats, signalName,  $procNameCdecl, $(widget.toStrLit), $p, $(arg.toStrLit)]
+  echo r2s
   result.add(parseStmt(r2s))
-  #echo r2s
 
-template connect*(widget: gobject.Object; signal: string; p: untyped; arg: typed): untyped =
+template connect*(widget: gobject.Object; signal: string; p: typed; arg: typed): untyped =
   mconnect(widget, signal, p, arg, false)
 
-template connect*(widget: gobject.Object; signal: string; p: untyped): untyped =
+template connect*(widget: gobject.Object; signal: string; p: typed): untyped =
   mconnect(widget, signal, p, "", true)
 
 var TimeoutID: int
