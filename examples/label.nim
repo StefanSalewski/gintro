@@ -2,7 +2,7 @@
 import gintro/[gtk, glib, gobject]
 import gintro/gio except Application, newApplication
 
-proc activate(app: Application) =
+proc appActivate(app: Application) =
   let window = newApplicationWindow(app)
   let label = newLabel("Yellow text on green background")
   let cssProvider = newCssProvider()
@@ -17,7 +17,7 @@ proc activate(app: Application) =
 
 proc main =
   let app = newApplication("org.gtk.example")
-  connect(app, "activate", activate)
+  connect(app, "activate", appActivate)
   discard run(app)
 
 main()

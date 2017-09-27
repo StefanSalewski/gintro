@@ -4,7 +4,7 @@ import gintro/[gtk, glib, gobject]
 import gintro/gio except Application, newApplication # we want to use GTK application
 #from gintro/gio import ApplicationFlags, scActivate, run
 
-proc activate(app: Application) =
+proc appActivate(app: Application) =
   let window = newApplicationWindow(app)
   window.title = "GTK3 & Nim"
   window.defaultSize = (200, 200)
@@ -12,7 +12,7 @@ proc activate(app: Application) =
 
 proc main =
   let app = newApplication("org.gtk.example")
-  connect(app, "activate", activate)
+  connect(app, "activate", appActivate)
   discard run(app)
 
 main()

@@ -1,5 +1,5 @@
 # High level gobject-introspection based GTK3 bindings for the Nim programming language
-# v 0.2 2017-SEP-19
+# v 0.2 2017-SEP-27
 # (c) S. Salewski 2017
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -240,6 +240,7 @@ proc mangleType(s: cstring): string =
 var output: StringStream
 var supmod: StringStream
 var methodBuffer: StringStream
+var signalBuffer: StringStream
 
 proc genP(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil): (string, string, TableRef[string, string])
 
@@ -355,6 +356,12 @@ proc genP(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil): (str
       arglist = "(cast[ptr " & manglename(gBaseInfoGetName(binfo)) & "00](" & "self.impl)"
       if genProxy:
         var h = manglename(gBaseInfoGetName(binfo))
+
+        if interfaceProvider.contains(h):
+          let provider = interfaceProvider[h]
+          for i in provider: discard mangleType(i)
+          h = h & " | " & provider.join(" | ")
+
         if (sym.startsWith("gdk_events_get_") or sym.startsWith("gdk_event_get_")) and h == "Event":
           h = "SomeEvent"
         resul = "(self: " & h
@@ -481,6 +488,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
   var replist: TableRef[string, string]
   let p = methodBuffer.getPosition
   let sym = $gFunctionInfoGetSymbol(mInfo)
+
   if sym[^1] == '_': return
   if sym.contains("__"): return
   if processedFunctions.contains(sym): return
@@ -494,6 +502,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
   if sym == "g_iconv":
     return
   try:
+    #if sym == "g_value_get_string": echo "g_value_get_string"; quit()
     (plist, arglist, replist) = genP(mInfo, genProxy, info)
     methodBuffer.write("\nproc " & sym & EM & plist)
     methodBuffer.writeLine(" {.\n    importc: \"", sym, "\", ", libprag, ".}")
@@ -506,6 +515,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
       asym.add($manglename(gBaseInfoGetName(info)))
     if keywords.split.contains(asym) or nims.split.contains(asym): asym.add('P')
     var ret2 = gCallableInfoGetReturnType(minfo)
+    #if sym == "g_value_get_string": echo isString(ret2); quit()
     var ret22 = gCallableInfoGetReturnType(minfo)
     for run in 0 .. 1:
       if run == 1:
@@ -835,7 +845,7 @@ proc writeInterface(info: GIInterfaceInfo) =
   ################################
 
   let numsig = info.gInterfaceInfoGetNSignals
-  if numsig > 0: output.writeLine("")
+  if numsig > 0: signalbuffer.writeLine("")
   for j in 0 .. <numsig:
     let signalInfo = gInterfaceInfoGetSignal(info, j)
     #let c = gSignalInfoGetClassClosure(signalInfo)
@@ -872,14 +882,24 @@ proc writeInterface(info: GIInterfaceInfo) =
     else:
       h = h.replace(")", "xdata: pointer)")
     var xxx = mangleName(gBaseInfoGetName(info))
-    output.write("proc " & mangleName("sc_" & $gBaseInfoGetName(signalInfo)) & EM & "(self: " & xxx & "; ")
+
+    #var h = manglename(gBaseInfoGetName(binfo))
+    let yyy = xxx
+    if interfaceProvider.contains(xxx):
+      let provider = interfaceProvider[xxx]
+      for i in provider: discard mangleType(i)
+      xxx = xxx & " | " & provider.join(" | ")
+
+
+
+    signalbuffer.write("proc " & mangleName("sc_" & $gBaseInfoGetName(signalInfo)) & EM & "(self: " & xxx & "; ")
     if gCallableInfoGetNArgs(signalInfo) > 0 or gTypeInfoGetTag(zzzu) != GITypeTag.VOID:
-      output.writeLine(" p: proc (self: ptr " & xxx & "00; " & h & " {.cdecl.}, xdata: pointer = nil): culong =")
+      signalbuffer.writeLine(" p: proc (self: ptr " & yyy & "00; " & h & " {.cdecl.}, xdata: pointer = nil): culong =")
     else:
-      output.writeLine(" p: proc (self: ptr gobject.Object00; " & h & " {.cdecl.}, xdata: pointer = nil): culong =")
-    output.write("  g_signal_connect_data(self.impl, \"")
-    output.write($gBaseInfoGetName(signalInfo))
-    output.writeLine("\", cast[GCallback](p), xdata, nil, cast[ConnectFlags](0))")
+      signalbuffer.writeLine(" p: proc (self: ptr gobject.Object00; " & h & " {.cdecl.}, xdata: pointer = nil): culong =")
+    signalbuffer.write("  g_signal_connect_data(self.impl, \"")
+    signalbuffer.write($gBaseInfoGetName(signalInfo))
+    signalbuffer.writeLine("\", cast[GCallback](p), xdata, nil, cast[ConnectFlags](0))")
 
   ################################
 
@@ -1099,7 +1119,7 @@ proc writeObj(info: GIObjectInfo) =
     output.writeLine("  g_object_remove_toggle_ref(o.impl, toggleNotify, addr(o[]))")
 
   let numsig = info.gObjectInfoGetNSignals
-  if numsig > 0: output.writeLine("")
+  if numsig > 0: signalbuffer.writeLine("")
   for j in 0 .. <numsig:
     let signalInfo = gObjectInfoGetSignal(info, j)
     let c = gSignalInfoGetClassClosure(signalInfo)
@@ -1136,14 +1156,21 @@ proc writeObj(info: GIObjectInfo) =
     else:
       h = h.replace(")", "xdata: pointer)")
     var xxx = mangleName(gBaseInfoGetName(info))
-    output.write("proc " & mangleName("sc_" & $gBaseInfoGetName(signalInfo)) & EM & "(self: " & xxx & "; ")
+
+    let yyy = xxx
+    if interfaceProvider.contains(xxx):
+      let provider = interfaceProvider[xxx]
+      for i in provider: discard mangleType(i)
+      xxx = xxx & " | " & provider.join(" | ")
+
+    signalbuffer.write("proc " & mangleName("sc_" & $gBaseInfoGetName(signalInfo)) & EM & "(self: " & xxx & "; ")
     if gCallableInfoGetNArgs(signalInfo) > 0 or gTypeInfoGetTag(zzzu) != GITypeTag.VOID:
-      output.writeLine(" p: proc (self: ptr " & xxx & "00; " & h & " {.cdecl.}, xdata: pointer = nil): culong =")
+      signalbuffer.writeLine(" p: proc (self: ptr " & yyy & "00; " & h & " {.cdecl.}, xdata: pointer = nil): culong =")
     else:
-      output.writeLine(" p: proc (self: ptr gobject.Object00; " & h & " {.cdecl.}, xdata: pointer = nil): culong =")
-    output.write("  g_signal_connect_data(self.impl, \"")
-    output.write($gBaseInfoGetName(signalInfo))
-    output.writeLine("\", cast[GCallback](p), xdata, nil, cast[ConnectFlags](0))")
+      signalbuffer.writeLine(" p: proc (self: ptr gobject.Object00; " & h & " {.cdecl.}, xdata: pointer = nil): culong =")
+    signalbuffer.write("  g_signal_connect_data(self.impl, \"")
+    signalbuffer.write($gBaseInfoGetName(signalInfo))
+    signalbuffer.writeLine("\", cast[GCallback](p), xdata, nil, cast[ConnectFlags](0))")
   let nMethods = gObjectInfoGetNMethods(info)
   for j in 0 .. <nMethods:
     let mInfo =  gObjectInfoGetMethod(info, j)
@@ -1495,7 +1522,9 @@ proc main(namespace: string) =
   var i: GIBaseInfo
   var unp = newSeq[GIBaseInfo]()
   reverse(s)
-  while s.len > 0:
+  var more_runs = 50
+  while s.len > 0 or more_runs > 0:
+    if s.len == 0: dec(more_runs)
     if namespace == "GObject" and not knownSyms.contains("g_signal_connect_data"):
       if knownSyms.contains("ClosureNotify") and knownSyms.contains("ConnectFlags"):
         knownSyms.incl("g_signal_connect_data")
@@ -1516,8 +1545,9 @@ proc main(namespace: string) =
         s.add(s[k])
         s.delete(k)
 
-    i = s.pop
-    delayedSyms.insert(i)
+    if s.len > 0:
+      i = s.pop
+      delayedSyms.insert(i)
     if classList.len > 0:
       delayedSyms.insert(classList.pop)
     unp.setLen(0)
@@ -1525,9 +1555,12 @@ proc main(namespace: string) =
       var pos = output.getPosition
       var supmodpos = supmod.getPosition
       try:
+        echo "try process ", mangleName(gBaseInfoGetName(k))
         knownSyms.incl(mangleName(gBaseInfoGetName(k)))
         methodBuffer = newStringStream()
+        signalBuffer = newStringStream()
         processInfo(k)
+        output.write(signalBuffer.data)
         output.write(methodBuffer.data)
         echo "----------", gBaseInfoGetName(k)
       except UndefEx:
@@ -1541,19 +1574,22 @@ proc main(namespace: string) =
         if delayedSyms.len > a:
           suppressType = true
           methodBuffer = newStringStream()
+          signalBuffer = newStringStream()
           unp = delayedSyms
           for t in unp.combinations(a + 1):
             var pos = output.getPosition
             var supmodpos = supmod.getPosition
             methodBuffer = newStringStream()
+            signalBuffer = newStringStream()
             let x = delayedMethods.len
             try:
               var h = false
               for k in t:
-                if gBaseInfoGetType(k) != GIInfoType.OBJECT and  gBaseInfoGetType(k) != GIInfoType.STRUCT and gBaseInfoGetType(k) != GIInfoType.UNION and not isCallbackInfo(k):
+                if gBaseInfoGetType(k) != GIInfoType.INTERFACE and gBaseInfoGetType(k) != GIInfoType.OBJECT and  gBaseInfoGetType(k) != GIInfoType.STRUCT and gBaseInfoGetType(k) != GIInfoType.UNION and not isCallbackInfo(k):
                   h = true
               if h: continue
               output.writeLine("type")
+
               for k in t:
                 knownSyms.incl(mangleName(gBaseInfoGetName(k)))
               for k in t:
@@ -1561,7 +1597,9 @@ proc main(namespace: string) =
               for k in t:
                 delayedSyms.keepItIf(mangleName(gBaseInfoGetName(k)) != mangleName(gBaseInfoGetName(it)))
               suppressType = false
+              output.write(signalBuffer.data)
               output.write(methodBuffer.data)
+
               break myb
             except UndefEx:
               for k in t:
@@ -1633,4 +1671,4 @@ o.close()
 supmod.close
 
 #for i in callerAllocCollector: echo i
-# 1530 lines
+# 1660 lines

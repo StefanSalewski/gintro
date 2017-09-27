@@ -21,7 +21,7 @@ proc b4Callback(button: Button; w: ApplicationWindow) =
   else:
     w.title = "Nim with GTK3"
 
-proc activate (app: Application) =
+proc appActivate (app: Application) =
   var o: O
   var r: ref O
   new r
@@ -47,7 +47,7 @@ proc activate (app: Application) =
 
 proc main =
   let app = newApplication("org.gtk.example")
-  connect(app, "activate", activate)
+  connect(app, "activate", appActivate)
   discard app.run
 
 main()

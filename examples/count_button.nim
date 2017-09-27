@@ -11,7 +11,7 @@ proc buttonClicked (button: CountButton; decrement: int) =
   button.label = "Counter: " & $button.counter 
   echo "Counter is now: ", button.counter
 
-proc activate (app: Application) =
+proc appActivate (app: Application) =
   var button: CountButton
   let window = newApplicationWindow(app)
   window.title = "Count Button"
@@ -23,7 +23,7 @@ proc activate (app: Application) =
 
 proc main =
   let app = newApplication("org.gtk.example")
-  connect(app, "activate", activate)
+  connect(app, "activate", appActivate)
   discard app.run
 
 main()

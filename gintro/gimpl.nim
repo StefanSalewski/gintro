@@ -14,19 +14,28 @@ proc ct5nt(s: string): string =
 
 proc findSignal(name, obj: NimNode): string =
   let str = ($name).replace("-", "_") & RecSep
+  var ipros: seq[string]
   for i in SCA:
     if i.startsWith(str):
-      let t = i.split(RecSep, 2)[1]
-      var n = obj
-      while true:
-        if n.kind != nnkBracketExpr: break
-        var h = $getType(n)[1].toStrLit
-        if h.endsWith(":ObjectType"):
-          h.setLen(h.len - 11)
-        if h == t:
-          return i
-        n = getType(n)[1]
-        n = getType(n)[1]
+      let h1 = i.split(RecSep)[3]
+      let h2 = h1.split(": ")[1]
+      let h = h2.split({';', ')'})[0]
+      if h.contains("|"):
+        ipros = h.split(" | ")
+      else:
+        ipros = @[h]
+        assert(ipros[0] == i.split(RecSep, 2)[1])
+      for t in ipros:
+        var n = obj
+        while true:
+          if n.kind != nnkBracketExpr: break
+          var h = $getType(n)[1].toStrLit
+          if h.endsWith(":ObjectType"):
+            h.setLen(h.len - 11)
+          if h == t:
+            return i
+          n = getType(n)[1]
+          n = getType(n)[1]
 
 var ProcID: int
 # from file gisup.nim we have:
@@ -73,7 +82,7 @@ proc $1$2 {.cdecl.} =
         if hargs[i].contains("|"):
           ipos = i
           break
-      assert(ipos >= 0) # indeed assert(ipos > 0) as first parameter should be plain widget/gobject
+      assert(ipos >= 0)
       let ipronode = p.symbol.getImpl().params[ipos + 1][1] # the actual data type for interface providers
       if ipronode.isNil:
         quit("Error: Signal-Handler has too few parameters: " & $(p.symbol.getImpl().name.toStrLit) & $(p.symbol.getImpl().params.toStrLit))
@@ -92,6 +101,7 @@ proc $1$2 {.cdecl.} =
     if ahl.contains("): "):
       resl = all.rsplit("): ", 1)[1]
     var resu = "  $3(cast[$4](h)"
+    
     if all.find(";") > 0: # more than one argument
       var largs = all.split("; ")
       largs.delete(0)
@@ -109,7 +119,10 @@ proc $1$2 {.cdecl.} =
           if h.len > 0:
             a1 = h & "(" & a1 & ")"
           names[i] = a1
-      if ipro != nil: types[ipos - 1] = ipro
+ 
+      if ipos > 0:
+        types[ipos - 1] = ipro
+
       for i in 0 .. largs.high:
         if types[i] == nil:
           resu.add(", " & names[i])
@@ -118,6 +131,7 @@ proc $1$2 {.cdecl.} =
           r1s.add("  var " & names[i] & "1: " & types[i] & "\n")
           r1s.add("  new " & names[i] & "1" & "\n")
           r1s.add("  " & names[i] & "1.impl = " & names[i] & "\n")
+    
     if not ignoreArg.boolVal:
       resu.add(", cast[$5](data)")
     resu.add(")")
@@ -134,6 +148,7 @@ proc $1$2 {.cdecl.} =
     ahl = "(self: " & wts & ";" & ahl.split(";", 1)[1]
   else:
     ahl = "(self: " & wts & ")" & ahl.split(")", 1)[1]
+
   let r2s =
     if ignoreArg.boolVal:
       """

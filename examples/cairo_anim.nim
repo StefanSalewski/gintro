@@ -25,7 +25,7 @@ proc drawingAreaDrawCb(widget: DrawingArea; context: Context): bool =
   inc(redrawNumber)
   return true # TRUE to stop other handlers from being invoked for the event. FALSE to propagate the event further.
 
-proc activate(app: Application) =
+proc appActivate(app: Application) =
   let window = newApplicationWindow(app)
   window.title = "Drawing example"
   window.defaultSize = (400, 400)
@@ -37,7 +37,7 @@ proc activate(app: Application) =
 
 proc main =
   let app = newApplication("org.gtk.example")
-  connect(app, "activate", activate)
+  connect(app, "activate", appActivate)
   discard run(app)
 
 main()
