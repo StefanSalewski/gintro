@@ -704,5 +704,136 @@ proc main =
 main()
 ----
 
+== A simple ListView example
+
+image::NimGTK3ListView.png[]
+
+Recently someone reported about some problems porting a GTK2 application to Nim GTK3, so I will give a small example
+which may help using ListViews and TreeViews. These two widget types are the most complicated widget types in GTK --
+I can remember that I had some trouble myself when I used Ruby-GTK some years ago. As I can currently not remember
+details about use of ListView widgets, I decided to take an example code from http://zetcode.com/gui/gtk2/gtktreeview/[zetcode.com] as starting point. Of course
+porting is straight forward, but when I tried to compile the result I noticed some bugs and restrictions of current
+gintro package. Of course not really surprising, as the package is not really tested yet. I will try to fix these bugs later.
+First problem is, that we store a ListStore as model in our TreeView, and we need to extract that ListStore from the TreeView
+for some operations. But module gtk.nim offers currently only a function to extract the model itself, which is of type TreeModel.
+In the C code an upcast is used to get the ListStore from the retrieved TreeModel. To avoid casting in our Nim code, I have just copied
+the getModel() proc and modified  it to return a ListStore. Second problem was, that module gio export a ListStore datatype also.
+To avoid prefixing all ListStore types with gtk prefix, I excluded gio.ListStore from import list. And finally a real bug:
+Proc newListStore() expects currently a plain pointer as last parameter, while we know that it should be the address of a list of GTypes.
+So we have to use an ugly cast for now. For populating the ListStore currently GValues are used. That is not very convenient, and
+for that we need the correct GType of our string list. In C one would use the macro G_TYPE_STRING, which is not provided by
+gobject-introspection. So we use typeFromName() to get the correct GType, which works fine when we know that the string name is "gchararray".
+Later we will provide a higher level function for this process.
+
+I will try to give more and better explained ListView and TreeView examples later...
+
+[[listview.nim]]
+[source,nim]
+.listview.nim
+----
+# http://zetcode.com/gui/gtk2/gtktreeview/
+# dynamiclistview.c
+
+import gintro/[glib, gobject, gtk]
+import gintro/gio except ListStore
+
+const    
+  LIST_ITEM = 0
+  N_COLUMNS = 1
+
+var list: TreeView
+
+# this is copied from gtk.nim
+#proc getModel*(self: TreeView): TreeModel =
+#  new(result)
+#  result.impl = gtk_tree_view_get_model(cast[ptr TreeView00](self.impl))
+
+proc getListStore(self: TreeView): ListStore =
+  new(result)
+  result.impl = gtk_tree_view_get_model(cast[ptr TreeView00](self.impl))
+
+proc appendItem(widget: Button; entry: Entry) =
+  var
+    val: Value
+    iter: TreeIter
+  let store = getListStore(list)
+  let gtype = typeFromName("gchararray")
+  discard gValueInit(val, gtype)
+  gValueSetString(val, entry.text)
+  store.append(iter)
+  store.setValue(iter, LIST_ITEM, val)
+  entry.text = ""
+
+proc removeItem(widget: Button; selection: TreeSelection) =
+  var    
+    ls: ListStore
+    iter: TreeIter
+  let store = getListStore(list)
+  if not store.getIterFirst(iter):
+      return
+  if getSelected(selection, ls, iter):
+    discard store.remove(iter)
+
+proc onRemoveAll(widget: Button; selection: TreeSelection) =
+  var
+    iter: TreeIter
+  let store = getListStore(list)
+  if not store.getIterFirst(iter):
+    return
+  clear(store)
+
+proc initList(list: TreeView) =
+  let renderer = newCellRendererText()
+  let column = newTreeViewColumn()
+  column.title = "List Item"
+  column.packStart(renderer, true)
+  column.addAttribute(renderer, "text", LIST_ITEM)
+  discard list.appendColumn(column)
+  let gtype = typeFromName("gchararray")
+  let store = newListStore(N_COLUMNS, cast[pointer]( unsafeaddr gtype)) # cast due to bug in gtk.nim
+  list.setModel(store)
+
+proc appActivate(app: Application) =
+  let
+    window = newApplicationWindow(app)
+    sw = newScrolledWindow()
+    hbox = newBox(Orientation.horizontal, 5)
+    vbox = newBox(Orientation.vertical, 0)
+    add = newButton("Add")
+    remove = newButton("Remove")
+    removeAll = newButton("Remove All")
+    entry = newEntry()
+  window. title = "List view"
+  window.position = WindowPosition.center
+  window.borderWidth = 10
+  window.setSizeRequest(370, 270)
+  list = newTreeView()  
+  sw.add(list)
+  sw.setPolicy(PolicyType.automatic, PolicyType.automatic)
+  sw.setShadowType(ShadowType.etchedIn)
+  list.setHeadersVisible(false)
+  vbox.packStart(sw, true, true, 5)
+  entry.setSizeRequest(120, -1)
+  hbox.packStart(add, false, true, 3)
+  hbox.packStart(entry, false, true, 3)
+  hbox.packStart(remove, false, true, 3)
+  hbox.packStart(removeAll, false, true, 3)
+  vbox.packStart(hbox, false, true, 3)
+  window.add(vbox)
+  initList(list)
+  let selection = getSelection(list)
+  connect(add, "clicked", listview.appendItem, entry)
+  connect(remove, "clicked", listview.removeItem, selection)
+  connect(removeAll, "clicked", listview.onRemoveAll, selection)
+  showAll(window)
+
+proc main =
+  let app = newApplication("org.gtk.example")
+  connect(app, "activate", appActivate)
+  discard run(app)
+
+main()
+----
+
 NOTE: Related work: https://github.com/jdmansour/nim-smartgi
 
