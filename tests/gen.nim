@@ -1,5 +1,5 @@
 # High level gobject-introspection based GTK3 bindings for the Nim programming language
-# v 0.2 2017-SEP-30
+# v 0.2 2017-OCT-02
 # (c) S. Salewski 2017
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -503,7 +503,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
     methodBuffer.write("\nproc " & sym & EM & plist)
     methodBuffer.writeLine(" {.\n    importc: \"", sym, "\", ", libprag, ".}")
     processedFunctions.incl(sym)
-    if sym.contains("g_param_spec_") or sym.contains("g_type_interface_")  or sym.contains("g_object_interface_") or sym.contains("g_value_"): return
+    if sym.contains("g_param_spec_") or sym.contains("g_type_interface_")  or sym.contains("g_object_interface_"): return # or sym.contains("g_value_"): return
     if sym.contains("gtk_widget_class_find_style_property") or sym.contains("gtk_container_class_find_child_property"): return
     if sym.contains("gtk_cell_area_class_find_cell_property"): return
     var asym = manglename(gBaseInfoGetName(mInfo))
@@ -535,7 +535,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
         let tag = gTypeInfoGetTag(ret2)
         if tag == GITypeTag.INTERFACE:
           let iface = gTypeInfoGetInterface(ret2)
-          if gBaseInfoGetType(iface) == GIInfoType.Object:
+          if gBaseInfoGetType(iface) == GIInfoType.Object and gBaseInfoGetName(iface) != "ParamSpec":
             isGObject = true
         (plist, arglist, replist) = genP(mInfo, true, info)
         if (gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) != 0:
