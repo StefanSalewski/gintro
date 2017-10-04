@@ -1,5 +1,5 @@
 # High level gobject-introspection based GTK3 bindings for the Nim programming language
-# v 0.2 2017-OCT-02
+# v 0.2 2017-OCT-04
 # (c) S. Salewski 2017
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -589,6 +589,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
               methodBuffer.writeLine("  g_object_set_qdata(result.impl, Quark, addr(result[]))")
             ]#
             if isGObject:
+              assert (gCallableInfoGetCallerOwns(minfo) in {GITransfer.NOTHING, GITransfer.EVERYTHING}) # both occur, we dont care
               # CAUTION: some procs are advertised as constructor but do not construct new objects,
               # they just return existing ones as gdk_cursor_new_from_name()
               methodBuffer.writeLine("  let gobj = " & sym & arglist)
@@ -614,6 +615,8 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
                 methodBuffer.writeLine("    g_object_unref(result.impl)")
                 methodBuffer.writeLine("    assert(g_object_get_qdata(result.impl, Quark) == nil)")
                 methodBuffer.writeLine("    g_object_set_qdata(result.impl, Quark, addr(result[]))")
+            elif gCallableInfoGetCallerOwns(minfo) == GITransfer.CONTAINER:
+              assert false
             elif gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING:
               if sym == "g_closure_new_simple": 
                 let nMethods = gStructInfoGetNMethods(info)
@@ -644,12 +647,19 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
                 methodBuffer.writeLine("  new(result, $1)" % freeMeName)
               methodBuffer.writeLine("  result.impl = " & sym & arglist)
             else:
+              assert gCallableInfoGetCallerOwns(minfo) == GITransfer.NOTHING
               methodBuffer.writeLine("  new(result)")
               methodBuffer.writeLine("  result.impl = " & sym & arglist)
+            #else:
+            #  assert false
             for k, v in replist:
               let kk = if k[0] == '`': k[1 .. ^2] else: k
               methodBuffer.writeLine("  $1 = $2($3_00)" % [k, ct3nt(v), kk]) 
         elif isProxyCandidate(ret2):
+          assert (gCallableInfoGetCallerOwns(minfo) in {GITransfer.NOTHING, GITransfer.EVERYTHING}) # both occur
+          #if gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING: echo "OOO1"
+          #if gCallableInfoGetCallerOwns(minfo) == GITransfer.CONTAINER: echo "OOO2"
+          #if gCallableInfoGetCallerOwns(minfo) == GITransfer.NOTHING: echo "OOO3"
           if info != nil:
             asym = asym.replace("new", "new" & manglename(gBaseInfoGetName(info)))
           if fixedProcNames.contains(sym):
@@ -662,6 +672,10 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
             let kk = if k[0] == '`': k[1 .. ^2] else: k
             methodBuffer.writeLine("  var $1_00 = $2($3)" % [kk, v, k])
           if isGObject:
+            assert (gCallableInfoGetCallerOwns(minfo) in {GITransfer.NOTHING, GITransfer.EVERYTHING}) # both occur
+            #if gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING: echo "OOO1"
+            #if gCallableInfoGetCallerOwns(minfo) == GITransfer.CONTAINER: echo "OOO2"
+            #if gCallableInfoGetCallerOwns(minfo) == GITransfer.NOTHING: echo "OOO3"
             methodBuffer.writeLine("  let gobj = " & sym & arglist)
             methodBuffer.writeLine("  if g_object_get_qdata(gobj, Quark) != nil:")
             methodBuffer.writeLine("    result = cast[$1](g_object_get_qdata(gobj, Quark))" % [genRec(ret2, true)])
@@ -705,12 +719,14 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
                 methodBuffer.writeLine("  new(result, $1)" % freeMeName)
               methodBuffer.writeLine("  result.impl = " & sym & arglist)
           else:
+            assert gCallableInfoGetCallerOwns(minfo) == GITransfer.NOTHING
             methodBuffer.writeLine("  new(result)")
             methodBuffer.writeLine("  result.impl = " & sym & arglist)
           for k, v in replist:
             let kk = if k[0] == '`': k[1 .. ^2] else: k
             methodBuffer.writeLine("  $1 = $2($3_00)" % [k, ct3nt(v), kk]) 
         else:
+          #assert gCallableInfoGetCallerOwns(minfo) == GITransfer.NOTHING
           if asym == "newFromStreamAsync" and sym.contains("gdk_pixbuf_animation_new"):
             asym = "newAnimationFromStreamAsync"
           methodBuffer.writeLine("\nproc " & asym & EM & plist & " =")
@@ -939,17 +955,20 @@ proc writeInterface(info: GIInterfaceInfo) =
     let mInfo =  gInterfaceInfoGetMethod(info, j)
     writeMethod(info, minfo)
 
-# the EventMask enum is very special, so we use a separate proc for it
-proc writeEventMask(info: GIEnumInfo) =
+# write a few of the strange enum sets
+proc writeModifierType(info: GIEnumInfo) =
+  let we = gBaseInfoGetName(info)
   type T = tuple[v: int64; n: string]
   var s = newSeq[T]()
   var alias = newSeq[string]()
-  var flags = ($gBaseInfoGetName(info)).endsWith("Mask")
+  var flags = true#($gBaseInfoGetName(info)).endsWith("Flags")
   output.writeLine("type")
   let n = info.gEnumInfoGetNValues()
-  for j in 0 .. <n:
+  for j in 0 ..< n:
     let value = info.gEnumInfoGetValue(j)
-    let name = ($mangleName(gBaseInfoGetName(value)))[0 .. ^5]
+    var name = mangleName(gBaseInfoGetName(value))
+    name.removeSuffix("Mask")
+    #if name.startsWith("modifierReserved_"): name = name[17 .. ^1] 
     let v = gValueInfoGetValue(value)
     if bitops.popCount(v) == 1:
       s.add((v, name))
@@ -960,13 +979,16 @@ proc writeEventMask(info: GIEnumInfo) =
   for j in 0 .. s.high:
     if s[j].v < 0: flags = false
     if j == 0 and s[j].v == 0: continue
+    if bitops.popCount(s[j].v) != 1:  flags = false
   if s.len <= 1:  flags = false
   var tname = mangleName(gBaseInfoGetName(info))
-  if flags: tname = tname[0 .. ^5]
+  if flags: tname.removeSuffix("Mask")
+  if flags: tname.removeSuffix("Type")
+  if flags: tname.removeSuffix("Flags")
   if flags:
     output.writeLine("  ", tname & "Flag" & EM, " {.size: sizeof(cint), pure.} = enum")
-    if s[0].v != 1 and s[1].v != 1:
-      output.writeLine("    ignoreThisDummyValue = 0")
+    if s[0].v != 0 and s[0].v != 1: # flags may start with none = 0 or with flag1 = 1
+      output.writeLine("    ignoreThisDummyValue = 0") # Nim needs start with 0 for these low level sets
   else:
     output.writeLine("  ", tname & EM, " {.size: sizeof(cint), pure.} = enum")
   var k: T
@@ -978,7 +1000,8 @@ proc writeEventMask(info: GIEnumInfo) =
       if i.n != k.n:
         alias.add("  " & tname & i.n.capitalizeAscii  & EM & " = " & tname  & '.' & k.n)
       continue
-    if flags: val = countTrailingZeroBits(val) # firstSetBit(val)
+    if flags:
+      val = countTrailingZeroBits(val)
     output.writeLine("    ", i.n, " = ", val)
     k = i
   if alias.len > 0:
@@ -986,39 +1009,38 @@ proc writeEventMask(info: GIEnumInfo) =
     for i in alias:
       output.writeLine(i)
   if flags:
-    output.writeLine("\n  ", tname & "Mask" & EM, " {.size: sizeof(cint).} = set[$1Flag]" % [tname])
+    if we == "ModifierType":
+      output.writeLine("\n  ", tname & "Type" & EM, " {.size: sizeof(cint).} = set[$1Flag]" % [tname])
+    elif we == "EventMask":
+      output.writeLine("\n  ", tname & "Mask" & EM, " {.size: sizeof(cint).} = set[$1Flag]" % [tname])
+    elif we == "AccelFlags":
+      output.writeLine("\n  ", tname & "Flags" & EM, " {.size: sizeof(cint).} = set[$1Flag]" % [tname])
+  if we == "ModifierType":
+    output.writeLine("\nconst ModifierMask* = {ModifierFlag.shift .. ModifierFlag.button5, ModifierFlag.super .. ModifierFlag.meta, ModifierFlag.release}")
+  elif we == "EventMask":
+    output.writeLine("\nconst AllEventsMask* = {EventFlag.exposure .. EventFlag.smoothScroll}")
+  #elif we == "AccelFlags":
+  #  output.writeLine("\nconst AccelFlagsMask* = AccelFlags(7)")
   let nMethods = gEnumInfoGetNMethods(info)
-  ###assert(nMethods <= 0)
-  assert(flags)
   for j in 0 .. <nMethods:
     let mInfo =  gEnumInfoGetMethod(info, j)
     writeMethod(info, minfo)
 
 proc writeEnum(info: GIEnumInfo) =
-  if mangleName(gBaseInfoGetName(info)) == "EventMask":
-    writeEventMask(info)
+  if mangleName(gBaseInfoGetName(info)) in ["ModifierType", "EventMask", "AccelFlags"]:
+    writeModifierType(info)
     return
   type T = tuple[v: int64; n: string]
   var s = newSeq[T]()
   var alias = newSeq[string]()
   var flags = ($gBaseInfoGetName(info)).endsWith("Flags")
   output.writeLine("type")
-
   let n = info.gEnumInfoGetNValues()
-  for j in 0 .. <n:
+  for j in 0 ..< n:
     let value = info.gEnumInfoGetValue(j)
     let name = mangleName(gBaseInfoGetName(value))
     let v = gValueInfoGetValue(value)
     s.add((v, name))
-    ###output.writeLine("    ", name, " = ", v)
-  # let m = info.gEnumInfoGetNMethods() # XXX this does not work!
-  # if m > 0: echo "EnumM: ", m, gBaseInfoGetName(info)
-  # for i in 0 .. <m:
-  #   let x = gEnumInfoGetMethod(info, m)
-  #   if x != nil:
-  #    echo gFunctionInfoGetFlags(x)
-  #    echo gCallableInfoGetNArgs(x)
-  # genProc(gEnumInfoGetMethod(info, m))
   s.sort do (x, y: T) -> int:
     result = cmp(x.v, y.v)
     if result == 0:
@@ -1032,8 +1054,9 @@ proc writeEnum(info: GIEnumInfo) =
   if flags: tname = tname[0 .. ^6]
   if flags:
     output.writeLine("  ", tname & "Flag" & EM, " {.size: sizeof(cint), pure.} = enum")
-    if s[0].v != 1 and s[1].v != 1:
-      output.writeLine("    ignoreThisDummyValue = 0")
+    # if s[0].v != 1 and s[1].v != 1: # wrong for 0, 2, ...
+    if s[0].v != 0 and s[0].v != 1: # flags may start with none = 0 or with flag1 = 1
+      output.writeLine("    ignoreThisDummyValue = 0") # Nim needs start with 0 for these low level sets
   else:
     output.writeLine("  ", tname & EM, " {.size: sizeof(cint), pure.} = enum")
   var k: T
@@ -1056,7 +1079,6 @@ proc writeEnum(info: GIEnumInfo) =
   if flags:
     output.writeLine("\n  ", tname & "Flags" & EM, " {.size: sizeof(cint).} = set[$1Flag]" % [tname])
   let nMethods = gEnumInfoGetNMethods(info)
-  ###assert(nMethods <= 0)
   for j in 0 .. <nMethods:
     let mInfo =  gEnumInfoGetMethod(info, j)
     writeMethod(info, minfo)
@@ -1700,4 +1722,4 @@ o.close()
 supmod.close
 
 #for i in callerAllocCollector: echo i
-# 1703 lines
+# 1725 lines
