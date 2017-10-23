@@ -1,5 +1,5 @@
 # High level gobject-introspection based GTK3 bindings for the Nim programming language
-# v 0.2 2017-OCT-04
+# v 0.2 2017-OCT-23
 # (c) S. Salewski 2017
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -509,6 +509,8 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
     var asym = manglename(gBaseInfoGetName(mInfo))
     if asym == "get" or asym == "getDefault" or asym == "from" or asym == "fromString": # maybe we should relax this later a bit for the case that first parameter type == gBaseInfoGetName(info)
       asym.add($manglename(gBaseInfoGetName(info)))
+    if sym == "gtk_buildable_get_name": asym = "buildableGetName" # conflict with gtk_widget_get_name()
+    if sym == "gtk_buildable_set_name": asym = "buildableSetName"
     if keywords.split.contains(asym) or nims.split.contains(asym): asym.add('P')
     var ret2 = gCallableInfoGetReturnType(minfo)
     #var ret22 = gCallableInfoGetReturnType(minfo)
