@@ -304,7 +304,7 @@ proc needProxyProc(info: GICallableInfo): bool =
   result = gCallableInfoIsMethod(info)
   let m = gCallableInfoGetNArgs(info) - 1
   for j in 0 .. m:
-    let arg = gCallableInfoGetArg(info, j)
+    let arg = gCallableInfoGetArg(info, j.cint)
     let t = gArgInfoGetType(arg)
     if isProxyCandidate(t): result = true
   var ret = gCallableInfoGetReturnType(info)
@@ -368,7 +368,7 @@ proc genP(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil): (str
       resul.add("; ")
       arglist.add(", ")
   for j in 0 .. m:
-    let arg = gCallableInfoGetArg(info, j)
+    let arg = gCallableInfoGetArg(info, j.cint)
     let t = gArgInfoGetType(arg)
     let mayBeNil = gArgInfoMayBeNull(arg)
     if gArgInfoIsCallerAllocates(arg):
@@ -494,7 +494,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
   if sym == "gtk_widget_destroyed": return
   if sym == "g_error_new_literal": return
   for j in 0 ..< gCallableInfoGetNArgs(minfo):
-    let arg = gCallableInfoGetArg(minfo, j)
+    let arg = gCallableInfoGetArg(minfo, j.cint)
     let t = gArgInfoGetType(arg)
   if sym == "g_iconv":
     return
@@ -557,7 +557,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
 
             if true:#needProxyProc(mInfo):
               for j in 0 ..< gCallableInfoGetNArgs(minfo):
-                let arg = gCallableInfoGetArg(minfo, j)
+                let arg = gCallableInfoGetArg(minfo, j.cint)
                 let t = gArgInfoGetType(arg)
                 if gArgInfoGetDirection(arg) == GIDirection.OUT:# and not callerAlloc.contains(genRec(t, true, true)): #and not gArgInfoIsCallerAllocates(arg)
                   assert(false)
@@ -735,7 +735,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
           var freeMeName: string
           for j in 0 ..< gCallableInfoGetNArgs(minfo):
             freeMeName = nil
-            let arg = gCallableInfoGetArg(minfo, j)
+            let arg = gCallableInfoGetArg(minfo, j.cint)
             let t = gArgInfoGetType(arg)
             if gArgInfoGetDirection(arg) == GIDirection.OUT and isProxyCandidate(t) and not callerAlloc.contains(genRec(t, true, true)) and not gArgInfoIsCallerAllocates(arg):
               #let h1 = genRec(arg)
@@ -967,7 +967,7 @@ proc writeModifierType(info: GIEnumInfo) =
   output.writeLine("type")
   let n = info.gEnumInfoGetNValues()
   for j in 0 ..< n:
-    let value = info.gEnumInfoGetValue(j)
+    let value = info.gEnumInfoGetValue(j.cint)
     var name = mangleName(gBaseInfoGetName(value))
     name.removeSuffix("Mask")
     #if name.startsWith("modifierReserved_"): name = name[17 .. ^1] 
@@ -1039,7 +1039,7 @@ proc writeEnum(info: GIEnumInfo) =
   output.writeLine("type")
   let n = info.gEnumInfoGetNValues()
   for j in 0 ..< n:
-    let value = info.gEnumInfoGetValue(j)
+    let value = info.gEnumInfoGetValue(j.cint)
     let name = mangleName(gBaseInfoGetName(value))
     let v = gValueInfoGetValue(value)
     s.add((v, name))
@@ -1527,8 +1527,8 @@ proc main(namespace: string) =
   var n = gi.gIrepositoryGetNInfos(namespace)
   var s = newSeq[GIBaseInfo]()
   for i in 0 ..< n:
-    if not droppedSyms.contains(mangleName(gBaseInfoGetName(gi.gIrepositoryGetInfo(namespace, i)))):
-      s.add(gi.gIrepositoryGetInfo(namespace, i))
+    if not droppedSyms.contains(mangleName(gBaseInfoGetName(gi.gIrepositoryGetInfo(namespace, i.cint)))):
+      s.add(gi.gIrepositoryGetInfo(namespace, i.cint))
   for i in s:
     if gBaseInfoGetType(i) == GIInfoType.OBJECT or gBaseInfoGetType(i) == GIInfoType.INTERFACE or gBaseInfoGetType(i) == GIInfoType.STRUCT or  gBaseInfoGetType(i) == GIInfoType.UNION or   isEnumInfo(i) or isCallbackInfo(i):
       allSyms.incl(mangleName(gBaseInfoGetName(i)))
