@@ -1,5 +1,5 @@
 # High level gobject-introspection based GTK3 bindings for the Nim programming language
-# v 0.2 2017-OCT-23
+# v 0.2 2017-NOV-20
 # (c) S. Salewski 2017
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -303,7 +303,7 @@ proc isProxyCandidate(t: GITypeInfo): bool =
 proc needProxyProc(info: GICallableInfo): bool =
   result = gCallableInfoIsMethod(info)
   let m = gCallableInfoGetNArgs(info) - 1
-  for j in 0 .. m:
+  for j in 0.cint .. m:
     let arg = gCallableInfoGetArg(info, j)
     let t = gArgInfoGetType(arg)
     if isProxyCandidate(t): result = true
@@ -493,7 +493,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
   if sym == "gtk_text_iter_copy": return
   if sym == "gtk_widget_destroyed": return
   if sym == "g_error_new_literal": return
-  for j in 0 ..< gCallableInfoGetNArgs(minfo):
+  for j in 0.cint ..< gCallableInfoGetNArgs(minfo):
     let arg = gCallableInfoGetArg(minfo, j)
     let t = gArgInfoGetType(arg)
   if sym == "g_iconv":
@@ -556,7 +556,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
             methodBuffer.writeLine(hhh & " =")
 
             if true:#needProxyProc(mInfo):
-              for j in 0 ..< gCallableInfoGetNArgs(minfo):
+              for j in 0.cint ..< gCallableInfoGetNArgs(minfo):
                 let arg = gCallableInfoGetArg(minfo, j)
                 let t = gArgInfoGetType(arg)
                 if gArgInfoGetDirection(arg) == GIDirection.OUT:# and not callerAlloc.contains(genRec(t, true, true)): #and not gArgInfoIsCallerAllocates(arg)
@@ -733,7 +733,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
             asym = "newAnimationFromStreamAsync"
           methodBuffer.writeLine("\nproc " & asym & EM & plist & " =")
           var freeMeName: string
-          for j in 0 ..< gCallableInfoGetNArgs(minfo):
+          for j in 0.cint ..< gCallableInfoGetNArgs(minfo):
             freeMeName = nil
             let arg = gCallableInfoGetArg(minfo, j)
             let t = gArgInfoGetType(arg)
@@ -966,7 +966,7 @@ proc writeModifierType(info: GIEnumInfo) =
   var flags = true#($gBaseInfoGetName(info)).endsWith("Flags")
   output.writeLine("type")
   let n = info.gEnumInfoGetNValues()
-  for j in 0 ..< n:
+  for j in 0.cint ..< n:
     let value = info.gEnumInfoGetValue(j)
     var name = mangleName(gBaseInfoGetName(value))
     name.removeSuffix("Mask")
@@ -1038,7 +1038,7 @@ proc writeEnum(info: GIEnumInfo) =
   var flags = ($gBaseInfoGetName(info)).endsWith("Flags")
   output.writeLine("type")
   let n = info.gEnumInfoGetNValues()
-  for j in 0 ..< n:
+  for j in 0.cint ..< n:
     let value = info.gEnumInfoGetValue(j)
     let name = mangleName(gBaseInfoGetName(value))
     let v = gValueInfoGetValue(value)
@@ -1526,7 +1526,7 @@ proc main(namespace: string) =
     output.writeLine("let Quark* = g_quark_from_static_string(qt)")
   var n = gi.gIrepositoryGetNInfos(namespace)
   var s = newSeq[GIBaseInfo]()
-  for i in 0 ..< n:
+  for i in 0.cint ..< n:
     if not droppedSyms.contains(mangleName(gBaseInfoGetName(gi.gIrepositoryGetInfo(namespace, i)))):
       s.add(gi.gIrepositoryGetInfo(namespace, i))
   for i in s:
