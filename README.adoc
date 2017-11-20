@@ -24,7 +24,7 @@ it should also work for upcoming _GTK4_.)
 
 https://nim-lang.org/[Nim] is a modern universal programming language.
 
-https://www.gtk.org/[GTK], also known as the _Gimp Tool Kit_ and now sometimes also called _Gnome Tool Kit_, is a Graphical User Interface library.
+https://www.gtk.org/[GTK], also known as the _Gimp Tool Kit_ and now sometimes called _Gnome Tool Kit_, is a Graphical User Interface library.
 
 NOTE: Later we will insert at this location a nice picture of a fancy Nim GTK3 GUI. Such a picture is fine to attract users and indeed is a good motivation.
 But such pictures are no real evidence for the quality of a GUI toolkit -- the concrete example may look nice, while the toolkit
@@ -41,19 +41,28 @@ in the Nim package repository. _Android OS_ is currently not supported by GTK at
 
 While low level Nim bindings for GTK3 are already available since a few years, this one is an attempt to
 provide real high level bindings with full type safety, full _Garbage Collector_ (_GC_) support and an idiomatic
-_Application Programming Interface_ (_API_)
+_Application Programming Interface_ (_API_).
 
-The low level bindings available at https://github.com/ngtk3 where generated with the Nim tool `c2nim` directly from the _C_ header files, are already tested
-with some applications (https://github.com/ngtk3/NEd[NEd Nim Editor], https://github.com/StefanSalewski/nim-chess3[Chess Game])
-and generally work fine. Indeed missing Garbage Collector support is generally not really a problem, as widgets are generally
-put into containers and were automatically deleted together with its parents due to GTK's reference counting.
+Currently there are at least 3 sources of GTK3 bindings for Nim:
 
-Still there can be some demand for really high level bindings -- so this repository tries to provide them.
+* https://github.com/ngtk3
+* https://github.com/StefanSalewski/oldgtk3
+* https://github.com/StefanSalewski/gintro
 
-High level GTK3 bindings, as available for many other programming languages like _Python_, _Ruby_ or _D_ already,
-would have these advantages:
+ngtk3 was the first attempt to provide GTK3 support for Nim. It contains single repositories for all the GTK related libraries and
+is not supported by nimble package manager. It was created from GTK 3.20 headers and is now deprecated.
 
-* full Garbage Collector support -- you should never have to free resources manually
+oldgtk3 is the port of ngtk3 to GTK 3.22 -- joining all libraries and providing nimble support. Some people may still prefer
+using oldgtk3. As it is generated with the Nim tool c2nim directly from the C header files without much manual intervention,
+it should be complete and contain not that much bugs. Missing Garbage Collector support is generally not really a problem, as
+widgets are generally put into containers and were automatically deleted together with its parents due to GTK's reference counting.
+
+Still there can be some demand for really high level bindings -- so this gintro repository tries to provide them.
+
+High level GTK3 bindings, as available for many other programming languages like _C++_, _Python_, _Ruby_ or _D_ already,
+have these advantages:
+
+* full Garbage Collector or Destructor support -- you should never have to free resources manually
 * Widgets are Nim objects, so inheritance and sub-classing can be used
 * full type safety -- no needs for casts or other unsafe and dangerous operations
 
@@ -106,14 +115,14 @@ These basic libraries are already partly tested:
 * Gtk
 
 In best case it should be possible to add more GObject based libraries to this list without larger modifications of the generator source code.
-Unfortunately the bindings for the _cairo_ drawing library provided by {GIR} are only a minimal stub -- later we will have to extend it manually.  
+Unfortunately the bindings for the _cairo_ drawing library provided by {GIR} was only a minimal stub -- we have extend it manually.  
 
 == How to try it out
 
 Of course you will need a working Nim installation with a recent compiler version and you have to ensure that GTK and related libraries are installed on your system. For some Linux
 distributions which provide mainly pre-compiled software you may have to also install some GTK related developer files. 
 
-This package now supports the _Nimble Package Manager_, so ideally a plain `nimble install gintro` should do. But as this package does not
+This package supports the _Nimble Package Manager_, so ideally a plain `nimble install gintro` should do. But as this package does not
 only provide some plain text files, but uses {GIR} database query on your local computer to generate
 binding files exactly matching your system, that does not work currently. We have to download the files, compile and execute
 the `gen.nim` generator program and finally to install the generated bindings modules on your computer as a _nimble package_.
@@ -127,6 +136,13 @@ cd gintro
 nimble prepare
 nimble install
 ----
+
+NOTE: Latest version of gintro package uses some files from oldgtk3 package for bootstrapping. We assume that
+users of gintro generally are not interested in low level oldgtk3 package, so we try to download only 3 single files
+from oldgtk3 package. That should work if wget or nimgrab executables are available. If it fails you should
+get a longer error message which may help you to solve the issue. If that should not work for you, you may
+copy the old file gintro.nimble.bak to gintro.nimble before calling `nimble prepare`. That would use files from
+deprecated ngtk3 repository for bootstrapping. 
 
 NOTE: Nimble prepare should run for about 20 seconds, it compiles and executes the generator program `gen.nim`.
 Unfortunately we can not guarantee that the generator command  will be able to really build all the

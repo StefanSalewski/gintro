@@ -8,7 +8,7 @@ skipDirs = @["examples", "tests"]
 
 # Dependencies
 
-requires "nim >= 0.17.0"
+requires "nim >= 0.17.2"
 
 when defined(nimdistros):
   import distros
@@ -33,19 +33,30 @@ proc prep =
   mkDir("ngtk3")
   cd("ngtk3")
 
-  exec("git clone https://github.com/ngtk3/nim-glib")
-  exec("git clone https://github.com/ngtk3/nim-gobject")
-  exec("git clone https://github.com/ngtk3/nim-gir")
-
   cpFile(this / "tests" / "gen.nim", td / wd / "gen.nim")
   cpFile(this / "tests" / "combinatorics.nim", td / wd / "combinatorics.nim")
 
-  cpFile("nim-glib/src/glib.nim", td / wd / "glib.nim")
-  cpFile("nim-gobject/src/gobject.nim", td / wd / "gobject.nim")
-  cpFile("nim-gir/src/gir.nim", td / wd / "gir.nim")
-
   cd(td)
   cd(wd)
+
+  try:
+    exec("wget 'https://raw.githubusercontent.com/StefanSalewski/oldgtk3/master/oldgtk3/gobject.nim' -O gobject.nim")
+    exec("wget 'https://raw.githubusercontent.com/StefanSalewski/oldgtk3/master/oldgtk3/glib.nim' -O glib.nim")
+    exec("wget 'https://raw.githubusercontent.com/StefanSalewski/oldgtk3/master/oldgtk3/gir.nim' -O gir.nim")
+  except:
+    try:
+      exec("nimgrab 'https://raw.githubusercontent.com/StefanSalewski/oldgtk3/master/oldgtk3/gobject.nim' gobject.nim")
+      exec("nimgrab 'https://raw.githubusercontent.com/StefanSalewski/oldgtk3/master/oldgtk3/glib.nim' glib.nim")
+      exec("nimgrab 'https://raw.githubusercontent.com/StefanSalewski/oldgtk3/master/oldgtk3/gir.nim' gir.nim")
+    except:
+      echo "For bootstrapping of gintro package we need the low level files gobject.nim, glib.nim and gir.nim."
+      echo "We take these from package oldgtk3. As most gintro users will not need the whole oldgtk3 package"
+      echo "we tried to only download these 3 single files using wget or nimgrab. But that failed."
+      echo "Ensure that wget or nimgrab are available. wget should be available for Unix like systems."
+      echo "Nimgrab should be available in Nim/tools directory. You may compile it with 'nim c -d:ssl nimgrab.nim'"
+      echo "and put it into your search path"
+      echo "For the unlikely case that you have already full oldgtk3 package installed, we will just try to continue..."
+
   exec("nim c gen.nim")
   mkDir("nim_gi")
   exec(td / wd / "gen")
