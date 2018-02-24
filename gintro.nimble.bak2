@@ -67,8 +67,8 @@ proc prep =
   cd(td)
   rmDir(wd) # cleanup
 
-#task prepare, "preparing gintro":
-before install:
+task prepare, "preparing gintro":
+#before install:
 
   echo "preparing gintro"
   prep()
