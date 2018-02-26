@@ -1,6 +1,5 @@
 # nim c button.nim
-import gintro/[gtk, glib, gobject]
-import gintro/gio except Application, newApplication
+import gintro/[gtk, glib, gobject, gio]
 
 proc buttonClicked (button: Button) =
   button.label = utf8Strreverse(button.label, -1)

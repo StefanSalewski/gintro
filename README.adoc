@@ -1,6 +1,6 @@
 = High level GTK3 bindings for the Nim programming language
 (c) Stefan Salewski                                     
-//Version 0.2 2017     
+//Version 0.3 2018     
 :experimental:
 :imagesdir: http://ssalewski.de/tmp
 :source-highlighter: pygments
@@ -11,7 +11,7 @@
 :MAC: MacOSX
 
 //(c) Stefan Salewski +
-//2017
+//2018
 
 TIP: A more fancy copy of this document with dark source code background is available at http://ssalewski.de/gintroreadme.html[GIntro README]
 
@@ -19,7 +19,7 @@ NOTE: This work is partly based on earlier works of J. Mansour and has been supp
 The `combinatorics` module was kindly provided by R. Behrends.
 
 //icon:thumbs-up[]
-This repository contains bindings from the Nim programming language to the GTK3 _GUI_ (_Graphical User Interface_) library and related libraries. (With minimal fixes
+This repository contains bindings from the Nim programming language to the GTK3 _GUI_ (_Graphical User Interface_) library and related libraries. (With some fixes
 it should also work for upcoming _GTK4_.)
 
 https://nim-lang.org/[Nim] is a modern universal programming language.
@@ -45,7 +45,7 @@ _Application Programming Interface_ (_API_).
 
 Currently there are at least 3 sources of GTK3 bindings for Nim:
 
-* https://github.com/ngtk3
+* https://github.com/ngtk3 (obsolete, will be deleted)
 * https://github.com/StefanSalewski/oldgtk3
 * https://github.com/StefanSalewski/gintro
 
@@ -69,7 +69,7 @@ have these advantages:
 These high level bindings are based on _{GIR}_, an _XML_ based database like interface description. Compared to the _C_ header
 files this description gives us more and deeper information about data types and function calls, for example ownership transfer of objects and
 in or out direction of procedure variables,  which makes writing the glue code much easier.
-And it should work with no or minimal
+And it should work with minimal
 modifications also for the upcoming GTK4.
 
 Unfortunately there are also some drawbacks:
@@ -101,48 +101,44 @@ But maybe more is missing, we have to investigate that. Until now these bindings
 
 These basic libraries are already partly tested:
 
-* GLib
-* GObject
-* GModule
-* xlib
-* Gio
-* Atk
-* Pango
-* cairo
-* GdkPixbuf
-* Rsvg
-* Gdk
-* Gtk
+Gtk, Gdk, GLib, GObject, Gio, GdkPixbuf, GtkSource, Pango, PangoCairo, PangoFT2, GModule, Rsvg, fontconfig, freetype2, xlib, Atk and *cairo*
 
 In best case it should be possible to add more GObject based libraries to this list without larger modifications of the generator source code.
-Unfortunately the bindings for the _cairo_ drawing library provided by {GIR} was only a minimal stub -- we have extend it manually.  
+Unfortunately the bindings for the _cairo_ drawing library provided by {GIR} was only a minimal stub -- we have extend it manually.
 
 == How to try it out
 
 Of course you will need a working Nim installation with a recent compiler version and you have to ensure that GTK and related libraries are installed on your system. For some Linux
 distributions which provide mainly pre-compiled software you may have to also install some GTK related developer files. 
 
-This package supports the _Nimble Package Manager_, so ideally a plain `nimble install gintro` should do. But as this package does not
-only provide some plain text files, but uses {GIR} database query on your local computer to generate
-binding files exactly matching your system, that does not work currently. We have to download the files, compile and execute
-the `gen.nim` generator program and finally to install the generated bindings modules on your computer as a _nimble package_.
-
-These instructions should be enough  for that:
+With a recent nimble version (>= v0.8.10) you only have to type in a shell window:
 
 ----
-cd /tmp
-git clone https://github.com/stefansalewski/gintro
-cd gintro
-nimble prepare
-nimble install
+nimble install gintro
 ----
+
+//This package supports the _Nimble Package Manager_, so ideally a plain `nimble install gintro` should do. But as this package does not
+//only provide some plain text files, but uses {GIR} database query on your local computer to generate
+//binding files exactly matching your system, that does not work currently. We have to download the files, compile and execute
+//the `gen.nim` generator program and finally to install the generated bindings modules on your computer as a _nimble package_.
+
+//These instructions should be enough  for that:
+
+//----
+//cd /tmp
+//git clone https://github.com/stefansalewski/gintro
+//cd gintro
+//nimble prepare
+//nimble install
+//----
 
 NOTE: Latest version of gintro package uses some files from oldgtk3 package for bootstrapping. We assume that
 users of gintro generally are not interested in low level oldgtk3 package, so we try to download only 3 single files
 from oldgtk3 package. That should work if wget or nimgrab executables are available. If it fails you should
-get a longer error message which may help you to solve the issue. If that should not work for you, you may
-copy the old file gintro.nimble.bak to gintro.nimble before calling `nimble prepare`. That would use files from
-deprecated ngtk3 repository for bootstrapping. 
+get a longer error message which may help you to solve the issue.
+// If that should not work for you, you may
+//copy the old file gintro.nimble.bak to gintro.nimble before calling `nimble prepare`. That would use files from
+//deprecated ngtk3 repository for bootstrapping. 
 
 NOTE: Nimble prepare should run for about 20 seconds, it compiles and executes the generator program `gen.nim`.
 Unfortunately we can not guarantee that the generator command  will be able to really build all the
@@ -153,7 +149,12 @@ The {GIR} based built process generates bindings customized to the OS where the 
 so for older GTK releases or a 32 bit system different files are created. Later we may also provide pre-generated
 files for various OS and GTK versions, but building locally is preferred when possible. 
 
-Now you can built `app0.nim` and launch it:
+== A few basic examples
+
+NOTE: Currently we do not install the example programs. If you want to try them, you have to copy the source code of the
+examples from https://github.com/StefanSalewski/gintro/tree/master/examples to your local computer, maybe to /tmp/gintro/examples directory.
+
+Then you can compile and run them from shell with commands like
 
 ----
 cd /tmp/gintro/examples/
@@ -161,7 +162,8 @@ nim c app0.nim
 ./app0
 ----
 
-== A few basic examples
+or you may open the source files in your favorite Nim IDE or editor. Taking the source code from this Readme file is not
+really recommended, as these source code listings may be not the latest versions.
 
 GTK3 programs can use still the old _GTK2_ design, where you first initialize the GTK library, create your widgets and finally enter the GTK main loop.
 This style is still used in many tutorials as in http://zetcode.com/gui/gtk2/[Zetcode tutorial] or in the GTK book of A. Krause.
@@ -188,7 +190,7 @@ We start with a minimal traditional old style example, which should be familiar 
 .t0.nim
 ----
 # nim c t0.nim
-import gintro/gtk
+import gintro/[gtk, gobject]
 
 proc bye(w: Window) =
   mainQuit()
@@ -222,11 +224,9 @@ differences between the source code displayed here and the sources in examples d
 ----
 # app0.nim -- minimal application style example
 # nim c app0.nim
-import gintro/gtk
-import gintro/gio except Application, newApplication # we want to use GTK application
-#from gintro/gio import ApplicationFlags, scActivate, run
+import gintro/[gtk, glib, gobject, gio]
 
-proc activate(app: Application) =
+proc appActivate(app: Application) =
   let window = newApplicationWindow(app)
   window.title = "GTK3 & Nim"
   window.defaultSize = (200, 200)
@@ -234,18 +234,25 @@ proc activate(app: Application) =
 
 proc main =
   let app = newApplication("org.gtk.example")
-  connect(app, "activate", activate)
+  connect(app, "activate", appActivate)
   discard run(app)
 
 main()
 ----
 
 In the `main proc` we create a new application and connect the activate signal to our `activate proc`, which then creates and displays
-the still empty window. For this program we need the `gtk` module and also some procs and data types from `gio` module. As both modules
-have a data type called `Application` (`gtk.Application` extends indeed the `gio.Application`) we can either qualify the `Application` data type and its `new proc`
-with `gtk` prefix, or as we did here, exclude that from `gio` imports. Another solution would be to import from `gio` only what is really needed. 
-The source code of this  minimal example is stored in the examples directory, you may `cd` into it and type `nim c app0.nim` to create
-the executable.
+the still empty window.
+
+NOTE: We are importing modules gtk and gio. Initially both modules had a data type called `Application` (`gtk.Application`
+extends indeed the `gio.Application`), so we would have to use module name prefixes, or we could import from gio only
+what is really needed (`from gio import ...`) or use the form (`import gio exept ...`). But as gio.Application is generally
+not needed often, we have no renamed gio.Application to GApplication. No more name clashes.
+
+// For this program we need the `gtk` module and also some procs and data types from `gio` module. As both modules
+//have a data type called `Application` (`gtk.Application` extends indeed the `gio.Application`) we can either qualify the `Application` data type and its `new proc`
+//with `gtk` prefix, or as we did here, exclude that from `gio` imports. Another solution would be to import from `gio` only what is really needed. 
+//The source code of this  minimal example is stored in the examples directory, you may `cd` into it and type `nim c app0.nim` to create
+//the executable.
 
 //(Well not yet, as we provide no real nimble install. Copy app0.nim to nim_gi directory where the bindings live, or
 //create symlinks for now.)
@@ -360,13 +367,12 @@ this:
 .button.nim
 ----
 # nim c button.nim
-import gintro/[gtk, glib]
-import gintro/gio except Application, newApplication
+import gintro/[gtk, glib, gobject, gio]
 
 proc buttonClicked (button: Button) =
   button.label = utf8Strreverse(button.label, -1)
 
-proc activate (app: Application) =
+proc appActivate (app: Application) =
   let window = newApplicationWindow(app)
   window.title = "GNOME Button"
   window.defaultSize = (250, 50)
@@ -377,7 +383,7 @@ proc activate (app: Application) =
 
 proc main =
   let app = newApplication("org.gtk.example")
-  connect(app, "activate", activate)
+  connect(app, "activate", appActivate)
   discard app.run
 
 main()
@@ -433,8 +439,7 @@ happens when you click on the buttons.
 .connect_args.nim
 ----
 # nim c connect_args.nim
-import gintro/[gtk, glib]
-import gintro/gio except Application, newApplication
+import gintro/[gtk, glib, gobject, gio]
 
 type
   O = object
@@ -455,7 +460,7 @@ proc b4Callback(button: Button; w: ApplicationWindow) =
   else:
     w.title = "Nim with GTK3"
 
-proc activate (app: Application) =
+proc appActivate (app: Application) =
   var o: O
   var r: ref O
   new r
@@ -481,7 +486,7 @@ proc activate (app: Application) =
 
 proc main =
   let app = newApplication("org.gtk.example")
-  connect(app, "activate", activate)
+  connect(app, "activate", appActivate)
   discard app.run
 
 main()
@@ -548,8 +553,7 @@ each button click. The amount of decrease (5) is passed to the callback as a int
 .count_button.nim
 ----
 # nim c count_button.nim
-import gintro/[gtk, glib]
-import gintro/gio except Application, newApplication
+import gintro/[gtk, glib, gobject, gio]
 
 type
   CountButton = ref object of Button
@@ -560,7 +564,7 @@ proc buttonClicked (button: CountButton; decrement: int) =
   button.label = "Counter: " & $button.counter 
   echo "Counter is now: ", button.counter
 
-proc activate (app: Application) =
+proc appActivate (app: Application) =
   var button: CountButton
   let window = newApplicationWindow(app)
   window.title = "Count Button"
@@ -572,7 +576,7 @@ proc activate (app: Application) =
 
 proc main =
   let app = newApplication("org.gtk.example")
-  connect(app, "activate", activate)
+  connect(app, "activate", appActivate)
   discard app.run
 
 main()
@@ -621,10 +625,9 @@ Converting that to Nim is again straight forward:
 .label.nim
 ----
 # nim c label.nim
-import gintro/[gtk, glib]
-import gintro/gio except Application, newApplication
+import gintro/[gtk, glib, gobject, gio]
 
-proc activate(app: Application) =
+proc appActivate(app: Application) =
   let window = newApplicationWindow(app)
   let label = newLabel("Yellow text on green background")
   let cssProvider = newCssProvider()
@@ -639,21 +642,21 @@ proc activate(app: Application) =
 
 proc main =
   let app = newApplication("org.gtk.example")
-  connect(app, "activate", activate)
+  connect(app, "activate", appActivate)
   discard run(app)
 
 main()
 ----
 
 For this example we create a plain label widget with some text. To colorize it, we generate a
-CssProvider and load it with a textual description of of our desired colors. Then we extract the
+CssProvider and load it with a textual description of our desired colors. Then we extract the
 style context from the label and add our CssProvider to it.
 
 The last parameter of the _C_ function gtk_css_provider_load_from_data() is of type GError and can
 be used in _C_ code to detect runtime errors. The _C_ code above just passes NULL to ignore this error.
 For Nim we map that GError argument to _exceptions_. To test what happens in Nim when an GError would
 report an error condition, you may uncomment  function loadFromPath() in the code above. As the specified path
-does not exist, we should get an exeption with a message telling us the problem. Of course in your real
+does not exist, we should get an exception with a message telling us the problem. Of course in your real
 code you may catch such exceptions with Nim's `try:` blocks. (You may also modify the data variable above to
 an illegal CSS statement -- if the statement is seriously wrong, then you should get an exception from
 loadFromData().
@@ -667,14 +670,13 @@ and shows a sine wave which is continuously moving to the left.
 
 NOTE: The gobject-introspection generated cairo module was only a minimal stub, because cairo
 library does not really support introspection. Now we are using a cairo module which is generated 
-directly from the cairo C header files with the tool c2nim and then modified to support an high level
-API. That modification is still work in progress, so not all cairo functionality is available already. 
+directly from the cairo C header files with the tool c2nim and then modified to support a high level
+API.
 
 [[cairo_anim.nim]]
 [source,nim]
 .cairo_anim.nim
 ----
-# nim c cairo_anim.nim
 # https://lists.cairographics.org/archives/cairo/2016-October/027791.html
 # Nim version of that plain cairo animation example
 
@@ -696,13 +698,13 @@ proc drawingAreaDrawCb(widget: DrawingArea; context: Context): bool =
   var redrawNumber {.global.} : int
   let width = getAllocatedWidth(widget)
   let height = getAllocatedHeight(widget)
-  for i in 1 .. < NumPoints:
+  for i in 1 ..< NumPoints:
     context.lineTo(i.float , sineToPoint(i + redrawNumber, width, height))
   context.stroke
   inc(redrawNumber)
   return true # TRUE to stop other handlers from being invoked for the event. FALSE to propagate the event further.
 
-proc activate(app: Application) =
+proc appActivate(app: Application) =
   let window = newApplicationWindow(app)
   window.title = "Drawing example"
   window.defaultSize = (400, 400)
@@ -714,7 +716,7 @@ proc activate(app: Application) =
 
 proc main =
   let app = newApplication("org.gtk.example")
-  connect(app, "activate", activate)
+  connect(app, "activate", appActivate)
   discard run(app)
 
 main()

@@ -1,6 +1,5 @@
 # nim c label.nim
-import gintro/[gtk, glib, gobject]
-import gintro/gio except Application, newApplication
+import gintro/[gtk, glib, gobject, gio]
 
 proc appActivate(app: Application) =
   let window = newApplicationWindow(app)

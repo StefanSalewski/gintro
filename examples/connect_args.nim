@@ -1,6 +1,5 @@
 # nim c connect_args.nim
-import gintro/[gtk, glib, gobject]
-import gintro/gio except Application, newApplication
+import gintro/[gtk, glib, gobject, gio]
 
 type
   O = object

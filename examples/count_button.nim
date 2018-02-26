@@ -1,6 +1,5 @@
 # nim c count_button.nim
-import gintro/[gtk, glib, gobject]
-import gintro/gio except Application, newApplication
+import gintro/[gtk, glib, gobject, gio]
 
 type
   CountButton = ref object of Button

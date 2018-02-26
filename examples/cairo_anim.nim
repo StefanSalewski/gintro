@@ -19,7 +19,7 @@ proc drawingAreaDrawCb(widget: DrawingArea; context: Context): bool =
   var redrawNumber {.global.} : int
   let width = getAllocatedWidth(widget)
   let height = getAllocatedHeight(widget)
-  for i in 1 .. < NumPoints:
+  for i in 1 ..< NumPoints:
     context.lineTo(i.float , sineToPoint(i + redrawNumber, width, height))
   context.stroke
   inc(redrawNumber)
