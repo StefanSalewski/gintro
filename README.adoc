@@ -37,7 +37,22 @@ When you develop primary _free open source software_ (_FOSS_) for Linux or other
 effort you should be even able to port your application to the proprietary Windows or {MAC} operating systems. But when your primary target platforms
 are Windows and {MAC} and you desire a real native look and feel there, then you may find better suited ones in the Nim software repository.
 Also, when you only need a minimal restricted GUI which is very easy to install on Windows and {MAC}, then you may find better suited packages
-in the Nim package repository. _Android OS_ is currently not supported by GTK at all.  
+in the Nim package repository. _Android OS_ is currently not supported by GTK at all.
+
+TIP: At least for Windows 10 it seems to be not that hard to install GTK3 libraries, as was recently reported in
+https://github.com/StefanSalewski/gintro/issues/24 by user zetashift:
+----
+  Sketch of GTK3 install for Windows 10:
+  For the GTK libs I did according these instructions(https://www.gtk.org/download/windows.php):
+  Install MSYS2
+  In the msys2 cmd I entered:
+  pacman -S mingw-w64-x86_64-gtk3
+  Then for some other necessary depencies(girepository.dll) you need to do:
+  pacman -S mingw-w64-x86_64-python3-gobject
+
+  Additional, you have to install the separate GtkSourceView lib in a similar manner from
+  https://github.com/Alexpux/MINGW-packages/blob/master/mingw-w64-gtksourceview3/
+----
 
 While low level Nim bindings for GTK3 are already available since a few years, this one is an attempt to
 provide real high level bindings with full type safety, full _Garbage Collector_ (_GC_) support and an idiomatic
@@ -117,28 +132,10 @@ With a recent nimble version (>= v0.8.10) you only have to type in a shell windo
 nimble install gintro
 ----
 
-//This package supports the _Nimble Package Manager_, so ideally a plain `nimble install gintro` should do. But as this package does not
-//only provide some plain text files, but uses {GIR} database query on your local computer to generate
-//binding files exactly matching your system, that does not work currently. We have to download the files, compile and execute
-//the `gen.nim` generator program and finally to install the generated bindings modules on your computer as a _nimble package_.
-
-//These instructions should be enough  for that:
-
-//----
-//cd /tmp
-//git clone https://github.com/stefansalewski/gintro
-//cd gintro
-//nimble prepare
-//nimble install
-//----
-
 NOTE: Latest version of gintro package uses some files from oldgtk3 package for bootstrapping. We assume that
 users of gintro generally are not interested in low level oldgtk3 package, so we try to download only 3 single files
 from oldgtk3 package. That should work if wget or nimgrab executables are available. If it fails you should
 get a longer error message which may help you to solve the issue.
-// If that should not work for you, you may
-//copy the old file gintro.nimble.bak to gintro.nimble before calling `nimble prepare`. That would use files from
-//deprecated ngtk3 repository for bootstrapping. 
 
 NOTE: Nimble prepare should run for about 20 seconds, it compiles and executes the generator program `gen.nim`.
 Unfortunately we can not guarantee that the generator command  will be able to really build all the
@@ -247,15 +244,6 @@ NOTE: We are importing modules gtk and gio. Initially both modules had a data ty
 extends indeed the `gio.Application`), so we would have to use module name prefixes, or we could import from gio only
 what is really needed (`from gio import ...`) or use the form (`import gio exept ...`). But as gio.Application is generally
 not needed often, we have no renamed gio.Application to GApplication. No more name clashes.
-
-// For this program we need the `gtk` module and also some procs and data types from `gio` module. As both modules
-//have a data type called `Application` (`gtk.Application` extends indeed the `gio.Application`) we can either qualify the `Application` data type and its `new proc`
-//with `gtk` prefix, or as we did here, exclude that from `gio` imports. Another solution would be to import from `gio` only what is really needed. 
-//The source code of this  minimal example is stored in the examples directory, you may `cd` into it and type `nim c app0.nim` to create
-//the executable.
-
-//(Well not yet, as we provide no real nimble install. Copy app0.nim to nim_gi directory where the bindings live, or
-//create symlinks for now.)
 
 Various ways to set widget parameters are supported -- the number 1 to 6 refer to the comments below:
 
@@ -401,9 +389,6 @@ for this task. While that function internally works with `cstrings`, and in _C_ 
 in our Nim example that is done automatically by Nim's Garbage Collector. When you compare our example carefully with the _C_ code,
 then you may notice a difference. The _C_ code passes the window containing the button as an additional parameter to the
 callback function, but that parameter is not really used. We simple ignore it here, as it is not used at all.
-//and I assume that passing a widget in this way in our nim code
-//may not work already currently. Fortunately widgets as optional parameter are not often needed, and we will try to make that
-//working soon...
 In one of the following examples you will learn how passing (nearly) arbitrary parameters in a type safe way is done.  
 Another difference is, that  the _C_ code returns an `integer` status value returned by `g_application_run()` to the _OS_. We
 could do the same by using the `quit() proc` of Nim's _OS_ module, but as that would give us no additional benefit, we simply ignore it.

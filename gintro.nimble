@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.4.0"
+version       = "0.4.1"
 author        = "Stefan Salewski"
 description = "High level GObject-Introspection based GTK3 bindings"
 license       = "MIT"
@@ -40,14 +40,14 @@ proc prep =
   cd(wd)
 
   try:
-    exec("wget 'https://raw.githubusercontent.com/StefanSalewski/oldgtk3/master/oldgtk3/gobject.nim' -O gobject.nim")
-    exec("wget 'https://raw.githubusercontent.com/StefanSalewski/oldgtk3/master/oldgtk3/glib.nim' -O glib.nim")
-    exec("wget 'https://raw.githubusercontent.com/StefanSalewski/oldgtk3/master/oldgtk3/gir.nim' -O gir.nim")
+    exec("wget https://raw.githubusercontent.com/StefanSalewski/oldgtk3/master/oldgtk3/gobject.nim -O gobject.nim")
+    exec("wget https://raw.githubusercontent.com/StefanSalewski/oldgtk3/master/oldgtk3/glib.nim -O glib.nim")
+    exec("wget https://raw.githubusercontent.com/StefanSalewski/oldgtk3/master/oldgtk3/gir.nim -O gir.nim")
   except:
     try:
-      exec("nimgrab 'https://raw.githubusercontent.com/StefanSalewski/oldgtk3/master/oldgtk3/gobject.nim' gobject.nim")
-      exec("nimgrab 'https://raw.githubusercontent.com/StefanSalewski/oldgtk3/master/oldgtk3/glib.nim' glib.nim")
-      exec("nimgrab 'https://raw.githubusercontent.com/StefanSalewski/oldgtk3/master/oldgtk3/gir.nim' gir.nim")
+      exec("nimgrab https://raw.githubusercontent.com/StefanSalewski/oldgtk3/master/oldgtk3/gobject.nim gobject.nim")
+      exec("nimgrab https://raw.githubusercontent.com/StefanSalewski/oldgtk3/master/oldgtk3/glib.nim glib.nim")
+      exec("nimgrab https://raw.githubusercontent.com/StefanSalewski/oldgtk3/master/oldgtk3/gir.nim gir.nim")
     except:
       echo "For bootstrapping of gintro package we need the low level files gobject.nim, glib.nim and gir.nim."
       echo "We take these from package oldgtk3. As most gintro users will not need the whole oldgtk3 package"
