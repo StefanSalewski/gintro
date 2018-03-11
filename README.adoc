@@ -1,6 +1,6 @@
 = High level GTK3 bindings for the Nim programming language
 (c) Stefan Salewski                                     
-//Version 0.3 2018     
+//Version 0.4 2018     
 :experimental:
 :imagesdir: http://ssalewski.de/tmp
 :source-highlighter: pygments
@@ -116,7 +116,7 @@ But maybe more is missing, we have to investigate that. Until now these bindings
 
 These basic libraries are already partly tested:
 
-Gtk, Gdk, GLib, GObject, Gio, GdkPixbuf, GtkSource, Pango, PangoCairo, PangoFT2, GModule, Rsvg, fontconfig, freetype2, xlib, Atk and *cairo*
+Gtk, Gdk, GLib, GObject, Gio, GdkPixbuf, GtkSource, Pango, PangoCairo, PangoFT2, GModule, Rsvg, fontconfig, freetype2, xlib, Atk, Vte, cairo
 
 In best case it should be possible to add more GObject based libraries to this list without larger modifications of the generator source code.
 Unfortunately the bindings for the _cairo_ drawing library provided by {GIR} was only a minimal stub -- we have extend it manually.
