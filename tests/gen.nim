@@ -1,5 +1,5 @@
 # High level gobject-introspection based GTK3 bindings for the Nim programming language
-# v 0.4 2018-MAR-10
+# v 0.4 2018-APR-25
 # (c) S. Salewski 2018
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -166,7 +166,8 @@ mangledTypes.add("guint64", "uint64")
 mangledTypes.add("gfloat", "cfloat")
 mangledTypes.add("gdouble", "cdouble")
 mangledTypes.add("ptr void", "pointer")
-mangledTypes.add("ptr filename", "ucstring") # WRONG, var deleted to make it compile!
+#mangledTypes.add("ptr filename", "ucstring") # WRONG, var deleted to make it compile!
+mangledTypes.add("ptr filename", "cstring")
 mangledTypes.add("ptr error", "ptr Error00")
 mangledTypes.add("ptr ghash", "ptr HashTable00")
 mangledTypes.add("ptr glist", "ptr pointer")
@@ -243,7 +244,7 @@ proc genP(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil): (str
 
 proc isString(t: GITypeInfo): bool =
   let tag = gTypeInfoGetTag(t)
-  tag == GITypeTag.UTF8
+  tag == GITypeTag.UTF8 or tag == GITypeTag.FILENAME
 
 # recursive investigate that type -- resolve Arrays and Interfaces
 proc genRec(t: GITypeInfo; genProxy = false; fullQualified: bool = false): string =
@@ -1325,7 +1326,7 @@ proc processInfo(i: GIBaseInfo) =
      writeUnion(i)
   elif gBaseInfoGetType(i) == GIInfoType.INTERFACE:
     let h = gInterfaceInfoGetIfaceStruct(i)
-    if h != nil:
+    if true:#h != nil: # Needed for FileChooser, AppChooser
       writeInterface(i)
   elif gBaseInfoGetType(i) == GIInfoType.STRUCT:
     writeStruct(i)
@@ -1371,6 +1372,41 @@ proc init* =
 
 proc loadFromData*(self: CssProvider; data: cstring): bool =
   loadFromData(self, uint8Array(data), -1)
+
+proc gtk_file_chooser_dialog_new*(title: cstring; parent: ptr Window00; action: FileChooserAction; 
+    firstButtonText: cstring = nil): ptr FileChooserDialog00 {.varargs,
+    importc: "gtk_file_chooser_dialog_new", libprag.}
+
+proc newFileChooserDialog*(title: string = nil; parent: Window = nil; action: FileChooserAction): FileChooserDialog =
+  let gobj = gtk_file_chooser_dialog_new(safeStringToCString(title), if parent.isNil: nil else: cast[ptr Window00](parent.impl), action)
+  if g_object_get_qdata(gobj, Quark) != nil:
+    result = cast[type(result)](g_object_get_qdata(gobj, Quark))
+    assert(result.impl == gobj)
+  else:
+    new(result, finalizeGObject)
+    result.impl = gobj
+    GC_ref(result)
+    discard g_object_ref_sink(result.impl)
+    g_object_add_toggle_ref(result.impl, toggleNotify, addr(result[]))
+    g_object_unref(result.impl)
+    assert(g_object_get_qdata(result.impl, Quark) == nil)
+    g_object_set_qdata(result.impl, Quark, addr(result[]))
+
+proc initFileChooserDialog*[T](result: var T; title: string = nil; parent: Window = nil; action: FileChooserAction) =
+  assert(result is FileChooserDialog)
+  let gobj = gtk_file_chooser_dialog_new(safeStringToCString(title), if parent.isNil: nil else: cast[ptr Window00](parent.impl), action)
+  if g_object_get_qdata(gobj, Quark) != nil:
+    result = cast[type(result)](g_object_get_qdata(gobj, Quark))
+    assert(result.impl == gobj)
+  else:
+    new(result, finalizeGObject)
+    result.impl = gobj
+    GC_ref(result)
+    discard g_object_ref_sink(result.impl)
+    g_object_add_toggle_ref(result.impl, toggleNotify, addr(result[]))
+    g_object_unref(result.impl)
+    assert(g_object_get_qdata(result.impl, Quark) == nil)
+    g_object_set_qdata(result.impl, Quark, addr(result[]))
 
 import macros, strutils
 
@@ -1439,7 +1475,7 @@ proc main(namespace: string) =
     output.writeLine("type\n  TypePlugin00Array* = pointer")
     output.writeLine("type\n  uint32Array* = pointer")
     output.writeLine("type\n  VaClosureMarshal* = pointer")
-    output.writeLine("type\n  TypePlugin00* = object")
+    #output.writeLine("type\n  TypePlugin00* = object")
   elif namespace == "GLib":
     output.writeLine("type\n  GException* = object of Exception")
     output.writeLine("type\n  OptionEntry00Array* = pointer")
