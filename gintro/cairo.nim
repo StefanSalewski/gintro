@@ -7,7 +7,7 @@
 # This is the template for creation of new objects:
 
 # proc newImageSurface*(format: Format; width, height: int): Surface =
-#   new(result, surfaceDestroy) 
+#   new(result, surfaceDestroy)
 #   result.impl = cairo_image_surface_create(format, width.cint, height.cint)
 #   discard cairo_surface_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
@@ -29,7 +29,7 @@
 # when ref count of surface is decreased, maybe because context is destroyed, then gcuref is called
 # which calls GC_unref() on proxy. When there is no other ref to proxy GC can free proxy and surface
 # by calling surfaceDestroy(). This works also when surface is newer used for something.
- 
+
 # currently this is still nearly untested!
 # one problem may be procs like cairo_surface_create_similar() when called frequently, maybe
 # for each frame in animations. GC may be too slow in freeing the memory.
@@ -157,7 +157,7 @@ type
     width*: cint
     height*: cint
 
-const 
+const
   CAIRO_HAS_TEE_SURFACE = true
   CAIRO_HAS_DRM_SURFACE = true
   CAIRO_HAS_SKIA_SURFACE = true
@@ -205,7 +205,7 @@ type
 var NUDK: ptr UserDataKey = cast[ptr UserDataKey](alloc(sizeof(UserDataKey)))
 
 proc gcuref(o: pointer) {.cdecl.} =
-  #echo "gcunref"  
+  #echo "gcunref"
   GC_unref(cast[RootRef](o))
 
 type
@@ -279,14 +279,14 @@ proc restore*(cr: Context) =
 
 proc cairo_push_group*(cr: ptr Context00) {.importc, libcairo.}
 #
-proc pushGroup*(cr: Context) = 
+proc pushGroup*(cr: Context) =
   cairo_push_group(cr.impl)
 
 proc cairo_push_group_with_content*(cr: ptr Context00; content: Content) {.importc, libcairo.}
 #
-#proc pushGroupWithContent*(cr: Context; content: Content) = 
-proc pushGroup*(cr: Context; content: Content) = 
-  cairo_push_group_with_content(cr.impl, content) 
+#proc pushGroupWithContent*(cr: Context; content: Content) =
+proc pushGroup*(cr: Context; content: Content) =
+  cairo_push_group_with_content(cr.impl, content)
 
 proc cairo_pattern_destroy*(pattern: ptr Pattern00) {.importc, libcairo.}
 #
@@ -302,7 +302,7 @@ proc setUserData*(pattern: Pattern; key: ptr UserDataKey; userData: pointer; des
 proc cairo_pop_group*(cr: ptr Context00): ptr Pattern00 {.importc, libcairo.}
 #
 proc popGroup*(cr: Context): Pattern =
-  new(result, patternDestroy) 
+  new(result, patternDestroy)
   result.impl = cairo_pop_group(cr.impl)
   discard cairo_pattern_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
@@ -367,9 +367,9 @@ proc cairo_set_source_surface*(cr: ptr Context00; surface: ptr Surface00; x, y: 
 #
 proc setSourceSurface*(cr: Context; surface: Surface; x, y: float) =
   #GC_ref(source) # we guess that surface is nor referenced, but a new intern pattern is created
-  let h = cairo_surface_get_reference_count(surface.impl)
+  #let h = cairo_surface_get_reference_count(surface.impl)
   cairo_set_source_surface(cr.impl, surface.impl, x.cdouble, y.cdouble)
-  assert(cairo_surface_get_reference_count(surface.impl) == h) # is our guess OK?
+  #assert(cairo_surface_get_reference_count(surface.impl) == h) # is our guess OK?
 #
 #const `sourceSurface=`* = setSourceSurface
 
@@ -733,7 +733,7 @@ proc copyClipRectangleList*(cr: Context): seq[Rectangle] =
   var r = cairo_copy_clip_rectangle_list(cr.impl)
   defer: cairo_rectangle_list_destroy(r)
   if r.status != Status.success or r.numRectangles == 0: return nil
-  result = newSeq[Rectangle]() 
+  result = newSeq[Rectangle]()
   for i in 0 ..< r.numRectangles:
     let k = cast[ptr array[99, Rectangle00]](r.rectangles)[i]
     h.x = k.x.float
@@ -1080,8 +1080,8 @@ proc cairo_show_text_glyphs*(cr: ptr Context00; utf8: cstring; utf8_len: cint;
 
 proc cairo_text_path*(cr: ptr Context00; utf8: cstring) {.importc,libcairo.}
 #
-proc textPath*(cr: Context; utf8: string) = 
-  cairo_text_path(cr.impl, utf8) 
+proc textPath*(cr: Context; utf8: string) =
+  cairo_text_path(cr.impl, utf8)
 
 # TODO
 proc cairo_glyph_path*(cr: ptr Context00; glyphs: ptr Glyph00; num_glyphs: cint) {.importc, libcairo.}
@@ -1236,7 +1236,7 @@ proc toyFontFaceCreate*(family: string; slant: FontSlant; weight: FontWeight): F
   result.impl = cairo_toy_font_face_create(family, slant, weight)
   discard cairo_font_face_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
-# returns: The family name. This string is owned by the font face and remains valid as long as the font face is alive (referenced). 
+# returns: The family name. This string is owned by the font face and remains valid as long as the font face is alive (referenced).
 proc cairo_toy_font_face_get_family*(fontFace: ptr Font_face00): cstring {.importc, libcairo.}
 #
 proc toyFontFaceGetFamily*(fontFace: FontFace): string =
@@ -1581,7 +1581,7 @@ proc cairo_device_set_user_data*(device: ptr Device00; key: ptr UserDataKey;
 proc setUserData*(device: Device; key: ptr UserDataKey; userData: pointer; destroy: DestroyFunc00): Status =
   cairo_device_set_user_data(device.impl, key, userData, destroy)
 
-# TODO: problem is, that it may take too long until GC may release surfaces! 
+# TODO: problem is, that it may take too long until GC may release surfaces!
 proc cairo_surface_create_similar*(other: ptr Surface00; content: Content; width, height: cint):
   ptr Surface00 {.importc, libcairo.}
 
@@ -2115,7 +2115,7 @@ proc mesh_pattern_set_corner_color_rgba*(pattern: Pattern; cornerNum: int; red, 
 
 proc cairo_pattern_set_matrix*(pattern: ptr Pattern00; matrix: Matrix) {.importc, libcairo.}
 #
-proc patternSetMatrix*(pattern: Pattern; matrix: Matrix) =
+proc setMatrix*(pattern: Pattern; matrix: Matrix) =
   cairo_pattern_set_matrix(pattern.impl, matrix)
 
 proc cairo_pattern_get_matrix*(pattern: ptr Pattern00; matrix: var Matrix) {.importc, libcairo.}
@@ -2289,8 +2289,8 @@ proc scale*(matrix: var Matrix; sx, sy: float) =
 
 proc cairo_matrix_rotate*(matrix: var Matrix; radians: cdouble) {.importc, libcairo.}
 #
-proc rotate*(matrix: var Matrix; radians: float) =  
-  cairo_matrix_rotate(matrix, radians.cdouble) 
+proc rotate*(matrix: var Matrix; radians: float) =
+  cairo_matrix_rotate(matrix, radians.cdouble)
 
 proc cairo_matrix_invert*(matrix: var Matrix): Status {.importc, libcairo.}
 #
@@ -2525,8 +2525,8 @@ when CAIRO_HAS_PDF_SURFACE:
 
   proc cairo_pdf_surface_set_thumbnail_size*(surface: ptr Surface00; width, height: cint) {.importc, libcairo.}
 #
-  proc pdfSurfaceSetThumbnailSize*(surface: Surface; width, height: int) = 
-    cairo_pdf_surface_set_thumbnail_size(surface.impl, width.cint, height.cint) 
+  proc pdfSurfaceSetThumbnailSize*(surface: Surface; width, height: int) =
+    cairo_pdf_surface_set_thumbnail_size(surface.impl, width.cint, height.cint)
 
 when CAIRO_HAS_PS_SURFACE:
   type
