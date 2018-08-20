@@ -51,7 +51,7 @@ macro mconnect(widget: gobject.Object; signal: string; p: typed; arg: typed; ign
 
   var # position and actual type of interface provider, if any
     ipos = -1
-    ipro: string = nil
+    ipro: string #= nil
 
   inc(ProcID)
   let wt = getType(widget)
@@ -112,7 +112,7 @@ proc $1$2 {.cdecl.} =
           (names[i], types[i]) = largs[i].split(": ptr ")
           types[i].setLen(types[i].len - 2)
         else:
-          types[i] = nil # plain arg, no object
+          types[i] = ""#nil # plain arg, no object
           var a1, a2: string
           (a1, a2) = largs[i].split(": ")
           let h = ct5nt(a2)
@@ -124,7 +124,7 @@ proc $1$2 {.cdecl.} =
         types[ipos - 1] = ipro
 
       for i in 0 .. largs.high:
-        if types[i] == nil:
+        if types[i] == "":
           resu.add(", " & names[i])
         else:
           resu.add(", " & names[i] & "1")

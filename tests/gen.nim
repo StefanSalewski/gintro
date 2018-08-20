@@ -1,5 +1,5 @@
 # High level gobject-introspection based GTK3 bindings for the Nim programming language
-# v 0.4.4 2018-AUG-02
+# v 0.4.5 2018-AUG-20
 # (c) S. Salewski 2018
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -433,8 +433,8 @@ proc genP(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil): (str
         let kk = if name[0] == '`': name[1 .. ^2] else: name
         arglist.add(kk & "_00")
       elif ct2nt.contains(str):
-       if str == "cstring":
-         arglist.add("safeStringToCString" & '(' & name & ')')
+       if str == "cstring" and mayBeNil:
+         arglist.add("safeStringToCString" & '(' & name & ')')################################################
        else:
          arglist.add(str & '(' & name & ')')
       else:
@@ -453,7 +453,8 @@ proc genP(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil): (str
       if name == h1 and str == h2:
         str.add(" = " & h3)
     if genProxy and str == "string" and mayBeNil:
-      str.add(" = nil")
+      #str.add(" = nil")
+      str.add(" = \"\"")
     if genProxy and isProxyCandidate(t) and mayBeNil:
       #if not str.contains("|") and (gArgInfoGetDirection(arg) == GIDirection.OUT or gArgInfoGetDirection(arg) == GIDirection.INOUT):
       #  str.add(" = cast[" & str & "](nil)")
@@ -462,6 +463,7 @@ proc genP(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil): (str
       #  discard
       #else:
         str.add(" = nil")
+        #str.add(" = \"\"")
     if (genProxy or sym == "pango_extents_to_pixels") and isFunctionInfo(info) and (gFunctionInfoGetFlags(info).int and GIFunctionInfoFlags.WRAPS_VFUNC.ord) == 0:
       if userAlloc and mayBeNil:
         var h = str
@@ -690,7 +692,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
                 freeMeName = $gBaseInfoGetName(freeMe)
               if sym == "g_closure_new_simple" or sym == "g_closure_new_object": freeMeName = "unref" # TODO GI bug?
               assert(gCallableInfoGetCallerOwns(minfo) in {GITransfer.EVERYTHING, GITransfer.NOTHING})
-              if freeMeName.isNil:
+              if freeMeName == "":
                 methodBuffer.writeLine("  new(result)")
               else:
                 methodBuffer.writeLine("  new(result, $1)" % freeMeName)
@@ -760,7 +762,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
                 elif h.endsWith("unref"):
                   freeMeName = "unref"
                   break
-              if freeMeName.isNil:
+              if freeMeName == "":
                 # assert false # TODO we have to fix this case manually
                 echo "Caution: No free/unref found for ", ' ', gBaseInfoGetName(iface), " (", sym, ')'
                 methodBuffer.writeLine("  new(result)")
@@ -781,7 +783,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
           methodBuffer.writeLine("\nproc " & asym & EM & plist & " =")
           var freeMeName: string
           for j in 0.cint ..< gCallableInfoGetNArgs(minfo):
-            freeMeName = nil
+            freeMeName = ""
             let arg = gCallableInfoGetArg(minfo, j)
             let t = gArgInfoGetType(arg)
             if gArgInfoGetDirection(arg) == GIDirection.OUT and isProxyCandidate(t) and not callerAlloc.contains(genRec(t, true, true)) and not gArgInfoIsCallerAllocates(arg):
@@ -815,7 +817,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
                   else:
                     freeMeName = $gBaseInfoGetName(freeMe)
               let h2 = mangleName(gBaseInfoGetName(arg))
-              if freeMeName.isNil:
+              if freeMeName == "":
                 methodBuffer.writeLine("  new(" & h2 & ")")
               else:
                 methodBuffer.writeLine("  new(" & h2 & ", " & freeMeName & ")")
@@ -976,6 +978,7 @@ proc writeInterface(info: GIInterfaceInfo) =
       (plist, arglist, replist) = genP(signalInfo, false, info)
       memo.add(plist)
       memo = memo.replace("\n    ", "")
+      memo = memo.replace("\"", "\\\"")
       supmod.writeLine("    \"" & ($gBaseInfoGetName(signalInfo)).replace("-", "_") & RecSep & $gBaseInfoGetName(info) & RecSep & memo & "\",")
     if gCallableInfoGetNArgs(signalInfo) > 0:
       var plist, arglist: string
@@ -1248,6 +1251,7 @@ proc writeObj(info: GIObjectInfo) =
       (plist, arglist, replist) = genP(signalInfo, false, info)
       memo.add(plist)
       memo = memo.replace("\n    ", "")
+      memo = memo.replace("\"", "\\\"")
       supmod.writeLine("    \"" & ($gBaseInfoGetName(signalInfo)).replace("-", "_") & RecSep & $gBaseInfoGetName(info) & RecSep & memo & "\",")
     if gCallableInfoGetNArgs(signalInfo) > 0:
       var plist, arglist: string
@@ -1424,7 +1428,7 @@ proc gtk_file_chooser_dialog_new*(title: cstring; parent: ptr Window00; action: 
     firstButtonText: cstring = nil): ptr FileChooserDialog00 {.varargs,
     importc: "gtk_file_chooser_dialog_new", libprag.}
 
-proc newFileChooserDialog*(title: string = nil; parent: Window = nil; action: FileChooserAction): FileChooserDialog =
+proc newFileChooserDialog*(title: string = ""; parent: Window = nil; action: FileChooserAction): FileChooserDialog =
   let gobj = gtk_file_chooser_dialog_new(safeStringToCString(title), if parent.isNil: nil else: cast[ptr Window00](parent.impl), action)
   if g_object_get_qdata(gobj, Quark) != nil:
     result = cast[type(result)](g_object_get_qdata(gobj, Quark))
@@ -1439,7 +1443,7 @@ proc newFileChooserDialog*(title: string = nil; parent: Window = nil; action: Fi
     assert(g_object_get_qdata(result.impl, Quark) == nil)
     g_object_set_qdata(result.impl, Quark, addr(result[]))
 
-proc initFileChooserDialog*[T](result: var T; title: string = nil; parent: Window = nil; action: FileChooserAction) =
+proc initFileChooserDialog*[T](result: var T; title: string = ""; parent: Window = nil; action: FileChooserAction) =
   assert(result is FileChooserDialog)
   let gobj = gtk_file_chooser_dialog_new(safeStringToCString(title), if parent.isNil: nil else: cast[ptr Window00](parent.impl), action)
   if g_object_get_qdata(gobj, Quark) != nil:
@@ -1569,7 +1573,7 @@ proc main(namespace: string) =
     output.writeLine("const GTrue = gboolean(1)")
     output.writeLine("proc cogfree*(mem: pointer) {.importc: \"g_free\", libprag.}")
     output.writeLine("proc toBool*(g: gboolean): bool = g.int != 0")
-    output.writeLine("proc safeStringToCString*(s: string): cstring = (if s.isNil: nil else: cstring(s))")
+    output.writeLine("proc safeStringToCString*(s: string): cstring = (if s.len == 0: nil else: cstring(s))")
   elif namespace == "Gdk":
     output.writeLine("type\n  AtomArray* = pointer")
     output.writeLine("type\n  KeymapKey00Array* = pointer")

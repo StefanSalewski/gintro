@@ -732,7 +732,7 @@ proc copyClipRectangleList*(cr: Context): seq[Rectangle] =
   var h: Rectangle
   var r = cairo_copy_clip_rectangle_list(cr.impl)
   defer: cairo_rectangle_list_destroy(r)
-  if r.status != Status.success or r.numRectangles == 0: return nil
+  if r.status != Status.success or r.numRectangles == 0: return @[]
   result = newSeq[Rectangle]() 
   for i in 0 ..< r.numRectangles:
     let k = cast[ptr array[99, Rectangle00]](r.rectangles)[i]
