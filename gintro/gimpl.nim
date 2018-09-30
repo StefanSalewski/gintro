@@ -67,7 +67,7 @@ macro mconnect(widget: gobject.Object; signal: string; p: typed; arg: typed; ign
 proc $1$2 {.cdecl.} =
   let h: pointer = g_object_get_qdata(self, Quark)
 """
-  if sci.isNil or sci == "": # the simple signals
+  if sci == "": # the simple signals
     all = "(self: ptr gobject.Object00; xdata: pointer)"
     ahl = "(self: gobject.Object)"
     r1s.add("  $3(cast[$4](h)")
