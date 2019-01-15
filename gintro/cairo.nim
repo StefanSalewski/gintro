@@ -138,7 +138,7 @@ type
     x*: cdouble
     y*: cdouble
 
-  PathData00* = object {.union.}
+  PathData00* {.union.} = object
     header*: INNER_C_STRUCT_3330700347
     point*: INNER_C_STRUCT_1651263489
 

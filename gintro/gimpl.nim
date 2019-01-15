@@ -85,9 +85,11 @@ proc $1$2 {.cdecl.} =
           ipos = i
           break
       assert(ipos >= 0)
-      let ipronode = p.symbol.getImpl().params[ipos + 1][1] # the actual data type for interface providers
+      #let ipronode = p.symbol.getImpl().params[ipos + 1][1] # the actual data type for interface providers
+      let ipronode = p.getImpl().params[ipos + 1][1]
       if ipronode.isNil:
-        quit("Error: Signal-Handler has too few parameters: " & $(p.symbol.getImpl().name.toStrLit) & $(p.symbol.getImpl().params.toStrLit))
+        #quit("Error: Signal-Handler has too few parameters: " & $(p.symbol.getImpl().name.toStrLit) & $(p.symbol.getImpl().params.toStrLit))
+        quit("Error: Signal-Handler has too few parameters: " & $(p.getImpl().name.toStrLit) & $(p.getImpl().params.toStrLit))
       else:
         ipro = $(ipronode.toStrLit)
       var ipros = hargs[ipos].split(" | ")

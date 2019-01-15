@@ -1,5 +1,5 @@
 # High level gobject-introspection based GTK3 bindings for the Nim programming language
-# v 0.4.7 2018-OCT-22
+# v 0.4.8 2019-JAN-15
 # (c) S. Salewski 2018
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -880,7 +880,8 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
 proc writeUnion(info: GIUnionInfo) =
   if not suppressType:
     output.writeLine("type")
-  output.writeLine("  ", mangleName(gBaseInfoGetName(info)) & "00" & EM, " = object {.union.}")
+  #output.writeLine("  ", mangleName(gBaseInfoGetName(info)) & "00" & EM, " = object {.union.}")
+  output.writeLine("  ", mangleName(gBaseInfoGetName(info)) & "00" & EM, " {.union.} = object")
   let n = info.gUnionInfoGetNFields()
   for j in 0.cint ..< n:
     let field = info.gUnionInfoGetField(j)
