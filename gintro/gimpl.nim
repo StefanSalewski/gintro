@@ -37,7 +37,7 @@ proc findSignal(name, obj: NimNode): string =
           n = getType(n)[1]
           n = getType(n)[1]
 
-var ProcID: int
+#var ProcID {.compileTime, global.}: int
 # from file gisup.nim we have:
 # "remove_editable!CellArea!2!(self: CellArea; renderer: CellRenderer; editable: CellEditable | SpinButton | ComboBox | ...
 # so for signal remove_editable third parameter of handler proc can be CellEditable OR SpinButton OR ComboBox OR ...
@@ -48,6 +48,8 @@ macro mconnect(widget: gobject.Object; signal: string; p: typed; arg: typed; ign
   #echo p.symbol.getImpl().toStrLit
   #echo p.symbol.getImpl().params.toStrLit
   #echo p.symbol.getImpl().params[2][1].toStrLit
+
+  var ProcID {.compileTime, global.}: int
 
   var # position and actual type of interface provider, if any
     ipos = -1
@@ -179,9 +181,10 @@ template connect*(widget: gobject.Object; signal: string; p: typed; arg: typed):
 template connect*(widget: gobject.Object; signal: string; p: typed): untyped =
   mconnect(widget, signal, p, "", true)
 
-var TimeoutID: int
+#var TimeoutID {.compileTime, global.}: int
 #
 macro timeoutAdd*(interval: Natural; p: untyped; arg: typed): untyped =
+  var TimeoutID {.compileTime, global.}: int
   inc(TimeoutID)
   let ats = $getTypeInst(arg).toStrLit
   let procName = "timeoutfunc_" & $TimeoutID
@@ -209,9 +212,10 @@ $1($5)
 """ % [$procName, ats, $interval.toStrLit, $procNameCdecl, $arg]
   result = parseStmt(r1s & r2s)
 
-var IdleID: int
+#var IdleID {.compileTime, global.}: int
 #
 macro idleAdd*(p: untyped; arg: typed): untyped =
+  var IdleID {.compileTime, global.}: int
   inc(IdleID)
   let ats = $getTypeInst(arg).toStrLit
   let procName = "idlefunc_" & $IdleID
