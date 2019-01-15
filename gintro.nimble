@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.4.7"
+version       = "0.4.8"
 author        = "Stefan Salewski"
 description = "High level GObject-Introspection based GTK3 bindings"
 license       = "MIT"
@@ -27,7 +27,8 @@ proc prep =
   cd(td)
   let wd = "gintrosalewski"
   if dirExists(wd):
-    quit("gintro: tmp directory already exists!")
+    rmDir(wd)
+    # quit("gintro: tmp directory already exists!")
   mkDir(wd)
   cd(wd)
   mkDir("ngtk3")
