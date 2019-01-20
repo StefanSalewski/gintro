@@ -1827,6 +1827,7 @@ main("Gdk")
 main("Gtk")
 main("GtkSource")
 main("Vte")
+main("Notify")
 
 supmod.writeLine("  ]")
 supmod.flush
