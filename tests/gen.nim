@@ -1,5 +1,5 @@
 # High level gobject-introspection based GTK3 bindings for the Nim programming language
-# v 0.4.8 2019-JAN-15
+# v 0.4.9 2019-FEB-10
 # (c) S. Salewski 2018
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -1594,7 +1594,7 @@ proc main(namespace: string) =
   elif namespace == "Atk":
     output.writeLine("type\n  StateTypeArray* = pointer") # enums!
     output.writeLine("type\n  TextRange00Array* = pointer")
-    output.writeLine("type\n  PtrArray* = pointer")
+    #output.writeLine("type\n  PtrArray* = pointer")
   elif namespace == "Pango":
     output.writeLine("type\n  GlyphInfo00Array* = pointer")
     output.writeLine("type\n  LogAttr00Array* = pointer")
@@ -1827,6 +1827,7 @@ main("Gdk")
 main("Gtk")
 main("GtkSource")
 main("Vte")
+main("Notify")
 
 supmod.writeLine("  ]")
 supmod.flush
