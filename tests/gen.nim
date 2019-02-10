@@ -270,7 +270,7 @@ proc genRec(t: GITypeInfo; genProxy = false; fullQualified: bool = false): strin
   if tag == GITypeTag.ARRAY:
     let toa = gTypeInfoGetArrayType(t) # type of array
     if toa == GIArrayType.ARRAY: result = "GArray00"
-    elif toa == GIArrayType.PTR_ARRAY: result = "PtrArray"
+    elif toa == GIArrayType.PTR_ARRAY: result = "PtrArray00"
     elif toa == GIArrayType.BYTE_ARRAY: result = "ByteArray00"
     elif toa == GIArrayType.C:
       let arrayType = gTypeInfoGetParamType(t, 0)
