@@ -1,5 +1,5 @@
 # High level gobject-introspection based GTK3 bindings for the Nim programming language
-# v 0.4.9 2019-FEB-10
+# v 0.4.11 2019-FEB-16
 # (c) S. Salewski 2018
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -436,15 +436,20 @@ proc genP(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil): (str
        if str == "cstring" and mayBeNil:
          arglist.add("safeStringToCString" & '(' & name & ')')################################################
        else:
-         arglist.add(str & '(' & name & ')')
+         if str != "string" and str != "cstring": # v0.4.11
+           arglist.add(str & '(' & name & ')')
+         else:
+           arglist.add(name)
       else:
         arglist.add(name)
-    if not genProxy and ct2nt.contains(str) and str != "cstring":
+    #if not genProxy and ct2nt.contains(str) and str != "cstring": # new in 0.4.11: for var pass Nim string, not cstring yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy
+    if not genProxy and ct2nt.contains(str) and (str != "cstring" or (gArgInfoGetDirection(arg) == GIDirection.OUT or gArgInfoGetDirection(arg) == GIDirection.INOUT)):
        replist.add($name, $str)
     if genProxy and ct2nt.contains(str):
       if gArgInfoGetDirection(arg) == GIDirection.OUT or gArgInfoGetDirection(arg) == GIDirection.INOUT:
         replist.add($name, $str)
-      str = ct2nt[str]
+      if gArgInfoGetDirection(arg) == GIDirection.OUT or gArgInfoGetDirection(arg) == GIDirection.INOUT or str != "cstring": # new in 0.4.11 -- allow passing cstring if not a var
+        str = ct2nt[str]
     if gArgInfoGetDirection(arg) == GIDirection.OUT or gArgInfoGetDirection(arg) == GIDirection.INOUT: # caution cstringArray
       str.insert("var ")
     if genProxy and defaultParameters.contains(sym):
@@ -452,7 +457,7 @@ proc genP(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil): (str
       (h1, h2, h3) = defaultParameters[sym].split
       if name == h1 and str == h2:
         str.add(" = " & h3)
-    if genProxy and str == "string" and mayBeNil:
+    if genProxy and (str == "string" or str == "cstring") and mayBeNil: # v0.4.11
       #str.add(" = nil")
       str.add(" = \"\"")
     if genProxy and isProxyCandidate(t) and mayBeNil:
@@ -544,7 +549,9 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
     if sym.contains("gtk_widget_class_find_style_property") or sym.contains("gtk_container_class_find_child_property"): return
     #if sym.contains("gtk_cell_area_class_fi$manglename(gBaseInfoGetName(info)))nd_cell_property"): return
     if sym.contains("gtk_cell_area_class_find_cell_property"): return
+
     var asym = manglename(gBaseInfoGetName(mInfo))
+    if asym == "errorQuark" or asym == "quark": return
 
 #[
     # this does not work really well, so we do proc renaming manually using fixedProcNames seq.
@@ -567,6 +574,9 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
     #var ret22 = gCallableInfoGetReturnType(minfo)
     for run in 0 .. 1:
       if run == 1:
+
+        #if not (asym != "errorQuark" and asym != "getPlugin" and asym != "quark"): continue
+
         if fixedProcNames.contains(sym): continue
         if not (asym.startsWith("get") or asym.startsWith("set")) or asym == "getPlugin" or asym.len < 4: continue
         if asym.startsWith("get") and gTypeInfoGetTag(ret2) == GITypeTag.VOID: continue
@@ -583,7 +593,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
           asym[0] = asym[0].toLowerAscii
           asym = '`' & asym & '=' & '`'
         if keywords.split.contains(asym) or nims.split.contains(asym): continue
-      if needProxyProc(mInfo) or isString(ret2) or replist.len > 0:
+      if needProxyProc(mInfo) or isString(ret2) or replist.len > 0 or ct2nt.contains(genRec(ret2)): # new in 0.4.11: return bool/int instead of gboolenan/int32#################################
         var isGObject = false
         let tag = gTypeInfoGetTag(ret2)
         if tag == GITypeTag.INTERFACE:
@@ -1574,7 +1584,7 @@ proc main(namespace: string) =
     output.writeLine("const GTrue = gboolean(1)")
     output.writeLine("proc cogfree*(mem: pointer) {.importc: \"g_free\", libprag.}")
     output.writeLine("proc toBool*(g: gboolean): bool = g.int != 0")
-    output.writeLine("proc safeStringToCString*(s: string): cstring = (if s.len == 0: nil else: cstring(s))")
+    output.writeLine("proc safeStringToCString*(s: cstring): cstring = (if s.len == 0: nil else: s)")
   elif namespace == "Gdk":
     output.writeLine("type\n  AtomArray* = pointer")
     output.writeLine("type\n  KeymapKey00Array* = pointer")
