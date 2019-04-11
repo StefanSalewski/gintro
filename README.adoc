@@ -893,7 +893,7 @@ const
   ZOOM_NEAR_MOUSEPOINTER = true # mouse wheel zooming -- to mousepointer or center
   SELECT_RECT_COL = [0.0, 0, 1, 0.5] # blue with transparency
 
-discard """"
+discard """
 Zooming, scrolling, panning...
 
 |-------------------------|
@@ -921,7 +921,7 @@ and translate the origin of our data to (0, 0)
 Zooming: Mouse wheel or selecting a rectangle with left mouse button pressed
 Scrolling: Scrollbars
 Panning: Moving mouse while middle mouse button pressed 
-""""
+"""
 
 # drawing area and scroll bars in 2x2 table (PDA == Plain Drawing Area)
 
