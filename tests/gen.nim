@@ -1,5 +1,5 @@
 # High level gobject-introspection based GTK3 bindings for the Nim programming language
-# v 0.4.11 2019-FEB-16
+# v 0.4.12 2019-APR-11
 # (c) S. Salewski 2018
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -115,11 +115,11 @@ var priList: seq[string]
 var knownSyms: HashSet[string]
 var suppressType = false
 var suppressRaise = false
-var droppedSyms = initSet[string]()
-var callerAlloc = initSet[string]()
-var callerAllocCollector = initSet[string]()
-var privStr = initSet[string]()
-var processedFunctions = initSet[string]()
+var droppedSyms = initHashSet[string]()
+var callerAlloc = initHashSet[string]()
+var callerAllocCollector = initHashSet[string]()
+var privStr = initHashSet[string]()
+var processedFunctions = initHashSet[string]()
 var delayedMethods: seq[(GIBaseInfo, GIFunctionInfo)]
 var classList: seq[GIBaseInfo]
 var ct: CountTable[string] 
@@ -1056,6 +1056,7 @@ proc writeModifierType(info: GIEnumInfo) =
   if flags: tname.removeSuffix("Mask")
   if flags: tname.removeSuffix("Type")
   if flags: tname.removeSuffix("Flags")
+  if flags: tname.removeSuffix("Options")
   if flags:
     output.writeLine("  ", tname & "Flag" & EM, " {.size: sizeof(cint), pure.} = enum")
     if s[0].v != 0 and s[0].v != 1: # flags may start with none = 0 or with flag1 = 1
@@ -1086,6 +1087,8 @@ proc writeModifierType(info: GIEnumInfo) =
       output.writeLine("\n  ", tname & "Mask" & EM, " {.size: sizeof(cint).} = set[$1Flag]" % [tname])
     elif we == "AccelFlags":
       output.writeLine("\n  ", tname & "Flags" & EM, " {.size: sizeof(cint).} = set[$1Flag]" % [tname])
+    elif we == "AttachOptions":
+      output.writeLine("\n  ", tname & "Options" & EM, " {.size: sizeof(cint).} = set[$1Flag]" % [tname])
   if we == "ModifierType":
     output.writeLine("\nconst ModifierMask* = {ModifierFlag.shift .. ModifierFlag.button5, ModifierFlag.super .. ModifierFlag.meta, ModifierFlag.release}")
   elif we == "EventMask":
@@ -1098,7 +1101,7 @@ proc writeModifierType(info: GIEnumInfo) =
     writeMethod(info, minfo)
 
 proc writeEnum(info: GIEnumInfo) =
-  if mangleName(gBaseInfoGetName(info)) in ["ModifierType", "EventMask", "AccelFlags"]:
+  if mangleName(gBaseInfoGetName(info)) in ["ModifierType", "EventMask", "AccelFlags", "AttachOptions"]:
     writeModifierType(info)
     return
   type T = tuple[v: int64; n: string]
@@ -1488,11 +1491,11 @@ proc main(namespace: string) =
   var error: GError
   ct = initCountTable[string]()
   var delayedSyms = newSeq[GIBaseInfo]()
-  allSyms = initSet[string]()
+  allSyms = initHashSet[string]()
   provInt.clear
   interfaceProvider.clear
-  var ig = initSet[string]()
-  knownSyms = initSet[string]()
+  var ig = initHashSet[string]()
+  knownSyms = initHashSet[string]()
   let gi = gIrepositoryGetDefault()
   assert(gi != nil)
   moduleNamespace = namespace.toLowerAscii
@@ -1814,7 +1817,7 @@ proc main(namespace: string) =
     echo gBaseInfoGetName(el[1])
 
 # when isMainModule:
-#scfilter = initSet[string]()
+#scfilter = initHashSet[string]()
 supmod = newStringStream()
 supmod.writeLine("const\n  SCA = [")
 
