@@ -145,7 +145,7 @@ proc $1$2 {.cdecl.} =
     r1s.add(resu & "\n")
     all = all.replace(")", "; data: pointer)")
   r1s = r1s % [$procNameCdecl, all, $p, wts, ats]
-  echo r1s
+  #echo r1s
   result = parseStmt(r1s)
   if not ignoreArg.boolVal:
     ahl = ahl.replace(")", "; arg: " & ats & ")")
@@ -175,7 +175,7 @@ proc $1(self: $2;  p: proc $3; a: $4): culong {.discardable.} =
     sc$5(self, $6, cast[pointer](ar[]))
 $1($7, $8, $9)
 """ % [$procName, wts,  ahl, ats, signalName,  $procNameCdecl, $(widget.toStrLit), $p, $(arg.toStrLit)]
-  echo r2s
+  #echo r2s
   result.add(parseStmt(r2s))
 
 template connect*(widget: gobject.Object; signal: string; p: typed; arg: typed): untyped =

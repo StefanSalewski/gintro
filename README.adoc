@@ -841,14 +841,13 @@ main()
 == A more advanced example for cairo drawing with zooming, panning, scrolling
 
 The following code is a plain Nim version of a drawing demo which I wrote some years ago in Ruby (http://ssalewski.de/PetEd-Demo.html.en).
-With the latest fix to Nim  GTK3 bingings it seems to work fine, but some rewriting for optimized performance
-may be needed, I have to investigate that.
+With the latest fix to Nim  GTK3 bindings it seems to work fine, but some rewriting for optimized performance
+may be needed, I have to investigate that. Cairo surface is currently manually freed, because GC may have a too large delay.
+Later we may use Destructors for that.
 
-NOTE: The latest needed gintro patch is not yet available, I will provide it soon...
-
-[[cairo2.nim]]
+[[drawingarea.nim]]
 [source,nim]
-.cairo2.nim
+.drawingarea.nim
 ----
 # Plain demo for zooming, panning, scrolling with GTK DrawingArea
 # (c) S. Salewski, 21-DEC-2010 (initial Ruby version)
@@ -879,7 +878,7 @@ proc drawWorld(cr: cairo.Context) =
   cr.rectangle(DataX, DataY, DataWidth, DataHeight)
   var i = 10.0
   while true:
-    if [DataWidth - 2.0 * i, DataHeight - 2.0 * i].min <= 0:
+    if min(DataWidth - 2.0 * i, DataHeight - 2.0 * i) <= 0:
       break
     cr.rectangle(DataX + i, DataY + i, DataWidth - 2.0 * i,
         DataHeight - 2.0 * i)
@@ -933,7 +932,7 @@ proc newPosAdj: PosAdj =
   initAdjustment(result, 0, 0, 1, 1, 10, 1)
 
 type
-  PDA = ref object of Table
+  PDA = ref object of Grid
     zoomNearMousepointer: bool
     selecting: bool
     userZoom: float
@@ -973,7 +972,7 @@ proc drawingAreaDrawCb(darea: DrawingArea; cr: Context; this: PDA): bool =
 # clamp to correct values, 0 <= value <= (adj.upper - adj.pageSize), block calling onAdjustmentEvent()
 proc updateVal(adj: PosAdj; d: float) =
   adj.signalHandlerBlock(adj.handlerID)
-  adj.setValue([0.0, [adj.value + d, adj.upper - adj.pageSize].min].max)
+  adj.setValue(max(0.0, min(adj.value + d, adj.upper - adj.pageSize)))
   adj.signalHandlerUnblock(adj.handlerID)
 
 proc updateAdjustments(this: PDA; dx, dy: float) =
@@ -991,7 +990,7 @@ proc updateAdjustments(this: PDA; dx, dy: float) =
 # or maybe even better do all drwing from within "draw" callback?
 proc paint(this: PDA) =
   if this.surf != nil:
-    cairosurfaceDestroy(this.surf.impl) # we may have to fix that later for automatically destroy 
+    cairosurfaceDestroy(this.surf.impl) # we may have to fix that later for automatically destroy
   this.surf = this.darea.window.createSimilarSurface(Content.color,
       this.darea.allocatedWidth, this.darea.allocatedHeight)
   let cr = newContext(this.surf)
@@ -1007,8 +1006,8 @@ proc dareaConfigureCallback(darea: DrawingArea; event: EventConfigure;
   this.updateAdjustments(0, 0)
   (this.dataX, this.dataY, this.dataWidth,
     this.dataHeight) = getWorldExtends() # query user defined size
-  this.fullScale = [this.darea.allocatedWidth.float / this.dataWidth,
-      this.darea.allocatedHeight.float / this.dataHeight].min
+  this.fullScale = min(this.darea.allocatedWidth.float / this.dataWidth,
+      this.darea.allocatedHeight.float / this.dataHeight)
   this.paint
 
 proc updateAdjustmentsAndPaint(this: PDA; dx, dy: float) =
@@ -1017,11 +1016,17 @@ proc updateAdjustmentsAndPaint(this: PDA; dx, dy: float) =
   this.darea.queueDrawArea(0, 0, this.darea.allocatedWidth,
       this.darea.allocatedHeight)
 
+# event coordinates to user space
+proc getUserCoordinates(this: PDA; eventX, eventY: float): (float, float) =
+  ((eventX - this.hadjustment.upper * 0.5 + this.hadjustment.value) / (
+      this.fullScale * this.userZoom) + this.dataX + this.dataWidth * 0.5,
+   (eventY - this.vadjustment.upper * 0.5 + this.vadjustment.value) / (
+       this.fullScale * this.userZoom) + this.dataY + this.dataHeight * 0.5)
+
 proc onMotion(darea: DrawingArea; event: EventMotion; this: PDA): bool =
-  var state: ModifierType
-  discard event.state(state)
-  var x, y: float
-  discard event.getCoords(x, y)
+  let state = getState(event)
+  let (x, y) = event.getCoords
+  #(x, y) = this.getUserCoordinates(x, y)
   if (state.contains(button1)): # selecting
     this.selecting = true
     this.zoomRectX1 = x
@@ -1040,10 +1045,8 @@ proc onMotion(darea: DrawingArea; event: EventMotion; this: PDA): bool =
 # is the relative movement caused by zooming
 proc scrollEvent(darea: DrawingArea; event: EventScroll; this: PDA): bool =
   let z0 = this.userZoom
-  var d: ScrollDirection
-  discard scrollDirection(event, d)
-  var x, y: float
-  discard event.getCoords(x, y)
+  var d = getScrollDirection(event)
+  var (x, y) = event.getCoords
   if d == ScrollDirection.up:
     this.userZoom *= ZOOM_FACTOR_MOUSE_WHEEL
   elif d == ScrollDirection.down:
@@ -1059,38 +1062,30 @@ proc scrollEvent(darea: DrawingArea; event: EventScroll; this: PDA): bool =
     this.updateAdjustmentsAndPaint((this.hadjustment.value +
         this.darea.allocatedWidth.float * 0.5) * (this.userZoom / z0 - 1),
                                  (this.vadjustment.value +
-                                     this.darea.allocatedHeight.float * 0.5) * (this.userZoom / z0 - 1))
-
-# event coordinates to user space
-proc getUserCoordinates(this: PDA; eventX, eventY: float): (float, float) =
-  ((eventX - this.hadjustment.upper * 0.5 + this.hadjustment.value) / (
-      this.fullScale * this.userZoom) + this.dataX + this.dataWidth * 0.5,
-   (eventY - this.vadjustment.upper * 0.5 + this.vadjustment.value) / (
-       this.fullScale * this.userZoom) + this.dataY + this.dataHeight * 0.5)
+                                     this.darea.allocatedHeight.float * 0.5) * (
+                                         this.userZoom / z0 - 1))
 
 proc buttonPressEvent(darea: DrawingArea; event: EventButton;
     this: PDA): bool =
-  var x, y: float
-  discard event.getCoords(x, y)
-  (x, y) = this.getUserCoordinates(x, y)
-  echo "User coordinates: ", x, ' ', y, "\n" # to verify getUserCoordinates()
+  var (x, y) = event.getCoords
   this.lastMousePosX = x
   this.lastMousePosY = y
   this.lastButtonDownPosX = x
   this.lastButtonDownPosY = y
+  echo "buttonPressEvent", x, " ", y
+  (x, y) = this.getUserCoordinates(x, y)
+  echo "User coordinates: ", x, ' ', y, "\n" # to verify getUserCoordinates()
 
 # zoom into selected rectangle and center it
 proc buttonReleaseEvent(darea: DrawingArea; event: EventButton;
     this: PDA): bool =
-  var x, y: float
-  discard event.getCoords(x, y)
-  var b: int
-  discard button(event, b)
+  var (x, y) = event.getCoords
+  var b = getButton(event)
   if b == 1:
     this.selecting = false
-    let z1 = [this.darea.allocatedWidth.float / (
+    let z1 = min(this.darea.allocatedWidth.float / (
         this.lastButtonDownPosX - x).abs, this.darea.allocatedHeight.float / (
-        this.lastButtonDownPosY - y).abs].min
+        this.lastButtonDownPosY - y).abs)
     if z1 < ZOOM_FACTOR_SELECT_MAX: # else selection rectangle will persist, we may output a message...
       this.userZoom *= z1
       this.updateAdjustmentsAndPaint(
@@ -1105,13 +1100,14 @@ proc onAdjustmentEvent(this: PosAdj; pda: PDA) =
       pda.darea.allocatedHeight)
 
 proc newPDA: PDA =
-  initTable(result, 2, 2, false)
+  initGrid(result)
   result.zoomNearMousepointer = ZOOM_NEAR_MOUSEPOINTER # mouse wheel zooming
   result.selecting = false
   result.userZoom = 1.0
   result.surf = nil
   result.darea = newDrawingArea()
-
+  result.darea.setHExpand#(true)
+  result.darea.setVExpand#(true)
   result.darea.connect("draw", drawingAreaDrawCb, result)
   result.darea.connect("configure-event", dareaConfigureCallback, result)
   result.darea.addEvents({EventFlag.buttonPress, EventFlag.buttonRelease,
@@ -1130,12 +1126,11 @@ proc newPDA: PDA =
       onAdjustmentEvent, result)
   result.hscrollbar = newScrollbar(Orientation.horizontal, result.hadjustment)
   result.vscrollbar = newScrollbar(Orientation.vertical, result.vadjustment)
-  result.attach(result.darea, 0, 1, 0, 1, {AttachFlag.expand, AttachFlag.fill}, {
-      AttachFlag.expand, AttachFlag.fill}, 0, 0)
-  result.attach(result.hscrollbar, 0, 1, 1, 2, {AttachFlag.expand,
-      AttachFlag.fill}, {}, 0, 0)
-  result.attach(result.vscrollbar, 1, 2, 0, 1, {}, {AttachFlag.expand,
-      AttachFlag.fill}, 0, 0)
+  result.hscrollbar.setHExpand#(true)
+  result.vscrollbar.setVExpand#(true)
+  result.attach(result.darea, 0, 0, 1, 1)
+  result.attach(result.vscrollbar, 1, 0, 1, 1)
+  result.attach(result.hscrollbar, 0, 1, 1, 1)
 
 proc appActivate(app: Application) =
   let window = newApplicationWindow(app)

@@ -1,5 +1,5 @@
 # High level gobject-introspection based GTK3 bindings for the Nim programming language
-# v 0.4.12 2019-APR-11
+# v 0.4.12 2019-APR-14
 # (c) S. Salewski 2018
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -460,6 +460,12 @@ proc genP(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil): (str
     if genProxy and (str == "string" or str == "cstring") and mayBeNil: # v0.4.11
       #str.add(" = nil")
       str.add(" = \"\"")
+    if genProxy and m == 0:
+      if sym.contains("_set_") and str == "bool":
+        #echo "TTTTTTTTTT", sym
+        str.add(" = true")
+
+
     if genProxy and isProxyCandidate(t) and mayBeNil:
       #if not str.contains("|") and (gArgInfoGetDirection(arg) == GIDirection.OUT or gArgInfoGetDirection(arg) == GIDirection.INOUT):
       #  str.add(" = cast[" & str & "](nil)")
@@ -573,6 +579,15 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
     var ret2 = gCallableInfoGetReturnType(minfo)
     #var ret22 = gCallableInfoGetReturnType(minfo)
     for run in 0 .. 1:
+
+      #if run == 0:
+      #  if asym.startsWith("set"):
+      #    if gCallableInfoGetNArgs(minfo) == 1 or (gCallableInfoIsMethod(minfo) and gCallableInfoGetNArgs(minfo) == 2):
+      #      echo "XXXXXXXXXX", asym, " ", gCallableInfoGetNArgs(minfo)
+
+
+
+
       if run == 1:
 
         #if not (asym != "errorQuark" and asym != "getPlugin" and asym != "quark"): continue
@@ -589,6 +604,10 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
           asym = asym[3 .. ^1]
           asym[0] = asym[0].toLowerAscii
         if asym.startsWith("set"):
+          #if plist.contains(" = true"):
+          #echo "ZZZZZZ ", plist, "  ", arglist
+          plist = plist.replace(": bool = true", ": bool")
+
           asym = asym[3 .. ^1]
           asym[0] = asym[0].toLowerAscii
           asym = '`' & asym & '=' & '`'
@@ -601,12 +620,18 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
           if gBaseInfoGetType(iface) == GIInfoType.Object and gBaseInfoGetName(iface) != "ParamSpec":
             isGObject = true
         (plist, arglist, replist) = genP(mInfo, true, info)
+        if asym[^2] == '=': 
+          plist = plist.replace(": bool = true", ": bool")
         if (gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) != 0:
           if info != nil:
             asym = asym.replace("new", "new" & manglename(gBaseInfoGetName(info)))
           if fixedProcNames.contains(sym):
             asym = fixedProcNames[sym]
           for i in 0 .. 1:
+
+            #if i > 0 and isGObject:
+            #  echo "XYZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA ", asym
+
             var hhh = "\nproc " & asym & EM & plist
             if i > 0:
               let semi = if hhh.contains("()"): "" else: "; "
@@ -1401,6 +1426,237 @@ proc processInfo(i: GIBaseInfo) =
     writeConst(i)
   else: assert(false)
 
+
+# Gtk objects builder may provide. Only for Gtk module, so Gtk prefix is assume.
+# Other objects loke gtkSourceView are separated!
+# This a guessed list, so it may be inaccurate. 
+const GtkBuilderObjects = """
+
+AboutDialog
+AccelLabel
+ActionBar
+ActionGroup
+Alignment
+AppChooserButton
+AppChooserDialog
+AppChooserWidget
+Application
+ApplicationWindow
+Arrow
+AspectFrame
+Assistant
+Box
+Builder
+Button
+ButtonBox
+Calendar
+CellAreaBox
+CellView
+CheckButton
+CheckMenuItem
+ColorButton
+ColorChooserDialog
+ColorChooserWidget
+ColorSelectionDialog
+ComboBox
+ComboBoxText
+Dialog
+DrawingArea
+Entry
+EntryCompletion
+EventBox
+Expander
+FileChooserButton
+FileChooserNative
+FileChooserWidget
+FileFilter
+Fixed
+FlowBox
+FontButton
+FontChooserDialog
+FontChooserWidget
+FontSelection
+FontSelectionDialog
+Frame
+GLArea
+Grid
+HandleBox
+HBox
+HButtonBox
+HeaderBar
+HPaned
+HScale
+HScrollbar
+HSeparator
+IconView
+ImageMenuItem
+InfoBar
+Invisible
+Label
+Layout
+LevelBar
+LinkButton
+ListBox
+ListBoxRow
+ListStore
+LockButton
+Menu
+MenuBar
+MenuButton
+MenuItem
+MenuToolButton
+ModelButton
+Notebook
+OffscreenWindow
+Overlay
+Paned
+PlacesSidebar
+Popover
+PopoverMenu
+ProgressBar
+RadioButton
+RadioMenuItem
+RadioToolButton
+RecentChooserMenu
+RecentChooserWidget
+RecentManager
+Revealer
+Scale
+ScaleButton
+Scrollbar
+ScrolledWindow
+SearchBar
+SearchEntry
+Separator
+SeparatorMenuItem
+SeparatorToolItem
+ShortcutLabel
+SizeGroup
+SpinButton
+Spinner
+Stack
+StackSidebar
+StackSwitcher
+Statusbar
+Style
+Switch
+Table
+TearoffMenuItem
+TextView
+ToggleButton
+ToggleToolButton
+Toolbar
+ToolButton
+ToolItem
+ToolItemGroup
+ToolPalette
+TreeStore
+TreeView
+TreeViewColumn
+VBox
+VButtonBox
+Viewport
+VolumeButton
+VPaned
+VScrollbar
+VSeparator
+Window
+
+"""
+
+const GTK_SOURCE_EPI = """
+
+proc getView(builder: Builder; name: string): View =
+  new result
+  let gt = g_type_from_name("GSource")
+  assert(gt != 0)
+  result.impl = gtk_builder_get_object(cast[ptr Builder00](builder.impl), name)
+  assert(toBool(g_type_check_instance_is_a(cast[ptr TypeInstance00](result.impl), gt)))
+
+proc completionContextGetType*(): GType {.importc: "gtk_source_completion_context_get_type", libprag.}
+  
+proc completionProviderGetType*(): GType {.importc: "gtk_source_completion_provider_get_type", libprag.}
+  
+proc completionWordsGetType*(): GType {.importc: "gtk_source_completion_words_get_type", libprag.}
+  
+proc bufferGetType*(): GType {.importc: "gtk_source_buffer_get_type", libprag.}
+  
+proc completionGetType*(): GType {.importc: "gtk_source_completion_get_type", libprag.}
+  
+proc completionInfoGetType*(): GType {.importc: "gtk_source_completion_info_get_type", libprag.}
+  
+proc completionItemGetType*(): GType {.importc: "gtk_source_completion_item_get_type", libprag.}
+  
+proc completionProposalGetType*(): GType {.importc: "gtk_source_completion_proposal_get_type", libprag.}
+  
+proc encodingGetType*(): GType {.importc: "gtk_source_encoding_get_type", libprag.}
+  
+proc fileGetType*(): GType {.importc: "gtk_source_file_get_type", libprag.}
+  
+proc fileLoaderGetType*(): GType {.importc: "gtk_source_file_loader_get_type", libprag.}
+  
+proc fileSaverGetType*(): GType {.importc: "gtk_source_file_saver_get_type", libprag.}
+  
+proc gutterGetType*(): GType {.importc: "gtk_source_gutter_get_type", libprag.}
+  
+proc gutterRendererGetType*(): GType {.importc: "gtk_source_gutter_renderer_get_type", libprag.}
+  
+proc gutterRendererTextGetType*(): GType {.importc: "gtk_source_gutter_renderer_text_get_type", libprag.}
+  
+proc gutterRendererPixbufGetType*(): GType {.importc: "gtk_source_gutter_renderer_pixbuf_get_type", libprag.}
+  
+proc languageGetType*(): GType {.importc: "gtk_source_language_get_type", libprag.}
+  
+proc languageManagerGetType*(): GType {.importc: "gtk_source_language_manager_get_type", libprag.}
+  
+proc viewGetType*(): GType {.importc: "gtk_source_view_get_type", libprag.}
+  
+proc mapGetType*(): GType {.importc: "gtk_source_map_get_type", libprag.}
+  
+proc markGetType*(): GType {.importc: "gtk_source_mark_get_type", libprag.}
+  
+proc markAttributesGetType*(): GType {.importc: "gtk_source_mark_attributes_get_type", libprag.}
+  
+proc printCompositorGetType*(): GType {.importc: "gtk_source_print_compositor_get_type", libprag.}
+  
+proc regionGetType*(): GType {.importc: "gtk_source_region_get_type", libprag.}
+  
+proc searchContextGetType*(): GType {.importc: "gtk_source_search_context_get_type", libprag.}
+  
+proc searchSettingsGetType*(): GType {.importc: "gtk_source_search_settings_get_type", libprag.}
+  
+proc spaceDrawerGetType*(): GType {.importc: "gtk_source_space_drawer_get_type", libprag.}
+  
+proc styleGetType*(): GType {.importc: "gtk_source_style_get_type", libprag.}
+  
+proc styleSchemeGetType*(): GType {.importc: "gtk_source_style_scheme_get_type", libprag.}
+  
+proc styleSchemeChooserGetType*(): GType {.importc: "gtk_source_style_scheme_chooser_get_type", libprag.}
+  
+proc styleSchemeChooserButtonGetType*(): GType {.importc: "gtk_source_style_scheme_chooser_button_get_type", libprag.}
+  
+proc styleSchemeChooserWidgetGetType*(): GType {.importc: "gtk_source_style_scheme_chooser_widget_get_type", libprag.}
+  
+proc styleSchemeManagerGetType*(): GType {.importc: "gtk_source_style_scheme_manager_get_type", libprag.}
+  
+proc tagGetType*(): GType {.importc: "gtk_source_tag_get_type", libprag.}
+  
+proc undoManagerGetType*(): GType {.importc: "gtk_source_undo_manager_get_type", libprag.}
+  
+proc completionWordsProposalGetType*(): GType {.importc: "gtk_source_completion_words_proposal_get_type", libprag.}
+  
+proc completionWordsLibraryGetType*(): GType {.importc: "gtk_source_completion_words_library_get_type", libprag.}
+  
+proc completionWordsBufferGetType*(): GType {.importc: "gtk_source_completion_words_buffer_get_type", libprag.}
+
+# register the GObject types so builder can use them, see
+# https://mail.gnome.org/archives/gtk-list/2015-March/msg00016.html
+discard viewGetType()
+discard completionInfoGetType()
+discard styleSchemeChooserButtonGetType()
+
+"""
+
 const GDK_EPI = """
 
 proc gdk_window_invalidate_nilrect(self: ptr Window00; rect: ptr Rectangle; invalidateChildren: gboolean) {.
@@ -1418,6 +1674,60 @@ proc fixednewCursorFromName*(display: Display; name: string): Cursor =
   g_object_unref(result.impl)
   #assert(g_object_get_qdata(result.impl, Quark) == nil)
   g_object_set_qdata(result.impl, Quark, addr(result[]))
+
+proc getAngle*(self: SomeEvent; event2: SomeEvent): cdouble =
+  if not toBool(gdk_events_get_angle(cast[ptr Event00](self.impl), cast[ptr Event00](event2.impl), result)):
+    raise newException(Defect, "Events do not support getAngle().")
+
+proc getCenter*(self: SomeEvent; event2: SomeEvent): (cdouble, cdouble) =
+  if not toBool(gdk_events_get_center(cast[ptr Event00](self.impl), cast[ptr Event00](event2.impl), result[0], result[1])):
+    raise newException(Defect, "Events do not support getCenter().")
+
+proc getDistance*(self: SomeEvent; event2: SomeEvent): cdouble =
+  if not toBool(gdk_events_get_distance(cast[ptr Event00](self.impl), cast[ptr Event00](event2.impl), result)):
+    raise newException(Defect, "Events do not support getDistance().")
+
+proc getAxis*(self: SomeEvent; axisUse: AxisUse): cdouble =
+  if not toBool(gdk_event_get_axis(cast[ptr Event00](self.impl), axisUse, result)):
+    raise newException(Defect, "Event does not support getAxis().")
+
+proc getButton*(self: SomeEvent): int =
+  var button: uint32
+  if not toBool(gdk_event_get_button(cast[ptr Event00](self.impl), button)):
+    raise newException(Defect, "Event don't has a button field.")
+  return int(button)
+
+proc getClickCount*(self: SomeEvent): int =
+  var clickCount_00: uint32
+  if not toBool(gdk_event_get_click_count(cast[ptr Event00](self.impl), clickCount_00)):
+    raise newException(Defect, "Event does not support getClickCount().")
+  return int(clickCount_00)
+
+proc getCoords*(self: SomeEvent): (cdouble, cdouble) =
+  if not toBool(gdk_event_get_coords(cast[ptr Event00](self.impl), result[0], result[1])):
+    raise newException(Defect, "This event don't has a coordinate field.")
+
+proc getKeyval*(self: SomeEvent): int =
+  var keyval_00 = uint32
+  if not toBool(gdk_event_get_keyval(cast[ptr Event00](self.impl), keyval_00)):
+    raise newException(Defect, "This event don't has a keyval field.")
+  return int(keyval_00)
+
+proc getRootCoords*(self: SomeEvent): (cdouble, cdouble) =
+  if not toBool(gdk_event_get_root_coords(cast[ptr Event00](self.impl), result[0], result[1])):
+    raise newException(Defect, "This event don't has a rootCoordinate field.")
+
+proc getScrollDeltas*(self: SomeEvent): (cdouble, cdouble) =
+  if not toBool(gdk_event_get_scroll_deltas(cast[ptr Event00](self.impl), result[0], result[1])):
+    raise newException(Defect, "This event don't has a scrollDeltas field.")
+
+proc getScrollDirection*(self: SomeEvent): ScrollDirection =
+  if not toBool(gdk_event_get_scroll_direction(cast[ptr Event00](self.impl), result)):
+    raise newException(Defect, "Event don't has a scrollDirection field.")
+
+proc getState*(self: SomeEvent): ModifierType =
+  if not toBool(gdk_event_get_state(cast[ptr Event00](self.impl), result)):
+    raise newException(Defect, "Event don't has a state field.")
 
 """
 
@@ -1801,11 +2111,27 @@ proc main(namespace: string) =
   if namespace == "Gtk":
     output.write(GTK_EPI)
 
+    for i in GtkBuilderObjects.split:
+      if i == "": continue
+      output.write("""
+proc get$1*(builder: Builder; name: string): $1 =
+  new result
+  let gt = g_type_from_name("Gtk$1")
+  assert(gt != 0)
+  result.impl = gtk_builder_get_object(cast[ptr Builder00](builder.impl), name)
+  assert(toBool(g_type_check_instance_is_a(cast[ptr TypeInstance00](result.impl), gt)))
+
+""" % [i])
+    output.write("")
+
   if namespace == "Gio":
     output.write(GIO_EPI)
 
   if namespace == "Gdk":
     output.write(GDK_EPI)
+
+  if namespace == "GtkSource":
+    output.write(GTK_SOURCE_EPI)
 
   output.flush
   var o = open("nim_gi" / (namespace.toLowerAscii) & ".nim", fmWrite)
