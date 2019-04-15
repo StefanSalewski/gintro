@@ -31,8 +31,6 @@ proc prep =
     # quit("gintro: tmp directory already exists!")
   mkDir(wd)
   cd(wd)
-  mkDir("ngtk3")
-  cd("ngtk3")
 
   cpFile(this / "tests" / "gen.nim", td / wd / "gen.nim")
   cpFile(this / "tests" / "combinatorics.nim", td / wd / "combinatorics.nim")
@@ -40,6 +38,8 @@ proc prep =
   cd(td)
   cd(wd)
 
+  mkDir("oldgtk3")
+  cd("oldgtk3")
   try:
     exec("wget https://raw.githubusercontent.com/StefanSalewski/oldgtk3/master/oldgtk3/gobject.nim -O gobject.nim")
     exec("wget https://raw.githubusercontent.com/StefanSalewski/oldgtk3/master/oldgtk3/glib.nim -O glib.nim")
@@ -57,6 +57,7 @@ proc prep =
       echo "Nimgrab should be available in Nim/tools directory. You may compile it with 'nim c -d:ssl nimgrab.nim'"
       echo "and put it into your search path"
       echo "For the unlikely case that you have already full oldgtk3 package installed, we will just try to continue..."
+  cd("..")
 
   exec("nim c gen.nim")
   mkDir("nim_gi")
@@ -70,7 +71,6 @@ proc prep =
 
 #task prepare, "preparing gintro":
 before install:
-
   echo "preparing gintro"
   prep()
   
