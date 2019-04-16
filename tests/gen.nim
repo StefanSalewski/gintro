@@ -1,5 +1,5 @@
 # High level gobject-introspection based GTK3 bindings for the Nim programming language
-# v 0.4.12 2019-APR-14
+# v 0.4.17 2019-APR-16
 # (c) S. Salewski 2018
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -115,11 +115,11 @@ var priList: seq[string]
 var knownSyms: HashSet[string]
 var suppressType = false
 var suppressRaise = false
-var droppedSyms = initHashSet[string]()
-var callerAlloc = initHashSet[string]()
-var callerAllocCollector = initHashSet[string]()
-var privStr = initHashSet[string]()
-var processedFunctions = initHashSet[string]()
+var droppedSyms = initSet[string]()
+var callerAlloc = initSet[string]()
+var callerAllocCollector = initSet[string]()
+var privStr = initSet[string]()
+var processedFunctions = initSet[string]()
 var delayedMethods: seq[(GIBaseInfo, GIFunctionInfo)]
 var classList: seq[GIBaseInfo]
 var ct: CountTable[string] 
@@ -1801,11 +1801,11 @@ proc main(namespace: string) =
   var error: GError
   ct = initCountTable[string]()
   var delayedSyms = newSeq[GIBaseInfo]()
-  allSyms = initHashSet[string]()
+  allSyms = initSet[string]()
   provInt.clear
   interfaceProvider.clear
-  var ig = initHashSet[string]()
-  knownSyms = initHashSet[string]()
+  var ig = initSet[string]()
+  knownSyms = initSet[string]()
   let gi = gIrepositoryGetDefault()
   assert(gi != nil)
   moduleNamespace = namespace.toLowerAscii
@@ -2143,7 +2143,7 @@ proc get$1*(builder: Builder; name: string): $1 =
     echo gBaseInfoGetName(el[1])
 
 # when isMainModule:
-#scfilter = initHashSet[string]()
+#scfilter = initSet[string]()
 supmod = newStringStream()
 supmod.writeLine("const\n  SCA = [")
 

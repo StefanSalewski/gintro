@@ -1,7 +1,7 @@
 const RecSep = "!" # Record separator for entries in gisup.nim, also defined in gen.nim
 
 # caution: $$ due to string interpolation
-let ct4nt = [
+const ct4nt = [
   "int32|int",
   "uint32|int",
   "gboolean|toBool",
