@@ -1,5 +1,5 @@
 # High level gobject-introspection based GTK3 bindings for the Nim programming language
-# v 0.4.17 2019-APR-16
+# v 0.4.18 2019-APR-27
 # (c) S. Salewski 2018
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -106,6 +106,7 @@ proc renumber(s: var string; i: int) =
 
 var defaultParameters = newTable[string, string]()
 var fixedProcNames = newTable[string, string]()
+var fixedDestroyNames = newTable[string, string]()
 var mangledNames = newTable[string, string]()
 var gdkKeys = newTable[string, seq[string]]()
 var allSyms: HashSet[string]
@@ -123,6 +124,11 @@ var processedFunctions = initSet[string]()
 var delayedMethods: seq[(GIBaseInfo, GIFunctionInfo)]
 var classList: seq[GIBaseInfo]
 var ct: CountTable[string] 
+
+fixedDestroyNames.add("gdk_window_create_similar_surface", "cairo.destroy")
+fixedDestroyNames.add("gdk_window_create_similar_image_surface", "cairo.destroy")
+fixedDestroyNames.add("gdk_cairo_region_create_from_surface", "cairo.destroy")
+fixedDestroyNames.add("gdk_cairo_surface_create_from_pixbuf", "cairo.destroy")
 
 fixedProcNames.add("gtk_button_new_with_label", "newButton")
 fixedProcNames.add("pango_font_description_from_string", "newFontDescription")
@@ -722,8 +728,12 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
                   freeMe = gStructInfoFindMethod(info, "unref")
               var freeMeName: string
               if freeMe == nil:
-                echo "Caution: No free/unref found for ", ' ', " (", sym, ')' # Mostly missing cairo functions...
+                if fixedDestroyNames.contains(sym):
+                  freeMeName = fixedDestroyNames[sym]
+                else:
+                  echo "Caution: No free/unref found for ", ' ', " (", sym, ')' # Mostly missing cairo functions...
               else:
+                assert not fixedDestroyNames.contains(sym)
                 freeMeName = $gBaseInfoGetName(freeMe)
               if sym == "g_closure_new_simple" or sym == "g_closure_new_object": freeMeName = "unref" # TODO GI bug?
               assert(gCallableInfoGetCallerOwns(minfo) in {GITransfer.EVERYTHING, GITransfer.NOTHING})
@@ -797,8 +807,16 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
                 elif h.endsWith("unref"):
                   freeMeName = "unref"
                   break
+
+              if fixedDestroyNames.contains(sym):
+                freeMeName = fixedDestroyNames[sym]
+                #else:
+
+
+
               if freeMeName == "":
                 # assert false # TODO we have to fix this case manually
+
                 echo "Caution: No free/unref found for ", ' ', gBaseInfoGetName(iface), " (", sym, ')'
                 methodBuffer.writeLine("  new(result)")
               else:
@@ -847,8 +865,17 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
                     freeMe = gStructInfoFindMethod(info, "free")
                     if freeMe.isNil:
                       freeMe = gStructInfoFindMethod(info, "unref")
+
+ 
+
+
                   if freeMe == nil:
-                    echo "Caution: No free/unref found for ", ' ', " (", sym, ')' # Mostly missing cairo functions...
+                    if fixedDestroyNames.contains(sym):
+                      freeMeName = fixedDestroyNames[sym]
+                    else:
+
+
+                      echo "Caution: No free/unref found for ", ' ', " (", sym, ')' # Mostly missing cairo functions...
                   else:
                     freeMeName = $gBaseInfoGetName(freeMe)
               let h2 = mangleName(gBaseInfoGetName(arg))
@@ -1907,6 +1934,10 @@ proc main(namespace: string) =
     output.writeLine("type\n  ColorArray* = pointer")
     output.writeLine("type\n  Point00Array* = pointer")
   elif namespace == "Gtk":
+    output.writeLine("# https://developer.gnome.org/gtk3/stable/GtkWidget.html#GtkWidget-draw")
+    output.writeLine("# TRUE to stop other handlers from being invoked for the event. FALSE to propagate the event further.")
+    output.writeLine("const\n  SignalEventStopPropagation* = true")
+    output.writeLine("const\n  SignalEventContinuePropagation* = false")
     output.writeLine("type\n  TargetEntry00Array* = pointer")
     output.writeLine("type\n  AccelGroupEntry00Array* = pointer")
     output.writeLine("type\n  BindingArg00Array* = pointer")
@@ -2115,10 +2146,21 @@ proc main(namespace: string) =
       if i == "": continue
       output.write("""
 proc get$1*(builder: Builder; name: string): $1 =
-  new result
   let gt = g_type_from_name("Gtk$1")
   assert(gt != 0)
-  result.impl = gtk_builder_get_object(cast[ptr Builder00](builder.impl), name)
+  let gobj = gtk_builder_get_object(cast[ptr Builder00](builder.impl), name)
+  if g_object_get_qdata(gobj, Quark) != nil:
+    result = cast[type(result)](g_object_get_qdata(gobj, Quark))
+    assert(result.impl == gobj)
+  else:
+    new(result, finalizeGObject)
+    result.impl = gobj
+    #GC_ref(result) # we should not need this for builder, as returned objects are not floating
+    #discard g_object_ref_sink(result.impl)
+    g_object_add_toggle_ref(result.impl, toggleNotify, addr(result[]))
+    #g_object_unref(result.impl)
+    assert(g_object_get_qdata(result.impl, Quark) == nil)
+    g_object_set_qdata(result.impl, Quark, addr(result[]))
   assert(toBool(g_type_check_instance_is_a(cast[ptr TypeInstance00](result.impl), gt)))
 
 """ % [i])
@@ -2176,4 +2218,4 @@ o.close()
 supmod.close
 
 #for i in callerAllocCollector: echo i
-# 1743 lines
+# 2233 lines

@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.4.17"
+version       = "0.4.18"
 author        = "Stefan Salewski"
 description = "High level GObject-Introspection based GTK3 bindings"
 license       = "MIT"
