@@ -733,7 +733,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
                 else:
                   echo "Caution: No free/unref found for ", ' ', " (", sym, ')' # Mostly missing cairo functions...
               else:
-                assert not fixedDestroyNames.contains(sym)
+                assert(not fixedDestroyNames.contains(sym))
                 freeMeName = $gBaseInfoGetName(freeMe)
               if sym == "g_closure_new_simple" or sym == "g_closure_new_object": freeMeName = "unref" # TODO GI bug?
               assert(gCallableInfoGetCallerOwns(minfo) in {GITransfer.EVERYTHING, GITransfer.NOTHING})
