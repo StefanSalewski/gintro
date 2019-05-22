@@ -31,8 +31,8 @@
 # This module is really ugly currently  -- the first goal was to get a working gi solution
 
 from os import `/`
-import gir
-import glib
+import oldgtk3/gir
+import oldgtk3/glib
 import strutils
 import sequtils
 import streams
