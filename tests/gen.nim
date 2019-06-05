@@ -1,5 +1,5 @@
 # High level gobject-introspection based GTK3 bindings for the Nim programming language
-# v 0.4.20 2019-JUN-05
+# v 0.4.22 2019-JUN-05
 # (c) S. Salewski 2018
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -1451,7 +1451,11 @@ proc processInfo(i: GIBaseInfo) =
     writeEnum(i)
   elif gBaseInfoGetType(i) == GIInfoType.CONSTANT:
     writeConst(i)
-  else: assert(false)
+  #else: assert(false)
+  elif gBaseInfoGetType(i) == GIInfoType.Boxed:
+    echo "gBaseInfoGetType(i) == GIInfoType.Boxed:"
+  else:
+    assert(false)
 
 
 # Gtk objects builder may provide. Only for Gtk module, so Gtk prefix is assume.
