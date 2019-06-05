@@ -1,5 +1,5 @@
 # High level gobject-introspection based GTK3 bindings for the Nim programming language
-# v 0.4.18 2019-APR-27
+# v 0.4.20 2019-JUN-05
 # (c) S. Salewski 2018
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -733,7 +733,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo; genProxy = false) =
                 else:
                   echo "Caution: No free/unref found for ", ' ', " (", sym, ')' # Mostly missing cairo functions...
               else:
-                assert not fixedDestroyNames.contains(sym)
+                assert (not fixedDestroyNames.contains(sym)) # missing outer () reported by Christian Ulrich, thanks.
                 freeMeName = $gBaseInfoGetName(freeMe)
               if sym == "g_closure_new_simple" or sym == "g_closure_new_object": freeMeName = "unref" # TODO GI bug?
               assert(gCallableInfoGetCallerOwns(minfo) in {GITransfer.EVERYTHING, GITransfer.NOTHING})
