@@ -1,4 +1,4 @@
-= High level GTK3 bindings for the Nim programming language
+= High level GTK3 (and GTK4) bindings for the Nim programming language
 (c) Stefan Salewski                                     
 //Version 0.4 2018     
 :experimental:
@@ -6,6 +6,7 @@
 :source-highlighter: pygments
 :pygments-style: monokai
 :icons: font
+:toc:
 
 :GIR: GObject-Introspection
 :MAC: MacOSX
@@ -645,6 +646,120 @@ does not exist, we should get an exception with a message telling us the problem
 code you may catch such exceptions with Nim's `try:` blocks. (You may also modify the data variable above to
 an illegal CSS statement -- if the statement is seriously wrong, then you should get an exception from
 loadFromData().
+
+
+
+== GTK Builder -- user interfaces created with the glade tool 
+
+As C code can be very verbose, some people prefer outsourcing the GUI layout
+in XML files which can be created and modified with the glade GUI creator program.
+For high level languages like Python or Nim the program source code is generally
+short and clean, so that use of XML files may not have much benefit. But of course
+we can use GTK builder from Nim. We follow the example from
+https://developer.gnome.org/gtk3/stable/ch01s03.html
+but we modify it to use the new GTK3 app style: For the XML file we have to change only
+class="GtkWindow" into class="GtkApplicationWindow". Our Nim program has
+the well known application shape, with one addition: We have to
+explicitly set the application for the main window. Of course you can also
+use the traditional program structure with Nim and Builder, for that case
+you can straight follow the linked page or other examples. Here is the XML file and the Nim code:
+
+[[builder.ui]]
+[source, xml]
+.builder.ui
+----
+<interface>
+  <object id="window" class="GtkApplicationWindow">
+    <property name="visible">True</property>
+    <property name="title">Grid</property>
+    <property name="border-width">10</property>
+    <child>
+      <object id="grid" class="GtkGrid">
+        <property name="visible">True</property>
+        <child>
+          <object id="button1" class="GtkButton">
+            <property name="visible">True</property>
+            <property name="label">Button 1</property>
+          </object>
+          <packing>
+            <property name="left-attach">0</property>
+            <property name="top-attach">0</property>
+          </packing>
+        </child>
+        <child>
+          <object id="button2" class="GtkButton">
+            <property name="visible">True</property>
+            <property name="label">Button 2</property>
+          </object>
+          <packing>
+            <property name="left-attach">1</property>
+            <property name="top-attach">0</property>
+          </packing>
+        </child>
+        <child>
+          <object id="quit" class="GtkButton">
+            <property name="visible">True</property>
+            <property name="label">Quit</property>
+          </object>
+          <packing>
+            <property name="left-attach">0</property>
+            <property name="top-attach">1</property>
+            <property name="width">2</property>
+          </packing>
+        </child>
+      </object>
+      <packing>
+      </packing>
+    </child>
+  </object>
+</interface>
+----
+
+
+[[builder.nim]]
+[source, nim]
+.builder.nim
+----
+ https://developer.gnome.org/gtk3/stable/ch01s03.html
+# builder.nim -- application style example using builder/glade xml file for user interface
+# nim c builder.nim
+import gintro/[gtk, glib, gobject, gio]
+
+proc hello(b: Button; msg: string) =
+  echo "Hello", msg
+
+proc quitApp(b: Button; app: Application) =
+  echo "Bye"
+  quit(app)
+
+proc appActivate(app: Application) =
+  let builder = newBuilder()
+  discard builder.addFromFile("builder.ui")
+  let window = builder.getApplicationWindow("window")
+  window.setApplication(app)
+  var button = builder.getButton("button1")
+  button.connect("clicked", hello, "")
+  button = builder.getButton("button2")
+  button.connect("clicked", hello, " again...")
+  button = builder.getButton("quit")
+  button.connect("clicked", quitApp, app)
+  #showAll(window)
+
+proc main =
+  let app = newApplication("org.gtk.example")
+  connect(app, "activate", appActivate)
+  discard run(app)
+
+main()
+----
+
+For each builder component gintro provides a typesafe access proc like
+getApplicationWindow() and getButton() in this example.
+
+Generally it is possible to use resource files merged with the executable program
+instead of an external XML files, we have to investigate how we can do that in Nim.
+And it may be possible to connect the signal handlers to handler procs from within
+the XML file -- this is also work in progress...
 
 == Drawing with Cairo graphics library
 
