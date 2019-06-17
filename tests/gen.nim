@@ -1,5 +1,5 @@
 # High level gobject-introspection based GTK3 bindings for the Nim programming language
-# v 0.4.22 2019-JUN-05
+# v 0.4.23 2019-JUN-17
 # (c) S. Salewski 2018
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -1829,6 +1829,7 @@ proc main(namespace: string) =
   classList = newSeq[GIBaseInfo]()
   output = newStringStream()
   methodBuffer = newStringStream()
+  var externInterfaces: seq[string]
   var error: GError
   ct = initCountTable[string]()
   var delayedSyms = newSeq[GIBaseInfo]()
@@ -2012,8 +2013,16 @@ proc main(namespace: string) =
       if ninterfaces > 0:
         var interf = newSeq[string]()
         let name = $gBaseInfoGetName(info)
-
         for i in 0.cint ..< ninterfaces:
+
+          var ns = ($gBaseInfoGetNamespace(info.gObjectInfoGetInterface(i))).toLowerAscii
+          if ns != moduleNamespace:
+            var iname = $gBaseInfoGetName(info.gObjectInfoGetInterface(i))
+            var fname = iname
+            fname[0] = toLowerAscii(fname[0])
+            iname = ns & "." & iname
+            let tname = moduleNamespace & "." & $gBaseInfoGetName(info)
+            externInterfaces.add("proc " & fname & "*(x: " & tname & "): " & iname & " = cast[" & iname & "](x)")
           interf.add($gBaseInfoGetName(info.gObjectInfoGetInterface(i)))
 
         if provInt.contains(name):
@@ -2028,6 +2037,7 @@ proc main(namespace: string) =
       else:
         interfaceProvider[i].add(obj)
 
+  #echo "<<<<<<<<<", interfaceProvider["ActionMap"] #@["ApplicationWindow", "Application"]
   if namespace == "Gdk": # special care for gdk keys due to nim's style insensitivity!
     for i in s:
       var h = $gBaseInfoGetName(i)
@@ -2143,6 +2153,13 @@ proc main(namespace: string) =
   for i in delayedSyms:
     processInfo(i)
 
+  if externInterfaces.len > 0:
+    output.writeLine("\n# Extern interfaces: (we don't use converters, but explicit procs for now.)")
+  for i in externInterfaces:
+    output.writeLine("")
+    output.writeLine(i)
+
+
   if namespace == "Gtk":
     output.write(GTK_EPI)
 
@@ -2222,4 +2239,4 @@ o.close()
 supmod.close
 
 #for i in callerAllocCollector: echo i
-# 2233 lines
+# 2233 lines interfa

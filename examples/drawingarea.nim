@@ -136,12 +136,21 @@ proc paint(this: PDA) =
   destroy(cr) # we can also manually destroy the context here, but GC would do it for us
 
 proc dareaConfigureCallback(darea: DrawingArea; event: EventConfigure; this: PDA): bool =
-  this.updateAdjustments(0, 0)
+  #this.updateAdjustments(0, 0)
   (this.dataX, this.dataY, this.dataWidth,
     this.dataHeight) = this.extents() # query user defined size
   this.fullScale = min(this.darea.allocatedWidth.float / this.dataWidth,
       this.darea.allocatedHeight.float / this.dataHeight)
   this.paint
+
+proc hscrollbarSizeAllocateCallback(s: Scrollbar; r: gdk.Rectangle; pda: PDA) =
+  pda.hadjustment.setUpper(r.width.float * pda.userZoom)
+  pda.hadjustment.setPageSize(r.width.float)
+
+proc vscrollbarSizeAllocateCallback(s: Scrollbar; r: gdk.Rectangle; pda: PDA) =
+  pda.vadjustment.setUpper(r.height.float * pda.userZoom)
+  pda.vadjustment.setPageSize(r.height.float)
+
 
 proc updateAdjustmentsAndPaint(this: PDA; dx, dy: float) =
   this.updateAdjustments(dx, dy)
@@ -246,6 +255,8 @@ proc newPDA: PDA =
   result.vscrollbar = newScrollbar(Orientation.vertical, result.vadjustment)
   result.hscrollbar.setHExpand
   result.vscrollbar.setVExpand
+  result.hscrollbar.connect("size-allocate", hscrollbarSizeAllocateCallback, result)
+  result.vscrollbar.connect("size-allocate", vscrollbarSizeAllocateCallback, result)
   result.attach(result.darea, 0, 0, 1, 1)
   result.attach(result.vscrollbar, 1, 0, 1, 1)
   result.attach(result.hscrollbar, 0, 1, 1, 1)

@@ -761,6 +761,56 @@ instead of an external XML files, we have to investigate how we can do that in N
 And it may be possible to connect the signal handlers to handler procs from within
 the XML file -- this is also work in progress...
 
+== GAction
+
+GAction represents a single named action and is for GTK3 the prefered way to do
+user interactions. GAction works with button, menus and keyboard shortcuts.
+
+The following example is based on
+
+https://wiki.gnome.org/HowDoI/GAction
+
+[[gaction.nim]]
+[source, nim]
+.gaction.nim
+----
+# https://wiki.gnome.org/HowDoI/GAction
+# nim c gaction.nim
+import gintro/[gtk, glib, gobject, gio]
+
+proc saveCb(action: SimpleAction; v: Variant) =
+  echo "saveCb"
+
+proc appActivate(app: Application) =
+  let window = newApplicationWindow(app)
+  let action = newSimpleAction("save")
+  discard action.connect("activate", saveCB)
+  window.actionMap.addAction(action)
+  let button = newButton()
+  button.label = "Save"
+  window.add(button)
+  button.setActionName("win.save")
+  var h: cstringArray = allocCstringArray(["<Control><Shift>S"])
+  setAccelsForAction(app, "win.save", h)
+  deallocCStringArray(h)
+  showAll(window)
+
+proc main =
+  let app = newApplication("org.gtk.example")
+  connect(app, "activate", appActivate)
+  discard run(app)
+
+main()
+----
+
+GtkApplicationWindow provides an interface to GActionMap. As
+the interface itself and the interface provider are defined in different modules,
+automatic conversion is not possible, so we have to convert the ApplicationWindow
+to ActionMap. (We could use a converter to do the conversion for us, but as
+these conversions are rare, and because gintro use no converters at all still, we use
+an explicit proc.) The use of cstringArray as third parameter for proc setAccelsForAction()
+is a bit ugly, we have to fix that later.
+
 == Drawing with Cairo graphics library
 
 The next example shows how we can use the cairo graphics library for drawing on a DrawingArea widget,
