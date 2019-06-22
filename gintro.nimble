@@ -1,14 +1,14 @@
 # Package
 
-version       = "0.4.23"
+version       = "0.5.0"
 author        = "Stefan Salewski"
-description = "High level GObject-Introspection based GTK3 bindings"
+description = "High level GObject-Introspection based GTK3/GTK4 bindings"
 license       = "MIT"
 skipDirs = @["examples", "tests"]
 
 # Dependencies
 
-requires "nim >= 0.19.0"
+requires "nim >= 0.20.0"
 
 when defined(nimdistros):
   import distros
@@ -60,6 +60,7 @@ proc prep =
 
   exec("nim c gen.nim")
   mkDir("nim_gi")
+  exec(td / wd / "gen 1")
   exec(td / wd / "gen")
   let mods = listFiles("nim_gi")
   for i in mods:

@@ -1,6 +1,6 @@
 = High level GTK3 (and GTK4) bindings for the Nim programming language
 (c) Stefan Salewski                                     
-//Version 0.4 2018     
+//Version 0.5    
 :experimental:
 :imagesdir: http://ssalewski.de/tmp
 :source-highlighter: pygments
@@ -19,9 +19,26 @@ TIP: A more fancy copy of this document with dark source code background is avai
 NOTE: This work is partly based on earlier works of J. Mansour and has been supported by A. Rumpf and other _Nim_ and _GTK/Gnome_ developers.
 The `combinatorics` module was kindly provided by R. Behrends.
 
+NOTE: Starting with current release 0.5.0 we also support GTK4. GTK4 is still work in progress and not intended for
+end users yet, but it is good to have it available for migration testing. For GTK4 we have a new module gsk, and
+new versions of modules gtk, gdk and gdkX11, which are not backward compatible with the old once of GTK3. The other
+modules can be used by GTK3 and GTK4 in parallel. Due to this fact we use a single nimble package which can be used for
+GTK3 and GTK4 development. To archive this, we have named the new modules gtk4, gdk4 and gdkX114 -- the
+old once are named gtk, gdk and gdkX11 still. So for existing GTK3 software no code changes are necessary.
+For GTK4 an example is provided -- it imports gtk4 instead of gtk now, and instead of window.showAll()
+window.show() is needed. More GTK4 examples may follow eventually, see GTK4 migration page at
+https://developer.gnome.org/gtk4/stable/gtk-migrating-3-to-4.html. The gintro package tries to install
+the GTK4 modules when GTK4 is available on the local computer and skips it if not available.
+For successful detection of GTK4 the typelibs must be found. For example, if you have installed
+GTK4 from sources on /opt/gtk as described in https://developer.gnome.org/gtk4/3.96/gtk-building.html, then
+you may have to execute "export GI_TYPELIB_PATH=/opt/gtk/lib64/girepository-1.0" in your shell before you
+do "nimble install gintro". Currently gtksourceview and vte is not available for GTK4. GTK4 provides a
+official test program called gtk4-demo -- of course that one should work fine on your box before you
+consider testing Nim with GTK4.
+
 //icon:thumbs-up[]
-This repository contains bindings from the Nim programming language to the GTK3 _GUI_ (_Graphical User Interface_) library and related libraries. (With some fixes
-it should also work for upcoming _GTK4_.)
+//This repository contains bindings from the Nim programming language to the GTK3 _GUI_ (_Graphical User Interface_) library and related libraries. (With some fixes
+//it should also work for upcoming _GTK4_.)
 
 https://nim-lang.org/[Nim] is a modern universal programming language.
 
@@ -61,12 +78,12 @@ _Application Programming Interface_ (_API_).
 
 Currently there are at least 3 sources of GTK3 bindings for Nim:
 
-* https://github.com/ngtk3 (obsolete, will be deleted)
+* https://github.com/ngtk3 (obsolete, has been deleted)
 * https://github.com/StefanSalewski/oldgtk3
 * https://github.com/StefanSalewski/gintro
 
-ngtk3 was the first attempt to provide GTK3 support for Nim. It contains single repositories for all the GTK related libraries and
-is not supported by nimble package manager. It was created from GTK 3.20 headers and is now deprecated.
+ngtk3 was the first attempt to provide GTK3 support for Nim. It contained single repositories for all the GTK related libraries and
+was not supported by nimble package manager. It was created from GTK 3.20 headers and is now deprecated.
 
 oldgtk3 is the port of ngtk3 to GTK 3.22 -- joining all libraries and providing nimble support. Some people may still prefer
 using oldgtk3. As it is generated with the Nim tool c2nim directly from the C header files without much manual intervention,

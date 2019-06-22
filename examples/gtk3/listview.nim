@@ -89,9 +89,9 @@ proc appActivate(app: Application) =
   window.add(vbox)
   initList(list)
   let selection = getSelection(list)
-  connect(add, "clicked", listview.appendItem, entry)
-  connect(remove, "clicked", listview.removeItem, selection)
-  connect(removeAll, "clicked", listview.onRemoveAll, selection)
+  connect(add, "clicked", appendItem, entry)
+  connect(remove, "clicked", removeItem, selection)
+  connect(removeAll, "clicked", onRemoveAll, selection)
   showAll(window)
 
 proc main =
