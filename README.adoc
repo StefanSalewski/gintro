@@ -425,7 +425,7 @@ gcc.options.speed = "-march=native -O3 -flto -fstrict-aliasing"
 
 With that optimization, your executable sizes should be in the range of about 50 kB only!
 
-=== Optional, type safe parameters for callbacks
+== Optional, type safe parameters for callbacks
 
 The next example shows, how we can pass (nearly) arbitrary parameters to our connect procs.
 We pass a string, an object from the stack, a reference to an object allocated on the heap
@@ -952,6 +952,141 @@ proc main =
 main()
 
 ----
+
+== GSettings
+
+GSettings provides a convenient way to permanently storing configuration data,
+and to bind them to properties of widgets.
+
+You can read an introduction at https://blog.gtk.org/2017/05/01/first-steps-with-gsettings/.
+
+For using GSettings in our own programs, we have first to create a XML file
+which defines names and type of each configuration entry, and additional
+provides default value and a description. The file name of such xml files
+must always end with ".gschema.xml".
+The following example has only one
+field called like-nim of type boolean (b). For a real application program
+we would install the configuration on our computer -- unfortunately we
+would need root access for this. We could do it this way:
+
+----
+# For making gsettings available system wide one method is, as root
+# https://developer.gnome.org/gio/stable/glib-compile-schemas.html
+# echo $XDG_DATA_DIRS
+# /usr/share/gnome:/usr/local/share:/usr/share:/usr/share/gdm
+# cd /usr/local/share/glib-2.0/schemas
+# cp test.gschema.xml .
+# glib-compile-schemas .
+#
+----
+
+For testing there is an easier method available:
+
+Create a directory and copy the xml file and the test program below into it.
+
+Then do, as ordinary user:
+
+----
+glib-compile-schemas .
+nim c gsettings.nim
+GSETTINGS_SCHEMA_DIR="." ./gsettings
+---- 
+
+This is the xml file and the test program: 
+
+[[test.gschema.xml]]
+[source, xml]
+.test.gschema.xml
+----
+<schemalist>
+  <schema path="/org/gnome/recipes/"       
+         id="org.gnome.Recipes">
+    <key type="b" name="like-nim">
+      <default>false</default>
+      <summary>I like Nim</summary>
+      <description>
+        I like or like not
+        the Nim programming language.
+      </description>
+    </key>
+  </schema>
+</schemalist>
+----
+
+[[gsettings.nim]]
+[source, nim]
+.gsettings.nim
+----
+# gsettings.nim -- basic use of gsettings
+# nim c gsettings.nim
+# https://blog.gtk.org/2017/05/01/first-steps-with-gsettings/
+# https://mail.gnome.org/archives/gtk-list/2016-December/msg00003.html
+import gintro/[gtk, glib, gobject, gio]
+
+# unused
+proc toggle(b: CheckButton) = 
+  echo b.active
+  let s = newSettings("org.gnome.Recipes")
+  discard s.setBoolean("like-nim", b.active)
+
+proc appActivate(app: Application) =
+  let window = newApplicationWindow(app)
+  window.title = "GTK3, Nim and GSettings"
+  window.defaultSize = (200, 200)
+  let b = newCheckButton()
+  b.halign = Align.center
+  b.label = "I like Nim"
+  #b.connect("toggled", toggle) # we don't need this for plain binding!
+  let s = newSettings("org.gnome.Recipes")
+  if s.getBoolean("like-nim"):
+    echo "I like Nim language"
+  `bind`(s, "like-nim", b, "active", {SettingsBindFlag.get, SettingsBindFlag.set})
+  window.add(b)
+  showAll(window)
+
+proc main =
+  let app = newApplication("org.gtk.example")
+  connect(app, "activate", appActivate)
+  discard run(app)
+
+main()
+----
+
+The command "glib-compile-schemas ." compiles all schemas in the current directory. And
+"GSETTINGS_SCHEMA_DIR="." ./gsettings" launches our test program with the environment
+variable GSETTINGS_SCHEMA_DIR pointing to the current directory, containing the compiled schema.
+
+Note that a system tool with same name as our test program exists -- that one can be used
+to get or set configuration data -- for example you may query the current state of field
+"like-nim" with
+
+----
+gsettings --schemadir "." get org.gnome.Recipes like-nim
+----
+
+Or test program first creates a window with a check button. Then our settings file is
+opened and we print the current value of the boolean variable. After that the
+bind procedure binds the active property (checkmark state) of our widget to the
+"like-nim" entry of our settings file. The result of this binding is, that
+our checkmark state is automatically made persistent, that is when we terminate
+and restart our test program, the checkmark will have the last state again.
+
+These bindings works for booleans, integers, floats, strings. The type of the property of the
+widget must be identical with the corresponding type of the entry in the settings xml file. 
+
+On Linux you may permanently set the gsetting directory by adding the statement
+
+----
+export GSETTINGS_SCHEMA_DIR="pathToMyProg"
+----
+
+to your .bashrc file -- of course after replacing pathToMyProg with the actual path.
+
+For more informations about gsettings see
+
+https://developer.gnome.org/gio/stable/GSettings.html.
+
+https://developer.gnome.org/gio/stable/running-gio-apps.html
 
 == Drawing with Cairo graphics library
 

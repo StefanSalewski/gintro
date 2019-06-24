@@ -1,0 +1,13 @@
+<schemalist>
+  <schema path="/org/gnome/recipes/"       
+         id="org.gnome.Recipes">
+    <key type="b" name="like-nim">
+      <default>false</default>
+      <summary>I like Nim</summary>
+      <description>
+        I like or like not
+        the Nim programming language.
+      </description>
+    </key>
+  </schema>
+</schemalist>
