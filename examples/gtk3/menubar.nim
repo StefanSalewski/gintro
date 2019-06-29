@@ -87,10 +87,8 @@ proc appActivate(app: Application) =
   #window.add(button) # do not add it here already: (menubar:10010): Gtk-WARNING **: 22:00:33.230: actionhelper:
   # action win.justify can't be activated due to parameter type mismatch (parameter type s, target type NULL)
   button.setDetailedActionName("win.justify::center")
-  #button.setActionName("app.quit") # for a stateless action
-  var h: cstringArray = allocCstringArray(["<Control><Shift>R"]) # ugly 
-  setAccelsForAction(app, "win.justify::right", h)
-  deallocCStringArray(h)
+  #button.setActionName("app.quit") # for a stateless action 
+  setAccelsForAction(app, "win.justify::right", "<Control><Shift>R")
   window.add(button)
   showAll(window)
 

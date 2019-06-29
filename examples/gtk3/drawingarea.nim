@@ -104,7 +104,7 @@ proc drawingAreaDrawCb(darea: DrawingArea; cr: Context; this: PDA): bool =
     cr.setSource(0, 0, 0)
     cr.setLineWidth(2)
     cr.stroke
-  return SignalEventStopPropagation
+  return gdk.EVENT_STOP # EVENT_PROPAGATE
   #return true # TRUE to stop other handlers from being invoked for the event. FALSE to propagate the event further.
 
 # clamp to correct values, 0 <= value <= (adj.upper - adj.pageSize), block calling onAdjustmentEvent()

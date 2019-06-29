@@ -4,7 +4,7 @@ import gintro/[gtk4, glib, gobject, gio]
 
 proc appActivate(app: Application) =
   let window = newApplicationWindow(app)
-  window.title = "GTK3 & Nim"
+  window.title = "GTK4 & Nim"
   window.defaultSize = (200, 200)
   show(window)
 

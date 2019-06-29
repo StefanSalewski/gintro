@@ -14,9 +14,7 @@ proc appActivate(app: Application) =
   button.label = "Save"
   window.add(button)
   button.setActionName("win.save")
-  var h: cstringArray = allocCstringArray(["<Control><Shift>S"])
-  setAccelsForAction(app, "win.save", h)
-  deallocCStringArray(h)
+  setAccelsForAction(app, "win.save", "<Control><Shift>S")
   showAll(window)
 
 proc main =

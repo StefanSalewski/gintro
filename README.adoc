@@ -807,9 +807,7 @@ proc appActivate(app: Application) =
   button.label = "Save"
   window.add(button)
   button.setActionName("win.save")
-  var h: cstringArray = allocCstringArray(["<Control><Shift>S"])
-  setAccelsForAction(app, "win.save", h)
-  deallocCStringArray(h)
+  setAccelsForAction(app, "win.save", "<Control><Shift>S")
   showAll(window)
 
 proc main =
@@ -935,9 +933,7 @@ proc appActivate(app: Application) =
   # parameter type mismatch (parameter type s, target type NULL)
   button.setDetailedActionName("win.justify::center")
   #button.setActionName("app.quit") # for a stateless action
-  var h: cstringArray = allocCstringArray(["<Control><Shift>R"]) # ugly 
-  setAccelsForAction(app, "win.justify::right", h)
-  deallocCStringArray(h)
+  setAccelsForAction(app, "win.justify::right", "<Control><Shift>R")
   window.add(button)
   showAll(window)
 
