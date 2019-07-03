@@ -1,5 +1,5 @@
 # High level gobject-introspection based GTK3/GTK4 bindings for the Nim programming language
-# v 0.5.0 2019-JUN-29
+# v 0.5.0 2019-JUL-03
 # (c) S. Salewski 2018
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -1067,6 +1067,9 @@ proc writeUnion(info: GIUnionInfo) =
     writeMethod(info, minfo)
 
 proc writeStruct(info: GIStructInfo) =
+  if g_struct_info_is_gtype_struct(info):
+    return # we should not need the class and interface structs
+  output.writeLine("")
   if not suppressType:
     output.writeLine("type")
   if callerAlloc.contains(($gBaseInfoGetNamespace(
@@ -1558,7 +1561,7 @@ proc writeConst(info: GIConstantInfo) =
     output.writeLine("const ", mangleName(h) & EM, " = ", str)
 
 proc processInfo(i: GIBaseInfo) =
-  if not isFunctionInfo(i):
+  if not (isFunctionInfo(i) or gBaseInfoGetType(i) == GIInfoType.STRUCT):
     output.write("\n")
   if isCallableInfo(i):
     if isFunctionInfo(i):
@@ -2341,4 +2344,4 @@ launch()
 #for i in callerAllocCollector:
 #  if CA_Items.find(i) == -1:
 #    echo i
-# 2344 lines
+# 2347 lines
