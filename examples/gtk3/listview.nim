@@ -10,23 +10,23 @@ const
 
 var list: TreeView
 
-# this is copied from gtk.nim
-#proc getModel*(self: TreeView): TreeModel =
-#  new(result)
-#  result.impl = gtk_tree_view_get_model(cast[ptr TreeView00](self.impl))
+# we need the following two procs for now -- later we will not use that ugly cast...
+proc typeTest(o: gobject.Object; s: string): bool =
+  let gt = g_type_from_name(s)
+  return g_type_check_instance_is_a(cast[ptr TypeInstance00](o.impl), gt).toBool
 
-proc getListStore(self: TreeView): ListStore =
-  new(result)
-  result.impl = gtk_tree_view_get_model(cast[ptr TreeView00](self.impl))
+proc listStore(o: gobject.Object): gtk.ListStore =
+  assert(typeTest(o, "GtkListStore"))
+  cast[gtk.ListStore](o)
 
 proc appendItem(widget: Button; entry: Entry) =
   var
     val: Value
     iter: TreeIter
-  let store = getListStore(list)
+  let store = listStore(getModel(list))
   let gtype = typeFromName("gchararray")
-  discard gValueInit(val, gtype)
-  gValueSetString(val, entry.text)
+  discard init(val, gtype)
+  setString(val, entry.text)
   store.append(iter)
   store.setValue(iter, LIST_ITEM, val)
   entry.text = ""
@@ -35,7 +35,7 @@ proc removeItem(widget: Button; selection: TreeSelection) =
   var    
     ls: ListStore
     iter: TreeIter
-  let store = getListStore(list)
+  let store = list.getModel.listStore#getListStore(list)
   if not store.getIterFirst(iter):
       return
   if getSelected(selection, ls, iter):
@@ -44,7 +44,8 @@ proc removeItem(widget: Button; selection: TreeSelection) =
 proc onRemoveAll(widget: Button; selection: TreeSelection) =
   var
     iter: TreeIter
-  let store = getListStore(list)
+  #let store = getListStore(list)
+  let store = list.getModel.listStore
   if not store.getIterFirst(iter):
     return
   clear(store)

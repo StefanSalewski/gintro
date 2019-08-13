@@ -1,6 +1,6 @@
 = High level GTK3 (and GTK4) bindings for the Nim programming language
 (c) Stefan Salewski                                     
-//Version 0.5    
+//Version 0.5.3
 :experimental:
 :imagesdir: http://ssalewski.de/tmp
 :source-highlighter: pygments
@@ -19,7 +19,16 @@ TIP: A more fancy copy of this document with dark source code background is avai
 NOTE: This work is partly based on earlier works of J. Mansour and has been supported by A. Rumpf and other _Nim_ and _GTK/Gnome_ developers.
 The `combinatorics` module was kindly provided by R. Behrends.
 
-NOTE: Starting with current release 0.5.0 we also support GTK4. GTK4 is still work in progress and not intended for
+NOTE: Starting with current release 0.5.3 we do not generate field entries for objects and we do
+not generate class structs and private objects. Also we stopped exporting the low level functions
+like gtk_button_new(). For a real high-level binding we should not need these. If that is a serious
+limitation for you, then use release 0.5.2 for now and create an github issue for your use case, we
+will try to fix it, maybe undo these changes. Also starting with v0.5.3 we try to support array
+parameters like TargetEntryArray, PageRangeArray and KeymapKeyArray. Use of these array parameters is rare,
+if you will use functions with these parameters you may inspect the source code first, as the
+code is auto-generated and still untested. 
+
+NOTE: Starting with release 0.5.0 we also support GTK4. GTK4 is still work in progress and not intended for
 end users yet, but it is good to have it available for migration testing. For GTK4 we have a new module gsk, and
 new versions of modules gtk, gdk and gdkX11, which are not backward compatible with the old once of GTK3. The other
 modules can be used by GTK3 and GTK4 in parallel. Due to this fact we use a single nimble package which can be used for

@@ -1,0 +1,15 @@
+nim c app0.nim
+nim c builder.nim
+nim c button.nim
+nim c cairo_anim.nim
+nim c connect_args.nim
+nim c count_button.nim
+nim c darea_test.nim
+nim c drawingarea.nim
+nim c gaction.nim
+nim c gsettings.nim
+nim c label.nim
+nim c listview.nim
+nim c menubar.nim
+nim c t0.nim
+
