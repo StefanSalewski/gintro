@@ -2,31 +2,32 @@
 # https://developer.gnome.org/glib/stable/glib-GVariantType.html
 # https://wiki.gnome.org/HowDoI/GMenu
 # https://wiki.gnome.org/HowDoI/GAction
-# nim c menubar.nim
+# https://developer.gnome.org/gnome-devel-demos/stable/menubutton.c.html.en
+# nim c gearsmenu.nim
 import gintro/[gtk, glib, gobject, gio]
-from strutils import `%`, format
+import strformat
 
 # https://github.com/GNOME/glib/blob/master/gio/tests/gapplication-example-actions.c
 proc activateToggleAction(action: SimpleAction; parameter: Variant; app: Application) =
   app.hold # hold/release taken over from C example, there may be reasons...
   block:
-    echo format("action $1 activated", action.name)
+    echo fmt"action {action.name} activated"
     let state: Variant = action.state
     let b = state.getBoolean
     action.state = newVariantBoolean(not b)
-    echo format("state change $1 -> $2", b, not b)
+    echo fmt"state change {b} -> {not b}"
   app.release
 
 proc activateStatefulAction(action: SimpleAction; parameter: Variant; app: Application) =
   app.hold
   block:
-    echo format("action $1 activated", action.name)
+    echo fmt"action {action.name} activated"
     let state: Variant = action.state
     var l: uint64
     let oldState = state.getString(l) # yes uint64 parameter is a bit ugly
     let newState = parameter.getString(l)
     action.state = newVariantString(newState)
-    echo format("state change $1 -> $2", oldState, newState)
+    echo fmt"state change {oldState} -> {newState}"
   app.release
 
 proc quitProgram(action: SimpleAction; parameter: Variant; app: Application) =
@@ -37,6 +38,13 @@ proc appStartup(app: Application) =
   let quit = newSimpleAction("quit") # here we create the actions for whole app
   connect(quit, "activate", quitProgram, app)
   app.addAction(quit)
+
+proc appActivate(app: Application) =
+  echo "appActivate"
+  let window = newApplicationWindow(app)
+  # window.title = "GTK3 App with Headerbar and Gears Menu" # unused due to HeaderBar
+  window.defaultSize = (500, 200)
+  window.position = WindowPosition.center
 
   let menu = gio.newMenu() # root of all menus
   block: # plain stateless menu
@@ -64,15 +72,22 @@ proc appStartup(app: Application) =
     let section = gio.newMenu()
     submenu.appendSection(nil, section)
     section.append("Check", "win.toggleSpellCheck")
-  # finally add the menubar
-    setMenuBar(app, menu)
 
-proc appActivate(app: Application) =
-  echo "appActivate"
-  let window = newApplicationWindow(app)
-  window.title = "GTK3 App with Menubar"
-  window.defaultSize = (500, 200)
-  window.position = WindowPosition.center
+  let headerBar = newHeaderBar()
+  headerBar.setShowCloseButton
+  headerBar.setTitle("Title")
+  headerBar.setSubtitle("Subtitle")
+  window.setTitlebar (headerBar)
+
+  let menubar = newMenuButton()
+  # menubar.setDirection(ArrowType.none) # show the gears Icon
+  # let image = newImageFromIconName("open-menu-symbolic", IconSize.menu.ord)
+  let image = newImageFromIconName("document-save", IconSize.dialog.ord) # dialog is really big!
+  menubar.setImage(image) # this is only an example for a custom image
+  # menubar.setIconName("open-menu-symbolic") # only gtk4
+  headerBar.packEnd(menubar)
+  menubar.setMenuModel(menu)
+
   block: # creat the window related actions
     let v = newVariantBoolean(true)
     let spellCheck = newSimpleActionStateful("toggleSpellCheck", nil, v)
@@ -86,8 +101,6 @@ proc appActivate(app: Application) =
     window.actionMap.addAction(justifyAction)
   let button = newButton()
   button.label = "Justify Center"
-  #window.add(button) # do not add it here already: (menubar:10010): Gtk-WARNING **: 22:00:33.230: actionhelper:
-  # action win.justify can't be activated due to parameter type mismatch (parameter type s, target type NULL)
   button.setDetailedActionName("win.justify::center")
   #button.setActionName("app.quit") # for a stateless action
   setAccelsForAction(app, "win.justify::right", "<Control><Shift>R")
@@ -98,7 +111,7 @@ proc main =
   let app = newApplication("app.example")
   connect(app, "startup", appStartup)
   connect(app, "activate", appActivate)
-  echo "GTK Version $1.$2.$3" % [$majorVersion(), $minorVersion(), $microVersion()]
+  echo fmt"GTK Version {majorVersion()}.{minorVersion()}.{microVersion()}"
   let status = run(app)
   quit(status)
 
