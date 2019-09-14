@@ -1,6 +1,6 @@
 = High level GTK3 (and GTK4) bindings for the Nim programming language
 (c) Stefan Salewski                                     
-//Version 0.5.3
+//Version 0.5.4
 :experimental:
 :imagesdir: http://ssalewski.de/tmp
 :source-highlighter: pygments
@@ -19,7 +19,7 @@ TIP: A more fancy copy of this document with dark source code background is avai
 NOTE: This work is partly based on earlier works of J. Mansour and has been supported by A. Rumpf and other _Nim_ and _GTK/Gnome_ developers.
 The `combinatorics` module was kindly provided by R. Behrends.
 
-NOTE: Starting with current release 0.5.3 we do not generate field entries for objects and we do
+NOTE: Starting with release 0.5.3 we do not generate field entries for objects and we do
 not generate class structs and private objects. Also we stopped exporting the low level functions
 like gtk_button_new(). For a real high-level binding we should not need these. If that is a serious
 limitation for you, then use release 0.5.2 for now and create an github issue for your use case, we
@@ -1416,15 +1416,215 @@ proc main =
 main()
 ----
 
+
+== A ListView example with CSS styling
+
+Recently C. Eric Cashon provided this example at https://discourse.gnome.org/t/gtk-treeview-cell-color-change/1750/3
+
+I will show his original code here too, so we can compare it better with the Nim version.
+We see that Nim code has currently some disadvantages still, for example we have no
+varargs procs implemented, so setting of properties and attributes is done using GValues,
+which is typesafe, but not really compact. That is not too bad, but we may consider
+creating macros to support a more dense, but still typesafe way similar to C's varargs functions.
+
+[[cell_color1.c]]
+[source,c]
+.cell_color1.c
+----
+// gcc -Wall cell_color1.c -o cell_color1 `pkg-config --cflags --libs gtk+-3.0`
+// https://discourse.gnome.org/t/gtk-treeview-cell-color-change/1750/4
+// C. Eric Cashon
+
+#include<gtk/gtk.h>
+
+enum
+{
+   ID,
+   PROGRAM,
+   COLOR1,
+   COLOR2,
+   COLUMNS
+};
+
+int main(int argc, char *argv[])
+  {
+    gtk_init(&argc, &argv);
+
+    GtkWidget *window=gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_title(GTK_WINDOW(window), "Select Cell");
+    gtk_window_set_position(GTK_WINDOW(window), GTK_WIN_POS_CENTER);
+    gtk_window_set_default_size(GTK_WINDOW(window), 500, 500);
+    gtk_container_set_border_width(GTK_CONTAINER(window), 20);
+    g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
+
+    GtkTreeIter iter;
+    GtkListStore *store=gtk_list_store_new(COLUMNS, G_TYPE_UINT, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING);
+    gtk_list_store_append(store, &iter);
+    gtk_list_store_set(store, &iter, ID, 0, PROGRAM, "Gedit", COLOR1, "DarkCyan", COLOR2, "cyan", -1);
+    gtk_list_store_append(store, &iter);
+    gtk_list_store_set(store, &iter, ID, 1, PROGRAM, "Gimp", COLOR1,  "LightSlateGray", COLOR2, "cyan", -1);
+    gtk_list_store_append(store, &iter);
+    gtk_list_store_set(store, &iter, ID, 2, PROGRAM, "Inkscape", COLOR1, "DarkCyan", COLOR2, "cyan", -1);
+    gtk_list_store_append(store, &iter);
+    gtk_list_store_set(store, &iter, ID, 3, PROGRAM, "Firefox", COLOR1, "LightSlateGray", COLOR2, "cyan", -1);
+    gtk_list_store_append(store, &iter);
+    gtk_list_store_set(store, &iter, ID, 4, PROGRAM, "Calculator", COLOR1, "DarkCyan", COLOR2, "cyan", -1);
+    gtk_list_store_append(store, &iter);
+    gtk_list_store_set(store, &iter, ID, 5, PROGRAM, "Devhelp", COLOR1, "LightSlateGray", COLOR2, "cyan", -1);
+
+    GtkWidget *tree=gtk_tree_view_new_with_model(GTK_TREE_MODEL(store));
+    gtk_widget_set_hexpand(tree, TRUE);
+    gtk_widget_set_vexpand(tree, TRUE);
+    g_object_set(tree, "activate-on-single-click", TRUE, NULL);
+
+    GtkTreeSelection *selection=gtk_tree_view_get_selection(GTK_TREE_VIEW(tree));
+    gtk_tree_selection_set_mode(selection, GTK_SELECTION_SINGLE);
+
+    GtkCellRenderer *renderer1=gtk_cell_renderer_text_new();
+    g_object_set(renderer1, "editable", FALSE, NULL);
+
+    GtkCellRenderer *renderer2=gtk_cell_renderer_text_new();
+    g_object_set(renderer2, "editable", TRUE, NULL);
+   
+    //Bind the COLOR column to the "cell-background" property.
+    GtkTreeViewColumn *column1=gtk_tree_view_column_new_with_attributes("ID", renderer1, "text", ID, "cell-background", COLOR1, NULL);
+    gtk_tree_view_append_column(GTK_TREE_VIEW(tree), column1);    
+    GtkTreeViewColumn *column2 = gtk_tree_view_column_new_with_attributes("Program", renderer2, "text", PROGRAM, "cell-background", COLOR2, NULL);
+    gtk_tree_view_append_column(GTK_TREE_VIEW(tree), column2);
+   
+    GtkWidget *grid=gtk_grid_new();
+    gtk_grid_attach(GTK_GRID(grid), tree, 0, 0, 1, 1);
+
+    gtk_container_add(GTK_CONTAINER(window), grid);
+
+    gchar *css_string=g_strdup("treeview{background-color: rgba(0,255,255,1.0); font-size:30pt} treeview:selected{background-color: rgba(255,255,0,1.0); color: rgba(0,0,255,1.0);}");
+    GError *css_error=NULL;
+    GtkCssProvider *provider=gtk_css_provider_new();
+    gtk_css_provider_load_from_data(provider, css_string, -1, &css_error);
+    gtk_style_context_add_provider_for_screen(gdk_screen_get_default(), GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+    if(css_error!=NULL)
+      {
+        g_print("CSS loader error %s\n", css_error->message);
+        g_error_free(css_error);
+      }
+    g_object_unref(provider);
+    g_free(css_string);
+   
+    gtk_widget_show_all(window);
+
+    gtk_main();
+    return 0;   
+  }
+----
+
+And this is the Nim version, created with c2nim and some manual tuning:
+
+[[css_colored_listview.nim]]
+[source,nim]
+.css_colored_listview.nim
+----
+# nim c css_colored_listview.nim
+import gintro/[gtk, gobject]
+import gintro/gdk except Window # there is a problem with gdk.Window -- we have to investigate!
+const # maybe we should use Nim's enum here?
+  Id = 0
+  Program = 1
+  Color1 = 2
+  Color2 = 3
+  Columns = 4
+
+proc bye(w: Window) =
+  mainQuit()
+  echo "Bye..."
+
+proc toStringVal(s: string): Value =
+  let gtype = typeFromName("gchararray")
+  discard init(result, gtype)
+  setString(result, s)
+
+proc toUIntVal(i: int): Value =
+  let gtype = typeFromName("guint")
+  discard init(result, gtype)
+  setUint(result, i)
+
+proc toBoolVal(b: bool): Value =
+  let gtype = typeFromName("gboolean")
+  discard init(result, gtype)
+  setBoolean(result, b)
+
+# we use the old gtk style with init() as is used in the C original -- maybe better use modern app sytle 
+proc main() =
+  gtk.init()
+  let window = newWindow()
+  window.title = "Select Cell"
+  window.position = WindowPosition.center
+  window.defaultSize = (500, 500)
+  window.borderWidth = 20
+  connect(window, "destroy", bye)
+  var iter: TreeIter
+  var h = [typeFromName("guint"), typeFromName("gchararray"), typeFromName("gchararray"), typeFromName("gchararray")]
+  var store = newListStore(Columns,  cast[pointer]( unsafeaddr h)) # this cast is ugly, we should fix it in the bindings soon.
+  let progNames = ["Gedit", "Gimp", "Inkscape", "Firefox", "Calculator", "Devhelp"]
+  for i, n in progNames:
+    store.append(iter) # currently we have to use setValue() as there is no varargs proc as in C original
+    store.setValue(iter, Id, toUIntVal(i))
+    store.setValue(iter, Program, toStringVal(n))
+    store.setValue(iter, Color1, toStringVal(if (i and 1) != 0: "LightSlateGray" else: "DarkCyan"))
+    store.setValue(iter, Color2, toStringVal("cyan"))
+  var tree  = newTreeViewWithModel(store)
+  tree.setHexpand
+  tree.setVexpand
+  setProperty(tree, "activate-on-single-click", toBoolVal(true))
+  var selection = tree.getSelection()
+  selection.setMode(SelectionMode.single)
+  var renderer1 = newCellRendererText()
+  setProperty(renderer1, "editable", toBoolVal(false))
+  var renderer2 = newCellRendererText()
+  setProperty(renderer2, "editable", toBoolVal(true))
+  ## Bind the Color column to the "cell-background" property.
+  var column1 = newTreeViewColumn()
+  column1.setTitle("ID")
+  column1.packStart(renderer1, true)
+  column1.addAttribute(renderer1, "text", Id)
+  column1.addAttribute(renderer1, "cell-background", Color1)
+  discard tree.appendColumn(column1)
+  var column2  = newTreeViewColumn()
+  column1.setTitle("Program")
+  column1.packStart(renderer2, true)
+  column1.addAttribute(renderer2, "text", Program)
+  column1.addAttribute(renderer2, "cell-background", Color2)
+  discard tree.appendColumn(column2)
+  var grid = newGrid() # grid with only one occupied cell makes not much sense here -- but so we can add more widgets later
+  grid.attach(tree, 0, 0, 1, 1)
+  window.add(grid)
+  const cssString = # note: big font selected intentionally
+    """treeview{background-color: rgba(0,255,255,1.0); font-size:30pt} treeview:selected{background-color: rgba(255,255,0,1.0);
+    color: rgba(0,0,255,1.0);}"""
+  var provider  = newCssProvider()
+  discard provider.loadFromData(cssString)
+  addProviderForScreen(getDefaultScreen(), provider, STYLE_PROVIDER_PRIORITY_APPLICATION)
+  window.showAll
+  gtk.main()
+
+main()
+----
+
+When you compile with `nim c -d:release -d:danger --passC:-flto css_colored_listview.nim`
+you will get an executable size of 80k, which is big compared with the 20k of the C version, but
+not too bad.
+
 == A more advanced example for cairo drawing with zooming, panning, scrolling
 
 The following code is a plain Nim version of a drawing demo which I wrote some years ago in Ruby (http://ssalewski.de/PetEd-Demo.html.en).
-With the latest fix to Nim  GTK3 bindings it seems to work fine, but some rewriting for optimized performance
-may be needed, I have to investigate that. Cairo surface is currently manually freed, because GC may have a too large delay.
+Cairo surface is currently manually freed, because GC may have a too large delay.
 
 You can resize the window and zoom in with the mouse wheel. When zoomed in scroll bars appear. You
 can hold the middle mouse button pressed while moving the mouse for panning, and you can press left mouse button
 and move the mouse to first draw a selection rectangle and zoom into it when releasing the mouse button.
+
+In the examples directory there is also a simplified version called `simpledrawingarea.nim` which does all
+the drawings in the draw callback, without using a buffering surface. This is generally preferable for
+plain applications.
 
 [[drawingarea.nim]]
 [source,nim]
@@ -1444,6 +1644,8 @@ and move the mouse to first draw a selection rectangle and zoom into it when rel
 # is reused when scrolling, a custom surface may be useful.
 # And finally that custom surface and custom cairo context is an
 # important test for the language bindings.
+
+# https://discourse.gnome.org/t/problem-with-gtkscrollbar-gtk-window-resize-and-gtk-adjustment-set-value/1081
 
 import gintro/[gtk, gdk, glib, gobject, gio, cairo]
 
@@ -1483,7 +1685,7 @@ Scrolling: Scrollbars
 Panning: Moving mouse while middle mouse button pressed
 """
 
-# drawing area and scroll bars in 2x2 table (PDA == Plain Drawing Area)
+# drawing area and scroll bars in 2x2 grid (PDA == Plain Drawing Area)
 
 type
   PosAdj = ref object of Adjustment
@@ -1504,6 +1706,8 @@ type
     selecting: bool
     userZoom: float
     surf: Surface
+    pattern: Pattern
+    cr: cairo.Context
     darea: DrawingArea
     hadjustment: PosAdj
     vadjustment: PosAdj
@@ -1520,23 +1724,24 @@ type
     lastMousePosY: float
     zoomRectX1: float
     zoomRectY1: float
+    oldSizeX: int
+    oldSizeY: int
     drawWorld: proc (cr: Context)
     extents: proc (): tuple[x, y, w, h: float]
 
 proc drawingAreaDrawCb(darea: DrawingArea; cr: Context; this: PDA): bool =
-  if this.surf.isNil: return
-  cr.setSource(patternCreateForSurface(this.surf))
+  if this.pattern.isNil: return
+  cr.setSource(this.pattern)
   cr.paint
   if this.selecting:
     cr.rectangle(this.lastButtonDownPosX, this.lastButtonDownPosY,
-                 this.zoomRectX1 - this.lastButtonDownPosX,
-                     this.zoomRectY1 - this.lastButtonDownPosY)
+      this.zoomRectX1 - this.lastButtonDownPosX, this.zoomRectY1 - this.lastButtonDownPosY)
     cr.setSource(0, 0, 1, 0.5) # SELECT_RECT_COL) # 0, 0, 1, 0.5
     cr.fillPreserve
     cr.setSource(0, 0, 0)
     cr.setLineWidth(2)
     cr.stroke
-  return SignalEventStopPropagation
+  return gdk.EVENT_STOP # EVENT_PROPAGATE
   #return true # TRUE to stop other handlers from being invoked for the event. FALSE to propagate the event further.
 
 # clamp to correct values, 0 <= value <= (adj.upper - adj.pageSize), block calling onAdjustmentEvent()
@@ -1553,27 +1758,47 @@ proc updateAdjustments(this: PDA; dx, dy: float) =
   updateVal(this.hadjustment, dx)
   updateVal(this.vadjustment, dy)
 
-# maybe for optimization we should only allocate a new surface when its size has changed.
 proc paint(this: PDA) =
-  if this.surf != nil:
-    destroy(this.surf) # manually destroy surface -- GC would do it for us, but GC is slow...
-  this.surf = this.darea.window.createSimilarSurface(Content.color,
-      this.darea.allocatedWidth, this.darea.allocatedHeight)
-  let cr = newContext(this.surf)
-  cr.translate(this.hadjustment.upper * 0.5 - this.hadjustment.value, # our origin is the center
+  # echo "paint"
+  this.cr.save
+  this.cr.translate(this.hadjustment.upper * 0.5 - this.hadjustment.value, # our origin is the center
     this.vadjustment.upper * 0.5 - this.vadjustment.value)
-  cr.scale(this.fullScale * this.userZoom, this.fullScale * this.userZoom)
-  cr.translate(-this.dataX - this.dataWidth * 0.5, -this.dataY - this.dataHeight * 0.5)
-  this.drawWorld(cr)          # call the user provided drawing function
-  destroy(cr) # we can also manually destroy the context here, but GC would do it for us
+  this.cr.scale(this.fullScale * this.userZoom, this.fullScale * this.userZoom)
+  this.cr.translate(-this.dataX - this.dataWidth * 0.5, -this.dataY - this.dataHeight * 0.5)
+  this.drawWorld(this.cr) # call the user provided drawing function
+  this.cr.restore
 
 proc dareaConfigureCallback(darea: DrawingArea; event: EventConfigure; this: PDA): bool =
-  this.updateAdjustments(0, 0)
   (this.dataX, this.dataY, this.dataWidth,
     this.dataHeight) = this.extents() # query user defined size
   this.fullScale = min(this.darea.allocatedWidth.float / this.dataWidth,
       this.darea.allocatedHeight.float / this.dataHeight)
+  if this.surf != nil:
+    destroy(this.surf) # manually destroy surface -- GC would do it for us, but GC is slow...
+  this.surf = this.darea.window.createSimilarSurface(Content.color,
+      this.darea.allocatedWidth, this.darea.allocatedHeight)
+  if this.pattern != nil:
+    patternDestroy(this.pattern)
+  if this.cr != nil:
+    destroy(this.cr)
+  this.pattern = patternCreateForSurface(this.surf) # pattern now owns the surface!
+  this.cr = newContext(this.surf) # this function references target!
   this.paint
+  return gdk.EVENT_STOP
+
+proc hscrollbarSizeAllocateCallback(s: Scrollbar; r: gdk.Rectangle; pda: PDA) =
+  pda.hadjustment.setUpper(r.width.float * pda.userZoom)
+  pda.hadjustment.setPageSize(r.width.float)
+  if pda.oldSizeX != 0: # this fix is not exact, as fullScale can ...
+    updateVal(pda.hadjustment, (r.width - pda.oldSizeX).float * 0.5)
+  pda.oldSizeX = r.width
+
+proc vscrollbarSizeAllocateCallback(s: Scrollbar; r: gdk.Rectangle; pda: PDA) =
+  pda.vadjustment.setUpper(r.height.float * pda.userZoom)
+  pda.vadjustment.setPageSize(r.height.float)
+  if pda.oldSizeY != 0: # ... change when window is rezized. But it's good enough!
+    updateVal(pda.vadjustment, (r.height - pda.oldSizeY).float * 0.5)
+  pda.oldSizeY = r.height
 
 proc updateAdjustmentsAndPaint(this: PDA; dx, dy: float) =
   this.updateAdjustments(dx, dy)
@@ -1590,37 +1815,45 @@ proc getUserCoordinates(this: PDA; eventX, eventY: float): (float, float) =
 proc onMotion(darea: DrawingArea; event: EventMotion; this: PDA): bool =
   let state = getState(event)
   let (x, y) = event.getCoords
-  if (state.contains(button1)): # selecting
+  if state.contains(button1): # selecting
     this.selecting = true
     this.zoomRectX1 = x
     this.zoomRectY1 = y
     this.darea.queueDrawArea(0, 0, this.darea.allocatedWidth, this.darea.allocatedHeight)
   elif button2 in state: # panning
     this.updateAdjustmentsAndPaint(this.lastMousePosX - x, this.lastMousePosY - y)
+  else:
+    return gdk.EVENT_PROPAGATE
   this.lastMousePosX = x
   this.lastMousePosY = y
+  return gdk.EVENT_STOP
   #event.request # request more motion events ?
 
 # zooming with mouse wheel -- data near mouse pointer should not move if possible!
 # hadjustment.value + event.x is the position in our zoomed_in world, (userZoom / z0 - 1)
 # is the relative movement caused by zooming
+# In other words, this is the delta-move d of a point at position P from zooming:
+# d = newPos - P = P * scale - P = P * (z/z0) - P = P * (z/z0 - 1). We have to compensate for this d.
 proc scrollEvent(darea: DrawingArea; event: EventScroll; this: PDA): bool =
   let z0 = this.userZoom
-  var d = getScrollDirection(event)
-  var (x, y) = event.getCoords
-  if d == ScrollDirection.up:
+  case getScrollDirection(event)
+  of ScrollDirection.up:
     this.userZoom *= ZoomFactorMouseWheel
-  elif d == ScrollDirection.down:
+  of ScrollDirection.down:
     this.userZoom /= ZoomFactorMouseWheel
-    if (this.userZoom < 1):
+    if this.userZoom < 1:
       this.userZoom = 1
+  else:
+    return gdk.EVENT_PROPAGATE
   if this.zoomNearMousepointer:
+    let (x, y) = event.getCoords
     this.updateAdjustmentsAndPaint((this.hadjustment.value + x) * (this.userZoom / z0 - 1),
-                                 (this.vadjustment.value + y) * (this.userZoom / z0 - 1))
+      (this.vadjustment.value + y) * (this.userZoom / z0 - 1))
   else: # zoom to center
     this.updateAdjustmentsAndPaint((this.hadjustment.value +
         this.darea.allocatedWidth.float * 0.5) * (this.userZoom / z0 - 1),
         (this.vadjustment.value + this.darea.allocatedHeight.float * 0.5) * (this.userZoom / z0 - 1))
+  return gdk.EVENT_STOP
 
 proc buttonPressEvent(darea: DrawingArea; event: EventButton; this: PDA): bool =
   var (x, y) = event.getCoords
@@ -1631,60 +1864,66 @@ proc buttonPressEvent(darea: DrawingArea; event: EventButton; this: PDA): bool =
   echo "buttonPressEvent", x, " ", y
   (x, y) = this.getUserCoordinates(x, y)
   echo "User coordinates: ", x, ' ', y, "\n" # to verify getUserCoordinates()
+  return gdk.EVENT_STOP
 
 # zoom into selected rectangle and center it
+# math: we first center the selection rectangle, and then compensate for translation due to scale
 proc buttonReleaseEvent(darea: DrawingArea; event: EventButton; this: PDA): bool =
-  var (x, y) = event.getCoords
-  var b = getButton(event)
+  let (x, y) = event.getCoords
+  let b = getButton(event)
   if b == 1:
     this.selecting = false
-    let z1 = min(this.darea.allocatedWidth.float / (
-        this.lastButtonDownPosX - x).abs, this.darea.allocatedHeight.float / (
-        this.lastButtonDownPosY - y).abs)
+    let z1 = min(this.darea.allocatedWidth.float / (this.lastButtonDownPosX - x).abs,
+      this.darea.allocatedHeight.float / (this.lastButtonDownPosY - y).abs)
     if z1 < ZoomFactorSelectMax: # else selection rectangle will persist, we may output a message...
       this.userZoom *= z1
       this.updateAdjustmentsAndPaint(
-        ((2 * this.hadjustment.value + x + this.lastButtonDownPosX) * z1 -
-            this.darea.allocatedWidth.float) * 0.5 - this.hadjustment.value,
-        ((2 * this.vadjustment.value + y + this.lastButtonDownPosY) * z1 -
-            this.darea.allocatedHeight.float) * 0.5 - this.vadjustment.value)
-
+        ((x + this.lastButtonDownPosX) * z1 - this.darea.allocatedWidth.float) * 0.5 + this.hadjustment.value * (z1 - 1),
+        ((y + this.lastButtonDownPosY) * z1 - this.darea.allocatedHeight.float) * 0.5 + this.vadjustment.value * (z1 - 1))
+    return gdk.EVENT_STOP
+  return gdk.EVENT_PROPAGATE
+ 
 proc onAdjustmentEvent(this: PosAdj; pda: PDA) =
   pda.paint
   pda.darea.queueDrawArea(0, 0, pda.darea.allocatedWidth, pda.darea.allocatedHeight)
 
 proc newPDA: PDA =
   initGrid(result)
+  let da = newDrawingArea()
+  result.darea = da
+  da.setHExpand
+  da.setVExpand
+  da.connect("draw", drawingAreaDrawCb, result)
+  da.connect("configure-event", dareaConfigureCallback, result)
+  da.addEvents({EventFlag.buttonPress, EventFlag.buttonRelease,
+      EventFlag.scroll, button1Motion, button2Motion, pointerMotionHint})
+  da.connect("motion-notify-event", onMotion, result)
+  da.connect("scroll_event", scrollEvent, result)
+  da.connect("button_press_event", buttonPressEvent, result)
+  da.connect("button_release_event", buttonReleaseEvent, result)
   result.zoomNearMousepointer = ZoomNearMousepointer # mouse wheel zooming
   result.userZoom = 1.0
-  result.darea = newDrawingArea()
-  result.darea.setHExpand
-  result.darea.setVExpand
-  result.darea.connect("draw", drawingAreaDrawCb, result)
-  result.darea.connect("configure-event", dareaConfigureCallback, result)
-  result.darea.addEvents({EventFlag.buttonPress, EventFlag.buttonRelease,
-      EventFlag.scroll, button1Motion, button2Motion, pointerMotionHint})
-  result.darea.connect("motion-notify-event", onMotion, result)
-  result.darea.connect("scroll_event", scrollEvent, result)
-  result.darea.connect("button_press_event", buttonPressEvent, result)
-  result.darea.connect("button_release_event", buttonReleaseEvent, result)
   result.hadjustment = newPosAdj()
-  result.hadjustment.handlerID = result.hadjustment.connect("value-changed",
-      onAdjustmentEvent, result)
+  result.hadjustment.handlerID = result.hadjustment.connect("value-changed", onAdjustmentEvent, result)
   result.vadjustment = newPosAdj()
-  result.vadjustment.handlerID = result.vadjustment.connect("value-changed",
-      onAdjustmentEvent, result)
+  result.vadjustment.handlerID = result.vadjustment.connect("value-changed", onAdjustmentEvent, result)
   result.hscrollbar = newScrollbar(Orientation.horizontal, result.hadjustment)
   result.vscrollbar = newScrollbar(Orientation.vertical, result.vadjustment)
   result.hscrollbar.setHExpand
   result.vscrollbar.setVExpand
+  result.hscrollbar.connect("size-allocate", hscrollbarSizeAllocateCallback, result)
+  result.vscrollbar.connect("size-allocate", vscrollbarSizeAllocateCallback, result)
   result.attach(result.darea, 0, 0, 1, 1)
   result.attach(result.vscrollbar, 1, 0, 1, 1)
   result.attach(result.hscrollbar, 0, 1, 1, 1)
 
-proc appActivate(app: Application; initData: ref PDA_Data) =
+proc appStartup(app: Application) =
+  echo "appStartup"
+
+proc appActivate(app: Application; initData: PDA_Data) =
   let window = newApplicationWindow(app)
   window.title = "Drawing example"
+  # window.defaultSize = initData.windowSize
   window.defaultSize = (initData.windowSize[0], initData.windowSize[1])
   let pda = newPDA()
   pda.drawWorld = initData.draw
@@ -1694,14 +1933,13 @@ proc appActivate(app: Application; initData: ref PDA_Data) =
 
 proc newDisplay*(initData: PDA_Data) =
   let app = newApplication("org.gtk.example")
-  var d = new (ref PDA_Data)
-  d[] = initData
-  connect(app, "activate", appActivate, d)
+  connect(app, "startup", appStartup)
+  connect(app, "activate", appActivate, initData)
   discard run(app)
 
 when isMainModule:
 
-  const                       # arbitrary locations for our data
+  const # arbitrary locations for our data
     DataX = 150.0
     DataY = 250.0
     DataWidth = 200.0
@@ -1721,21 +1959,16 @@ when isMainModule:
     cr.setSource(0, 0, 0)
     cr.setLineWidth(2)
     var i = 0.0
-    while true:
-      if min(DataWidth - 2.0 * i, DataHeight - 2.0 * i) <= 0:
-        break
+    while min(DataWidth - 2 * i, DataHeight - 2 * i) > 0:
       cr.rectangle(DataX + i, DataY + i, DataWidth - 2 * i, DataHeight - 2 * i)
-      i += 10.0
+      i += 10
     cr.stroke
 
   proc test =
-    var data: PDA_Data
-    data.draw = drawWorld
-    data.extents = worldExtents
-    data.windowSize = (800, 600)
+    let data = PDA_Data(draw: drawWorld, extents: worldExtents, windowSize: (800, 600))
     newDisplay(data)
 
-  test()
+  test() # 337 lines
 ----
 
 We can use this module as a library easily and get this simple drawing tool with full zoom and scroll support:

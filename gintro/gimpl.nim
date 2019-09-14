@@ -58,6 +58,8 @@ macro mconnect(widget: gobject.Object; signal: string; p: typed; arg: typed; ign
   inc(ProcID)
   let wt = getType(widget)
   let at = getTypeInst(arg)
+  #echo at.repr
+  #echo at.typeKind == ntyRef
   let wts = ($(wt[1].toStrLit)).replace(":ObjectType")
   let ats = $at.toStrLit
   let signalName = ($signal).replace("-", "_") # maybe we should just use plain proc names
@@ -74,7 +76,10 @@ proc $1$2 {.cdecl.} =
     ahl = "(self: gobject.Object)"
     r1s.add("  $3(cast[$4](h)")
     if not ignoreArg.boolVal:
-      r1s.add(", cast[$5](xdata)")
+      if getTypeInst(arg).typeKind == ntyRef:
+        r1s.add(", cast[$5](xdata)")
+      else:
+        r1s.add(", cast[ptr $5](xdata)[]")
     r1s.add(")\n")
   else: # signals with multiple arguments and maybe using interface providers
     (sn, wid, num, ahl, all) = sci.split(RecSep)
@@ -136,16 +141,19 @@ proc $1$2 {.cdecl.} =
           r1s.add("  if " & names[i] & "1" & ".isNil:\n")
           r1s.add("    new " & names[i] & "1" & "\n")
           r1s.add("  " & names[i] & "1.impl = " & names[i] & "\n")
-    
     if not ignoreArg.boolVal:
-      resu.add(", cast[$5](data)")
+      # resu.add(", cast[$5](data)")
+      if getTypeInst(arg).typeKind == ntyRef:
+        resu.add(", cast[$5](data)")
+      else:
+        resu.add(", cast[ptr $5](data)[]")
     resu.add(")")
     if resl == "gboolean":
       resu.add(".ord.gboolean")
     r1s.add(resu & "\n")
     all = all.replace(")", "; data: pointer)")
   r1s = r1s % [$procNameCdecl, all, $p, wts, ats]
-  #echo r1s
+  # echo r1s
   result = parseStmt(r1s)
   if not ignoreArg.boolVal:
     ahl = ahl.replace(")", "; arg: " & ats & ")")
@@ -154,7 +162,7 @@ proc $1$2 {.cdecl.} =
   else:
     ahl = "(self: " & wts & ")" & ahl.split(")", 1)[1]
 
-  let r2s =
+  let r2sunused =
     if ignoreArg.boolVal:
       """
 proc $1(self: $2;  p: proc $3): culong {.discardable.} =
@@ -164,7 +172,7 @@ $1($6, $7)
     else:
       """
 proc $1(self: $2;  p: proc $3; a: $4): culong {.discardable.} =
-  when a is RootRef:
+  when a is ref:
     GC_ref(a)
     sc$5(self, $6, cast[pointer](a))
   else:
@@ -172,10 +180,38 @@ proc $1(self: $2;  p: proc $3; a: $4): culong {.discardable.} =
     new(ar)
     deepCopy(ar[], a)
     GC_ref(ar)
-    sc$5(self, $6, cast[pointer](ar[]))
+    # sc$5(self, $6, cast[pointer](ar[]))
+    sc$5(self, $6, cast[pointer](ar))
 $1($7, $8, $9)
 """ % [$procName, wts,  ahl, ats, signalName,  $procNameCdecl, $(widget.toStrLit), $p, $(arg.toStrLit)]
-  #echo r2s
+
+  # maybe we write this better this way:
+  let r2s =
+    if ignoreArg.boolVal:
+      """
+proc $1(self: $2;  p: proc $3): culong {.discardable.} =
+  sc$4(self, $5, nil)
+$1($6, $7)
+""" % [$procName, wts, ahl, signalName,  $procNameCdecl, $(widget.toStrLit), $p]
+    elif getTypeInst(arg).typeKind == ntyRef:
+      """
+proc $1(self: $2;  p: proc $3; a: $4): culong {.discardable.} =
+  GC_ref(a)
+  sc$5(self, $6, cast[pointer](a))
+$1($7, $8, $9)
+""" % [$procName, wts,  ahl, ats, signalName,  $procNameCdecl, $(widget.toStrLit), $p, $(arg.toStrLit)]
+    else:
+      """
+proc $1(self: $2;  p: proc $3; a: $4): culong {.discardable.} =
+  var ar: ref $4
+  new(ar)
+  deepCopy(ar[], a)
+  GC_ref(ar)
+  # sc$5(self, $6, cast[pointer](ar[]))
+  sc$5(self, $6, cast[pointer](ar))
+$1($7, $8, $9)
+""" % [$procName, wts,  ahl, ats, signalName,  $procNameCdecl, $(widget.toStrLit), $p, $(arg.toStrLit)]
+  # echo r2s
   result.add(parseStmt(r2s))
 
 template connect*(widget: gobject.Object; signal: string; p: typed; arg: typed): untyped =

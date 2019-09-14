@@ -1,7 +1,7 @@
 # This is the high level cairo module for Nim -- based on the low level ngtk3 module, manually tuned.
 # (c) S. Salewski 2017, cairo 1.15.6
-# v0.4.18
-# 24-APR-2019
+# v0.5.04
+# 14-SEP-2019
 
 # Cairo does not really support gobject introspection and gobject's toggle references.
 # So code for memory management is a bit different compared to other gtk modules.
@@ -25,7 +25,8 @@
 #  result.impl = cairo_create(target.impl)
 #  discard cairo_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
-# We have to call GC_ref() because we store no direct reference to the proxy object.
+# We have to call GC_ref() because we store no direct reference to the proxy object, while
+# cairo_get_target() allows us to get the surface back from cairo context.
 # For this example cairo_create() references the surface.
 # When ref count of surface is decreased, maybe because context is destroyed, then gcuref is called
 # which calls GC_unref() on proxy. When there is no other ref to proxy GC can free proxy and surface
@@ -34,7 +35,8 @@
 # But there is at least one design flaw:
 # When we create for example a surface and GC releases it, then gcunref() is called on it while
 # gc_ref() was newer called. When we consider that the cairo context is the only element which
-# stores references to other objects, then we can simplify the code to
+# stores references to other objects, then we can simplify the code to (Footnote: This is not really
+# true, for example Pattern stores references to surface too -- but it should work similar.)
 
 # proc newImageSurface*(format: Format; width, height: int): Surface =
 #   new(result, surfaceDestroy) 
@@ -55,7 +57,17 @@
 # with
 # proc gcuref(o: pointer) {.cdecl.} =  GC_unref(cast[RootRef](o))
 
+# cairo_image_surface_create() set refcount of the plain cairo surface to 1.
+# cairo_create() increases refcount of surface (by 2), cairo destroy decreases
+# surface refcount again. cairo_surface_set_user_data() ensures that
+# Nim surface proxy element is unreffed when refcount of cairo surface
+# drops to zero, so surfaceDestroy() frees the cairo memory.
+
+# Note: For some other procs like cairo_set_source_surface() we also need code like
+#  discard cairo_surface_set_user_data(target.impl, NUDK, cast[pointer](target), gcuref)
+
 # Currently this is all not really tested.
+
 # One problem may be procs like cairo_surface_create_similar() when called frequently, maybe
 # for each frame in animations. GC may be too slow in freeing the memory.
 # We should try to avoid such usage, or we may add a way to manually free memory.
@@ -290,9 +302,6 @@ proc newContext*(target: Surface): Context =
   result.impl = cairo_create(target.impl)
   discard cairo_surface_set_user_data(target.impl, NUDK, cast[pointer](target), gcuref)
 
-
-
-
 proc cairo_reference*(cr: ptr Context00): ptr Context00 {.importc, libcairo.}
 #
 proc reference*(cr: Context): Context =
@@ -330,7 +339,11 @@ proc pushGroup*(cr: Context; content: Content) =
 proc cairo_pattern_destroy*(pattern: ptr Pattern00) {.importc, libcairo.}
 #
 proc patternDestroy*(pattern: Pattern) =
-  cairo_pattern_destroy(pattern.impl)
+  #cairo_pattern_destroy(pattern.impl)
+
+  if pattern != nil and pattern.impl != nil:
+    cairo_pattern_destroy(pattern.impl)
+    pattern.impl = nil
 
 proc cairo_pattern_set_user_data*(pattern: ptr Pattern00; key: ptr UserDataKey; userData: pointer;
   destroy: DestroyFunc00): Status {.importc, libcairo.}
@@ -405,11 +418,9 @@ proc getReferenceCount*(surface: Surface): int =
 proc cairo_set_source_surface*(cr: ptr Context00; surface: ptr Surface00; x, y: cdouble) {.importc, libcairo.}
 #
 proc setSourceSurface*(cr: Context; surface: Surface; x, y: float) =
-  #GC_ref(source) # we guess that surface is nor referenced, but a new intern pattern is created
-  let h = cairo_surface_get_reference_count(surface.impl)
+  GC_ref(surface)
   cairo_set_source_surface(cr.impl, surface.impl, x.cdouble, y.cdouble)
-  assert(cairo_surface_get_reference_count(surface.impl) == h) # is our guess OK?
-#
+  discard cairo_surface_set_user_data(surface.impl, NUDK, cast[pointer](surface), gcuref)
 #const `sourceSurface=`* = setSourceSurface
 
 proc cairo_set_tolerance*(cr: ptr Context00; tolerance: cdouble) {.importc, libcairo.}
@@ -1378,15 +1389,22 @@ proc cairo_pattern_get_user_data*(pattern: ptr Pattern00; key: ptr UserDataKey):
 proc getUserData*(pattern: Pattern; key: ptr UserDataKey): pointer =
   cairo_pattern_get_user_data(pattern.impl, key)
 
+proc cairo_pattern_reference*(pattern: ptr Pattern00): ptr Pattern00 {.importc, libcairo.}
+#
+proc patternReference*(pattern: Pattern): Pattern =
+  discard cairo_pattern_reference(pattern.impl)
+  return pattern
+
+# Returns the current source pattern. This object is owned by cairo.
+# To keep a reference to it, you must call cairo_pattern_reference().
 proc cairo_get_source*(cr: ptr Context00): ptr Pattern00 {.importc, libcairo.}
 #
 proc getSource*(cr: Context): Pattern =
   let h = cairo_get_source(cr.impl)
   let d = cairo_pattern_get_user_data(h, NUDK)
   if d.isNil:
-    #assert false # may this happen?
     new(result, patternDestroy)
-    result.impl = h
+    result.impl = cairo_pattern_reference(h)
   else:
     result = cast[Pattern](d)
     assert(result.impl == h)
@@ -2077,11 +2095,7 @@ proc patternCreateMesh*(): Pattern =
   result.impl = cairo_pattern_create_mesh()
   ### discard cairo_pattern_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
-proc cairo_pattern_reference*(pattern: ptr Pattern00): ptr Pattern00 {.importc, libcairo.}
-#
-proc patternReference*(pattern: Pattern): Pattern =
-  discard cairo_pattern_reference(pattern.impl)
-  return pattern
+
 
 proc cairo_pattern_status*(pattern: ptr Pattern00): Status {.importc, libcairo.}
 #
@@ -2821,4 +2835,5 @@ when CAIRO_HAS_TEE_SURFACE:
     discard cairo_tee_surface_index(surface.impl, index.cuint)
     return surface
 
-# 2786 lines
+# 2851 lines
+ 

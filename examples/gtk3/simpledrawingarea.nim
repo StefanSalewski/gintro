@@ -3,15 +3,8 @@
 # Nim version April 2019
 # License MIT
 
-# This version of the demo program uses a separate proc paint()
-# which allocates a custom surface for buffered drawing.
-# That may be not really necessary, for simple drawings doing all
-# the drawing in the "draw" call back is easier and faster. But for
-# more complicated drawing operations, for example when using a
-# background grid, which is a bit larger than the window size and
-# is reused when scrolling, a custom surface may be useful.
-# And finally that custom surface and custom cairo context is an
-# important test for the language bindings.
+# This is a simplified example, where all the drawing is done in
+# the draw callback function. No separate paint proc with own buffer surface.
 
 # https://discourse.gnome.org/t/problem-with-gtkscrollbar-gtk-window-resize-and-gtk-adjustment-set-value/1081
 
@@ -73,9 +66,6 @@ type
     zoomNearMousepointer: bool
     selecting: bool
     userZoom: float
-    surf: Surface
-    pattern: Pattern
-    cr: cairo.Context
     darea: DrawingArea
     hadjustment: PosAdj
     vadjustment: PosAdj
@@ -98,9 +88,13 @@ type
     extents: proc (): tuple[x, y, w, h: float]
 
 proc drawingAreaDrawCb(darea: DrawingArea; cr: Context; this: PDA): bool =
-  if this.pattern.isNil: return
-  cr.setSource(this.pattern)
-  cr.paint
+  cr.save
+  cr.translate(this.hadjustment.upper * 0.5 - this.hadjustment.value, # our origin is the center
+    this.vadjustment.upper * 0.5 - this.vadjustment.value)
+  cr.scale(this.fullScale * this.userZoom, this.fullScale * this.userZoom)
+  cr.translate(-this.dataX - this.dataWidth * 0.5, -this.dataY - this.dataHeight * 0.5)
+  this.drawWorld(cr) # call the user provided drawing function
+  cr.restore
   if this.selecting:
     cr.rectangle(this.lastButtonDownPosX, this.lastButtonDownPosY,
       this.zoomRectX1 - this.lastButtonDownPosX, this.zoomRectY1 - this.lastButtonDownPosY)
@@ -126,32 +120,11 @@ proc updateAdjustments(this: PDA; dx, dy: float) =
   updateVal(this.hadjustment, dx)
   updateVal(this.vadjustment, dy)
 
-proc paint(this: PDA) =
-  # echo "paint"
-  this.cr.save
-  this.cr.translate(this.hadjustment.upper * 0.5 - this.hadjustment.value, # our origin is the center
-    this.vadjustment.upper * 0.5 - this.vadjustment.value)
-  this.cr.scale(this.fullScale * this.userZoom, this.fullScale * this.userZoom)
-  this.cr.translate(-this.dataX - this.dataWidth * 0.5, -this.dataY - this.dataHeight * 0.5)
-  this.drawWorld(this.cr) # call the user provided drawing function
-  this.cr.restore
-
 proc dareaConfigureCallback(darea: DrawingArea; event: EventConfigure; this: PDA): bool =
   (this.dataX, this.dataY, this.dataWidth,
     this.dataHeight) = this.extents() # query user defined size
   this.fullScale = min(this.darea.allocatedWidth.float / this.dataWidth,
       this.darea.allocatedHeight.float / this.dataHeight)
-  if this.surf != nil:
-    destroy(this.surf) # manually destroy surface -- GC would do it for us, but GC is slow...
-  this.surf = this.darea.window.createSimilarSurface(Content.color,
-      this.darea.allocatedWidth, this.darea.allocatedHeight)
-  if this.pattern != nil:
-    patternDestroy(this.pattern)
-  if this.cr != nil:
-    destroy(this.cr)
-  this.pattern = patternCreateForSurface(this.surf) # pattern now owns the surface!
-  this.cr = newContext(this.surf) # this function references target!
-  this.paint
   return gdk.EVENT_STOP
 
 proc hscrollbarSizeAllocateCallback(s: Scrollbar; r: gdk.Rectangle; pda: PDA) =
@@ -170,7 +143,6 @@ proc vscrollbarSizeAllocateCallback(s: Scrollbar; r: gdk.Rectangle; pda: PDA) =
 
 proc updateAdjustmentsAndPaint(this: PDA; dx, dy: float) =
   this.updateAdjustments(dx, dy)
-  this.paint
   this.darea.queueDrawArea(0, 0, this.darea.allocatedWidth, this.darea.allocatedHeight)
 
 # event coordinates to user space
@@ -252,7 +224,6 @@ proc buttonReleaseEvent(darea: DrawingArea; event: EventButton; this: PDA): bool
   return gdk.EVENT_PROPAGATE
  
 proc onAdjustmentEvent(this: PosAdj; pda: PDA) =
-  pda.paint
   pda.darea.queueDrawArea(0, 0, pda.darea.allocatedWidth, pda.darea.allocatedHeight)
 
 proc newPDA: PDA =
@@ -336,4 +307,4 @@ when isMainModule:
     let data = PDA_Data(draw: drawWorld, extents: worldExtents, windowSize: (800, 600))
     newDisplay(data)
 
-  test() # 337 lines
+  test() # 310 lines

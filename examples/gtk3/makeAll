@@ -12,4 +12,7 @@ nim c label.nim
 nim c listview.nim
 nim c menubar.nim
 nim c t0.nim
-
+nim c simpledrawingarea.nim
+nim c css_colored_listview.nim
+nim c gearsmenu.nim
+nim c cairoImage.nim
