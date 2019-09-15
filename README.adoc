@@ -1524,7 +1524,7 @@ And this is the Nim version, created with c2nim and some manual tuning:
 .css_colored_listview.nim
 ----
 # nim c css_colored_listview.nim
-import gintro/[gtk, gobject]
+import gintro/[gtk, glib, gobject]
 import gintro/gdk except Window # there is a problem with gdk.Window -- we have to investigate!
 const # maybe we should use Nim's enum here?
   Id = 0
@@ -1552,6 +1552,26 @@ proc toBoolVal(b: bool): Value =
   discard init(result, gtype)
   setBoolean(result, b)
 
+# we need the following two procs for now -- later we will not use that ugly cast...
+proc typeTest(o: gobject.Object; s: string): bool =
+  let gt = g_type_from_name(s)
+  return g_type_check_instance_is_a(cast[ptr TypeInstance00](o.impl), gt).toBool
+
+proc listStore(o: gobject.Object): gtk.ListStore =
+  assert(typeTest(o, "GtkListStore"))
+  cast[gtk.ListStore](o)
+
+proc updateRow(renderer: CellRendererText; path: cstring; newText: cstring; tree: TreeView) =
+  var iter: TreeIter
+  var value: Value
+  let gtype = typeFromName("gchararray")
+  discard init(value, gtype)
+  let store = listStore(tree.getModel())   
+  value.setString(newText)
+  let treePath = newTreePathFromString(path)
+  discard store.getIter(iter, treePath)
+  store.setValue(iter, 1, value)
+
 # we use the old gtk style with init() as is used in the C original -- maybe better use modern app sytle 
 proc main() =
   gtk.init()
@@ -1562,8 +1582,9 @@ proc main() =
   window.borderWidth = 20
   connect(window, "destroy", bye)
   var iter: TreeIter
-  var h = [typeFromName("guint"), typeFromName("gchararray"), typeFromName("gchararray"), typeFromName("gchararray")]
-  var store = newListStore(Columns,  cast[pointer]( unsafeaddr h)) # this cast is ugly, we should fix it in the bindings soon.
+  var h = [typeFromName("guint"), typeFromName("gchararray"), typeFromName("gchararray"),
+    typeFromName("gchararray")]
+  var store = newListStore(Columns,  cast[pointer]( unsafeaddr h)) # cast is ugly, we should fix it in bindings.
   let progNames = ["Gedit", "Gimp", "Inkscape", "Firefox", "Calculator", "Devhelp"]
   for i, n in progNames:
     store.append(iter) # currently we have to use setValue() as there is no varargs proc as in C original
@@ -1581,6 +1602,7 @@ proc main() =
   setProperty(renderer1, "editable", toBoolVal(false))
   var renderer2 = newCellRendererText()
   setProperty(renderer2, "editable", toBoolVal(true))
+  connect(renderer2, "edited", updateRow, tree)
   ## Bind the Color column to the "cell-background" property.
   var column1 = newTreeViewColumn()
   column1.setTitle("ID")
@@ -1594,12 +1616,12 @@ proc main() =
   column1.addAttribute(renderer2, "text", Program)
   column1.addAttribute(renderer2, "cell-background", Color2)
   discard tree.appendColumn(column2)
-  var grid = newGrid() # grid with only one occupied cell makes not much sense here -- but so we can add more widgets later
+  var grid = newGrid() # only one occupied cell makes no sense -- but so we can add more widgets later
   grid.attach(tree, 0, 0, 1, 1)
   window.add(grid)
   const cssString = # note: big font selected intentionally
-    """treeview{background-color: rgba(0,255,255,1.0); font-size:30pt} treeview:selected{background-color: rgba(255,255,0,1.0);
-    color: rgba(0,0,255,1.0);}"""
+    """treeview{background-color: rgba(0,255,255,1.0); font-size:30pt} treeview:selected{background-color:
+    rgba(255,255,0,1.0); color: rgba(0,0,255,1.0);}"""
   var provider  = newCssProvider()
   discard provider.loadFromData(cssString)
   addProviderForScreen(getDefaultScreen(), provider, STYLE_PROVIDER_PRIORITY_APPLICATION)
@@ -1611,7 +1633,10 @@ main()
 
 When you compile with `nim c -d:release -d:danger --passC:-flto css_colored_listview.nim`
 you will get an executable size of 80k, which is big compared with the 20k of the C version, but
-not too bad.
+not too bad. You may note that I have added the updateRow() proc, which is necessary to
+make editing the program name entries permanent. That proc needs cstring parametes, which
+may be surprising, as we generally use Nim strings. Not a big problem, maybe intended, we may have to
+check the connect() macro in gimpl.nim.
 
 == A more advanced example for cairo drawing with zooming, panning, scrolling
 
