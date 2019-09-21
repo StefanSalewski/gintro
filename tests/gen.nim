@@ -1,5 +1,5 @@
 # High level gobject-introspection based GTK3/GTK4 bindings for the Nim programming language
-# v 0.5.3 2019-AUG-13
+# v 0.5.5 2019-SEP-21
 # (c) S. Salewski 2018
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -1174,12 +1174,14 @@ template writeSignal() =
     xxx = xxx & " | " & provider.join(" | ")
   signalbuffer.write("proc " & mangleName("sc_" & $gBaseInfoGetName(signalInfo)) & EM & "(self: " & xxx & "; ")
   if gCallableInfoGetNArgs(signalInfo) > 0 or gTypeInfoGetTag(zzzu) != GITypeTag.VOID:
-    signalbuffer.writeLine(" p: proc (self: ptr " & yyy & "00; " & h & " {.cdecl.}, xdata: pointer = nil): culong =")
+    #signalbuffer.writeLine(" p: proc (self: ptr " & yyy & "00; " & h & " {.cdecl.}, xdata: pointer = nil, cf: gobject.ConnectFlags = {}): culong =")
+    signalbuffer.writeLine(" p: proc (self: ptr " & yyy & "00; " & h & " {.cdecl.}, xdata: pointer, cf: gobject.ConnectFlags): culong =")
   else:
-    signalbuffer.writeLine(" p: proc (self: ptr gobject.Object00; " & h & " {.cdecl.}, xdata: pointer = nil): culong =")
+    #signalbuffer.writeLine(" p: proc (self: ptr gobject.Object00; " & h & " {.cdecl.}, xdata: pointer = nil, cf: gobject.ConnectFlags = {}): culong =")
+    signalbuffer.writeLine(" p: proc (self: ptr gobject.Object00; " & h & " {.cdecl.}, xdata: pointer, cf: gobject.ConnectFlags): culong =")
   signalbuffer.write("  g_signal_connect_data(self.impl, \"")
   signalbuffer.write($gBaseInfoGetName(signalInfo))
-  signalbuffer.writeLine("\", cast[GCallback](p), xdata, nil, cast[ConnectFlags](0))")
+  signalbuffer.writeLine("\", cast[GCallback](p), xdata, nil, cf)")
 
 proc writeInterface(info: GIInterfaceInfo) =
   if not suppressType:

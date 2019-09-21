@@ -37,31 +37,45 @@ proc findSignal(name, obj: NimNode): string =
           n = getType(n)[1]
           n = getType(n)[1]
 
-#var ProcID {.compileTime, global.}: int
 # from file gisup.nim we have:
 # "remove_editable!CellArea!2!(self: CellArea; renderer: CellRenderer; editable: CellEditable | SpinButton | ComboBox | ...
 # so for signal remove_editable third parameter of handler proc can be CellEditable OR SpinButton OR ComboBox OR ...
 # This is because SpinButton, ComboBox provides the CellEditable interface!
 # https://mail.gnome.org/archives/gtk-list/2017-July/msg00018.html
 # This interface parameter is in most cases the second parameter of handler proc, but can be the third also.
-macro mconnect(widget: gobject.Object; signal: string; p: typed; arg: typed; ignoreArg: bool): untyped =
+macro mconnect(widget: gobject.Object; signal: string; p: typed; arg: typed; ignoreArg: bool; sf: static[gobject.ConnectFlags]): untyped =
   #echo p.symbol.getImpl().toStrLit
   #echo p.symbol.getImpl().params.toStrLit
   #echo p.symbol.getImpl().params[2][1].toStrLit
 
   var ProcID {.compileTime, global.}: int
-
   var # position and actual type of interface provider, if any
     ipos = -1
     ipro: string #= nil
+    sfstr = $sf
+  #if sfstr == "{after}":
+  #  sfstr = "{gobject.ConnectFlag.after}"
+  sfstr = sfstr.replace("after", "gobject.ConnectFlag.after")
+  sfstr = sfstr.replace("swapped", "gobject.ConnectFlag.swapped")
 
   inc(ProcID)
   let wt = getType(widget)
   let at = getTypeInst(arg)
+
+  # echo getType(widget)[0].strVal # ref
+  # echo getType(widget)[1].strVal # Window:ObjectType
+  # echo getTypeInst(widget).strVal # Window
+
   #echo at.repr
   #echo at.typeKind == ntyRef
-  let wts = ($(wt[1].toStrLit)).replace(":ObjectType")
-  let ats = $at.toStrLit
+  # let wts = getTypeInst(widget).strVal
+  let wts = widget.getTypeInst.owner.strVal & '.' & widget.getTypeInst.strVal # new in v0.5.5
+
+  let ats = at.toStrLit.strVal
+
+  #assert ats == $(at.toStrLit)
+  #assert ats == at.toStrLit.strVal
+
   let signalName = ($signal).replace("-", "_") # maybe we should just use plain proc names
   let procNameCdecl = "connect_for_signal_cdecl_" & signalName & $ProcID
   let procName = "connect_for_signal_" & signalName & $ProcID
@@ -142,7 +156,6 @@ proc $1$2 {.cdecl.} =
           r1s.add("    new " & names[i] & "1" & "\n")
           r1s.add("  " & names[i] & "1.impl = " & names[i] & "\n")
     if not ignoreArg.boolVal:
-      # resu.add(", cast[$5](data)")
       if getTypeInst(arg).typeKind == ntyRef:
         resu.add(", cast[$5](data)")
       else:
@@ -190,16 +203,16 @@ $1($7, $8, $9)
     if ignoreArg.boolVal:
       """
 proc $1(self: $2;  p: proc $3): culong {.discardable.} =
-  sc$4(self, $5, nil)
+  sc$4(self, $5, nil, $8)
 $1($6, $7)
-""" % [$procName, wts, ahl, signalName,  $procNameCdecl, $(widget.toStrLit), $p]
+""" % [$procName, wts, ahl, signalName,  $procNameCdecl, $(widget.toStrLit), $p, sfstr]
     elif getTypeInst(arg).typeKind == ntyRef:
       """
 proc $1(self: $2;  p: proc $3; a: $4): culong {.discardable.} =
   GC_ref(a)
-  sc$5(self, $6, cast[pointer](a))
+  sc$5(self, $6, cast[pointer](a), $10)
 $1($7, $8, $9)
-""" % [$procName, wts,  ahl, ats, signalName,  $procNameCdecl, $(widget.toStrLit), $p, $(arg.toStrLit)]
+""" % [$procName, wts,  ahl, ats, signalName,  $procNameCdecl, $(widget.toStrLit), $p, $(arg.toStrLit), sfstr]
     else:
       """
 proc $1(self: $2;  p: proc $3; a: $4): culong {.discardable.} =
@@ -208,20 +221,30 @@ proc $1(self: $2;  p: proc $3; a: $4): culong {.discardable.} =
   deepCopy(ar[], a)
   GC_ref(ar)
   # sc$5(self, $6, cast[pointer](ar[]))
-  sc$5(self, $6, cast[pointer](ar))
+  sc$5(self, $6, cast[pointer](ar), $10)
 $1($7, $8, $9)
-""" % [$procName, wts,  ahl, ats, signalName,  $procNameCdecl, $(widget.toStrLit), $p, $(arg.toStrLit)]
+""" % [$procName, wts,  ahl, ats, signalName,  $procNameCdecl, $(widget.toStrLit), $p, $(arg.toStrLit), sfstr]
   # echo r2s
   result.add(parseStmt(r2s))
 
 template connect*(widget: gobject.Object; signal: string; p: typed; arg: typed): untyped =
-  mconnect(widget, signal, p, arg, false)
+  mconnect(widget, signal, p, arg, false, {})
 
 template connect*(widget: gobject.Object; signal: string; p: typed): untyped =
-  mconnect(widget, signal, p, "", true)
+  mconnect(widget, signal, p, "", true, {})
 
-#var TimeoutID {.compileTime, global.}: int
-#
+template connectAfter*(widget: gobject.Object; signal: string; p: typed; arg: typed): untyped =
+  mconnect(widget, signal, p, arg, false, {gobject.ConnectFlag.after})
+
+template connectAfter*(widget: gobject.Object; signal: string; p: typed): untyped =
+  mconnect(widget, signal, p, "", true, {gobject.ConnectFlag.after})
+
+template connectSwapped*(widget: gobject.Object; signal: string; p: typed; arg: typed): untyped =
+  mconnect(widget, signal, p, arg, false, {gobject.ConnectFlag.swapped})
+
+template connectSwapped*(widget: gobject.Object; signal: string; p: typed): untyped =
+  mconnect(widget, signal, p, "", true, {gobject.ConnectFlag.swapped})
+
 macro timeoutAdd*(interval: Natural; p: untyped; arg: typed): untyped =
   var TimeoutID {.compileTime, global.}: int
   inc(TimeoutID)
@@ -251,8 +274,6 @@ $1($5)
 """ % [$procName, ats, $interval.toStrLit, $procNameCdecl, $arg]
   result = parseStmt(r1s & r2s)
 
-#var IdleID {.compileTime, global.}: int
-#
 macro idleAdd*(p: untyped; arg: typed): untyped =
   var IdleID {.compileTime, global.}: int
   inc(IdleID)
@@ -281,4 +302,3 @@ proc $1(a: $2): culong {.discardable.} =
 $1($4)
 """ % [$procName, ats, $procNameCdecl, $arg]
   result = parseStmt(r1s & r2s)
-

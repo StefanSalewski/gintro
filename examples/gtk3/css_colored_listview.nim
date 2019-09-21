@@ -2,8 +2,7 @@
 ##  C. Eric Cashon
 
 # nim c css_colored_listview.nim
-import gintro/[gtk, glib, gobject]
-import gintro/gdk except Window # there is a problem with gdk.Window -- we have to investigate!
+import gintro/[gtk, gdk, glib, gobject]
 const # maybe we should use Nim's enum here?
   Id = 0
   Program = 1
@@ -11,7 +10,7 @@ const # maybe we should use Nim's enum here?
   Color2 = 3
   Columns = 4
 
-proc bye(w: Window) =
+proc bye(w: gtk.Window) =
   mainQuit()
   echo "Bye..."
 
