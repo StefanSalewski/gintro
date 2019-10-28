@@ -16,6 +16,12 @@
 
 TIP: A more fancy copy of this document with dark source code background is available at http://ssalewski.de/gintroreadme.html[GIntro README]
 
+WARNING: Please do not use the code from the examples in this page, but use the actual code from
+https://github.com/StefanSalewski/gintro/tree/master/examples . The github readme.adoc does not
+allow to insert code from files, so I had to manually insert it, and so that code in the html page
+may not compile with latest gintro version. I plan to create a new page hosted somewhere else
+with code inserted from files directly.
+
 NOTE: This work is partly based on earlier works of J. Mansour and has been supported by A. Rumpf, E. Bassi and other _Nim_ and _GTK/Gnome_ developers.
 The `combinatorics` module was kindly provided by R. Behrends.
 
