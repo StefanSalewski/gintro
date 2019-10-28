@@ -1,6 +1,6 @@
 = High level GTK3 (and GTK4) bindings for the Nim programming language
 (c) Stefan Salewski                                     
-//Version 0.5.4
+//Version 0.6.0
 :experimental:
 :imagesdir: http://ssalewski.de/tmp
 :source-highlighter: pygments
@@ -16,8 +16,13 @@
 
 TIP: A more fancy copy of this document with dark source code background is available at http://ssalewski.de/gintroreadme.html[GIntro README]
 
-NOTE: This work is partly based on earlier works of J. Mansour and has been supported by A. Rumpf and other _Nim_ and _GTK/Gnome_ developers.
+NOTE: This work is partly based on earlier works of J. Mansour and has been supported by A. Rumpf, E. Bassi and other _Nim_ and _GTK/Gnome_ developers.
 The `combinatorics` module was kindly provided by R. Behrends.
+
+NOTE: Starting with current version v.0.6.0 we support gstreamer (gst). At the same time we have split
+cairo module into an gobject-introspection basic part and an manually created part. Unfortunately the
+gobject-introspection is not available for very old cairo libraries, so installation may fail for you.
+Use v0.5.5 in this case. Also we support gBoxed types now, this is assumed to work well but is not well tested yet.
 
 NOTE: Starting with release 0.5.3 we do not generate field entries for objects and we do
 not generate class structs and private objects. Also we stopped exporting the low level functions
@@ -186,8 +191,8 @@ nim c app0.nim
 ./app0
 ----
 
-or you may open the source files in your favorite Nim IDE or editor. Taking the source code from this Readme file is not
-really recommended, as these source code listings may be not the latest versions.
+or you may open the source files in your favorite Nim IDE or editor. [black yellow-background]#Taking the source code from this Readme file is not
+really recommended, as these source code listings may be not the latest versions.#
 
 GTK3 programs can use still the old _GTK2_ design, where you first initialize the GTK library, create your widgets and finally enter the GTK main loop.
 This style is still used in many tutorials as in http://zetcode.com/gui/gtk2/[Zetcode tutorial] or in the GTK book of A. Krause.
@@ -2339,6 +2344,38 @@ proc main =
   add(window, grid)
   showAll(window)
   gtk.main()
+
+main()
+----
+
+== A GStreamer example
+
+Recently someone asked about gstreamer support for gintro, see https://github.com/StefanSalewski/gintro/issues/59 .
+So we added it. I don't know much about gstreamer, but I was told that it is used with
+Python and lately with Rusts bindings, so there may be some use case.
+
+[[gstBasicTutorial1.nim]]
+[source,nim]
+.gstBasicTutorial1.nim
+----
+# https://gstreamer.freedesktop.org/documentation/tutorials/basic/hello-world.html?gi-language=c
+# nim c gstBasicTutorial1.nim
+import gintro/gst
+
+proc main =
+  var pipeline: gst.Element
+  var bus: gst.Bus
+  var msg: gst.Message
+  ##  Initialize GStreamer
+  gst.init()
+  ##  Build the pipeline
+  pipeline = gst.parseLaunch("playbin uri=https://www.freedesktop.org/software/gstreamer-sdk/data/media/sintel_trailer-480p.webm")
+  ##  Start playing
+  discard gst.setState(pipeline, gst.State.playing)
+  ##  Wait until error or EOS
+  bus = gst.getBus(pipeline)
+  msg = gst.timedPopFiltered(bus, gst.Clock_Time_None, {gst.MessageFlag.error, gst.MessageFlag.eos})
+  discard gst.setState(pipeline, gst.State.null) # is this necessary?
 
 main()
 ----

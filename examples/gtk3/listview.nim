@@ -24,7 +24,7 @@ proc appendItem(widget: Button; entry: Entry) =
     val: Value
     iter: TreeIter
   let store = listStore(getModel(list))
-  let gtype = typeFromName("gchararray")
+  let gtype = gStringGetType() # typeFromName("gchararray")
   discard init(val, gtype)
   setString(val, entry.text)
   store.append(iter)
@@ -57,7 +57,7 @@ proc initList(list: TreeView) =
   column.packStart(renderer, true)
   column.addAttribute(renderer, "text", LIST_ITEM)
   discard list.appendColumn(column)
-  let gtype = typeFromName("gchararray")
+  let gtype = gStringGetType() # typeFromName("gchararray")
   let store = newListStore(N_COLUMNS, cast[pointer]( unsafeaddr gtype)) # cast due to bug in gtk.nim
   list.setModel(store)
 

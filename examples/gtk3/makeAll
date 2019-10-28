@@ -16,3 +16,6 @@ nim c simpledrawingarea.nim
 nim c css_colored_listview.nim
 nim c gearsmenu.nim
 nim c cairoImage.nim
+nim c gstBasicTutorial1.nim
+nim c sourceview_test.nim
+nim c overlay_tree1.nim

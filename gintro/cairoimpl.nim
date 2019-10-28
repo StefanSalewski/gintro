@@ -1,7 +1,9 @@
 # This is the high level cairo module for Nim -- based on the low level ngtk3 module, manually tuned.
 # (c) S. Salewski 2017, cairo 1.15.6
-# v0.5.04
-# 14-SEP-2019
+# v0.6.0
+# 28-OCT-2019
+
+# starting with gintro v.0.6.0 we split cairo into the gobject-introspection generated cairo.nim and this file.
 
 # Cairo does not really support gobject introspection and gobject's toggle references.
 # So code for memory management is a bit different compared to other gtk modules.
@@ -92,112 +94,7 @@ else:
 
 {.pragma: libcairo, cdecl, dynlib: LIB_CAIRO.}
 
-type
-  Context00* = object
-  Context* = ref object of RootRef
-    impl*: ptr Context00
-
-type
-  Surface00* = object
-  Surface* = ref object of RootRef
-    impl*: ptr Surface00
-
-type
-  Matrix* {.byRef.} = object
-    xx*: cdouble
-    yx*: cdouble
-    xy*: cdouble
-    yy*: cdouble
-    x0*: cdouble
-    y0*: cdouble
-
-type
-  Pattern00* = object
-  Pattern* = ref object of RootRef
-    impl*: ptr Pattern00
-
-type
-  Region00* = object
-  Region* = ref object of RootRef
-    impl*: ptr Region00
-
-type
-  Content* {.size: sizeof(cint), pure.} = enum
-    color = 0x1000, alpha = 0x2000,
-    color_alpha = 0x3000
-
-type
-  FontOptions00* = object
-  FontOptions* = ref object of RootRef
-    impl*: ptr FontOptions00
-
-type
-  FontFace00*  = object
-  FontFace* = ref object of RootRef
-    impl*: ptr FontFace00
-
-type
-  ScaledFont00* = object
-  ScaledFont* = ref object of RootRef
-    impl*: ptr ScaledFont00
-
-type
-  Status* {.size: sizeof(cint), pure.} = enum
-    success = 0, noMemory, invalidRestore,
-    invalidPopGroup, noCurrentPoint,
-    invalidMatrix, invalidStatus,
-    nullPointer, invalidString,
-    invalidPathData, readError,
-    writeError, surfaceFinished,
-    surfaceTypeMismatch, patternTypeMismatch,
-    invalidContent, invalidFormat,
-    invalidVisual, fileNotFound,
-    invalidDash, invalidDscComment,
-    invalidIndex, clipNotRepresentable,
-    tempFileError, invalidStride,
-    fontTypeMismatch, userFontImmutable,
-    userFontError, negativeCount,
-    invalidClusters, invalidSlant,
-    invalidWeight, invalidSize,
-    userFontNotImplemented, deviceTypeMismatch,
-    deviceError, invalidMeshConstruction,
-    deviceFinished, jbig2GlobalMissing,
-    pngError, freetypeError,
-    win32GdiError, tagError, lastStatus
-
-type
-  PathDataType* {.size: sizeof(cint), pure.} = enum
-    moveTo, lineTo, curveTo, closePath
-
-type
-  INNER_C_STRUCT_3330700347* = object
-    t*: PathDataType
-    length*: cint
-
-  INNER_C_STRUCT_1651263489* = object
-    x*: cdouble
-    y*: cdouble
-
-  PathData00* {.union.} = object
-    header*: INNER_C_STRUCT_3330700347
-    point*: INNER_C_STRUCT_1651263489
-
-type
-  Path00* = object
-    status*: Status
-    data*: ptr PathData00
-    numData*: cint
-  Path* = ref object of RootRef
-    impl*: ptr Path00
-
-type
-  RectangleInt* {.byRef.} = object
-    x*: cint
-    y*: cint
-    width*: cint
-    height*: cint
-
-const 
+const
   CAIRO_HAS_TEE_SURFACE = true
   CAIRO_HAS_DRM_SURFACE = true
   CAIRO_HAS_SKIA_SURFACE = true
@@ -229,11 +126,6 @@ type
 #  int(cbool) != 0
 
 type
-  Device00* = object
-  Device* = ref object of RootRef
-    impl*: ptr Device00
-
-type
   DestroyFunc00* = proc (data: pointer) {.cdecl.}
 
 type
@@ -245,14 +137,8 @@ type
 var NUDK: ptr UserDataKey = cast[ptr UserDataKey](alloc(sizeof(UserDataKey)))
 
 proc gcuref(o: pointer) {.cdecl.} =
-  #echo "gcunref"  
+  #echo "gcunref"
   GC_unref(cast[RootRef](o))
-
-type
-  Format* {.size: sizeof(cint), pure.} = enum
-    invalid = - 1, argb32 = 0, rgb24 = 1,
-    a8 = 2, a1 = 3, rgb16_565 = 4,
-    rgb30 = 5
 
 type
   WriteFunc00* = proc (closure: pointer; data: ptr cuchar; length: cuint): Status {.cdecl.}
@@ -327,14 +213,14 @@ proc restore*(cr: Context) =
 
 proc cairo_push_group*(cr: ptr Context00) {.importc, libcairo.}
 #
-proc pushGroup*(cr: Context) = 
+proc pushGroup*(cr: Context) =
   cairo_push_group(cr.impl)
 
 proc cairo_push_group_with_content*(cr: ptr Context00; content: Content) {.importc, libcairo.}
 #
-#proc pushGroupWithContent*(cr: Context; content: Content) = 
-proc pushGroup*(cr: Context; content: Content) = 
-  cairo_push_group_with_content(cr.impl, content) 
+#proc pushGroupWithContent*(cr: Context; content: Content) =
+proc pushGroup*(cr: Context; content: Content) =
+  cairo_push_group_with_content(cr.impl, content)
 
 proc cairo_pattern_destroy*(pattern: ptr Pattern00) {.importc, libcairo.}
 #
@@ -354,7 +240,7 @@ proc setUserData*(pattern: Pattern; key: ptr UserDataKey; userData: pointer; des
 proc cairo_pop_group*(cr: ptr Context00): ptr Pattern00 {.importc, libcairo.}
 #
 proc popGroup*(cr: Context): Pattern =
-  new(result, patternDestroy) 
+  new(result, patternDestroy)
   result.impl = cairo_pop_group(cr.impl)
   discard cairo_pattern_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
@@ -362,20 +248,6 @@ proc cairo_pop_group_to_source*(cr: ptr Context00) {.importc, libcairo.}
 #
 proc popGroupToSource*(cr: Context) =
   cairo_pop_group_to_source(cr.impl)
-
-type
-  Operator* {.size: sizeof(cint), pure.} = enum
-    clear, source, over,
-    `in`, `out`, atop,
-    dest, destOver, destIn,
-    destOut, destAtop, `xor`,
-    add, saturate, multiply,
-    screen, overlay, darken,
-    lighten, color_dodge, colorBurn,
-    hardLight, softLight,
-    difference, exclusion, hslHue,
-    hslSaturation, hslColor,
-    hslLuminosity
 
 proc cairo_set_operator*(cr: ptr Context00; op: Operator) {.importc, libcairo.}
 #
@@ -430,22 +302,12 @@ proc setTolerance*(cr: Context; tolerance: float) =
 #
 const `tolerance=`* = setTolerance
 
-type
-  Antialias* {.size: sizeof(cint), pure.} = enum
-    default, none, gray,
-    subpixel, fast, good,
-    best
-
 proc cairo_set_antialias*(cr: ptr Context00; antialias: Antialias) {.importc, libcairo.}
 #
 proc setAntialias*(cr: Context; antialias = Antialias.default) =
   cairo_set_antialias(cr.impl, antialias)
 #
 const `antialias=`* = setAntialias
-
-type
-  FillRule* {.size: sizeof(cint), pure.} = enum
-    winding, evenOdd
 
 proc cairo_set_fill_rule*(cr: ptr Context00; fillRule: FillRule) {.importc, libcairo.}
 #
@@ -461,20 +323,12 @@ proc setLineWidth*(cr: Context; width: float) =
 #
 const `lineWidth=`* = setLineWidth
 
-type
-  LineCap* {.size: sizeof(cint), pure.} = enum
-    butt, round, square
-
 proc cairo_set_line_cap*(cr: ptr Context00; lineCap: LineCap) {.importc, libcairo.}
 #
 proc setLineCap*(cr: Context; lineCap: LineCap) =
   cairo_set_line_cap(cr.impl, lineCap)
 #
-const `lineCap=`*  = setLineCap
-
-type
-  LineJoin* {.size: sizeof(cint), pure.} = enum
-    miter, round, bevel
+const `lineCap=`* = setLineCap
 
 proc cairo_set_line_join*(cr: ptr Context00; lineJoin: Line_join) {.importc, libcairo.}
 #
@@ -571,7 +425,7 @@ proc newPath*(cr: Context) =
 proc cairo_move_to*(cr: ptr Context00; x, y: cdouble) {.importc, libcairo.}
 #
 proc moveTo*(cr: Context; x, y: float) =
-  cairo_move_to(cr.impl,  x.cdouble, y.cdouble)
+  cairo_move_to(cr.impl, x.cdouble, y.cdouble)
 
 proc cairo_new_sub_path*(cr: ptr Context00) {.importc, libcairo.}
 #
@@ -586,7 +440,7 @@ proc lineTo*(cr: Context; x, y: float) =
 proc cairo_curve_to*(cr: ptr Context00; x1, y1, x2, y2, x3, y3: cdouble) {.importc, libcairo.}
 #
 proc curveTo*(cr: Context; x1, y1, x2, y2, x3, y3: float) =
-  cairo_curve_to(cr.impl,  x1.cdouble, y1.cdouble, x2.cdouble, y2.cdouble, x3.cdouble, y3.cdouble)
+  cairo_curve_to(cr.impl, x1.cdouble, y1.cdouble, x2.cdouble, y2.cdouble, x3.cdouble, y3.cdouble)
 
 proc cairo_arc*(cr: ptr Context00; xc, yc, radius, angle1, angle2: cdouble) {.importc, libcairo.}
 #
@@ -675,7 +529,7 @@ proc strokePreserve*(cr: Context) =
 proc cairo_fill*(cr: ptr Context00) {.importc, libcairo.}
 #
 proc fill*(cr: Context) =
-  cairo_fill(cr. impl)
+  cairo_fill(cr.impl)
 
 proc cairo_fill_preserve*(cr: ptr Context00) {.importc, libcairo.}
 #
@@ -755,23 +609,9 @@ proc clipExtents*(cr: Context; x1, y1, x2, y2: var float) =
 const getClipExtents* = clipExtents
 
 type
-  Rectangle00* = object
-    x*: cdouble
-    y*: cdouble
-    width*: cdouble
-    height*: cdouble
-
-type
-  Rectangle* = object
-    x*: float
-    y*: float
-    width*: float
-    height*: float
-
-type
   RectangleList00* = object
     status*: Status
-    rectangles*: ptr Rectangle00
+    rectangles*: ptr Rectangle
     numRectangles*: cint
 
 proc cairo_copy_clip_rectangle_list(cr: ptr Context00): ptr RectangleList00 {.importc, libcairo.}
@@ -783,9 +623,9 @@ proc copyClipRectangleList*(cr: Context): seq[Rectangle] =
   var r = cairo_copy_clip_rectangle_list(cr.impl)
   defer: cairo_rectangle_list_destroy(r)
   if r.status != Status.success or r.numRectangles == 0: return @[]
-  result = newSeq[Rectangle]() 
+  result = newSeq[Rectangle]()
   for i in 0 ..< r.numRectangles:
-    let k = cast[ptr array[99, Rectangle00]](r.rectangles)[i]
+    let k = cast[ptr array[99, Rectangle]](r.rectangles)[i]
     h.x = k.x.float
     h.y = k.y.float
     h.width = k.width.float
@@ -812,7 +652,7 @@ type
     x*: cdouble
     y*: cdouble
 
-  Glyph* = ref object  of RootRef
+  Glyph* = ref object of RootRef
     impl*: ptr Glyph00
 
 # TODO
@@ -833,10 +673,6 @@ proc cairo_text_cluster_allocate*(num_clusters: cint): ptr Text_cluster00 {.impo
 proc cairo_text_cluster_free*(clusters: ptr Text_cluster00) {.importc, libcairo.}
 
 type
-  TextClusterFlags* {.size: sizeof(cint), pure.} = enum
-    backward = 0x1
-
-type
   TextExtents* {.byRef.} = object
     xBearing*: cdouble
     yBearing*: cdouble
@@ -852,28 +688,6 @@ type
     height*: cdouble
     maxXAdvance*: cdouble
     maxYAdvance*: cdouble
-
-type
-  FontSlant* {.size: sizeof(cint), pure.} = enum
-    normal, italic, oblique
-
-type
-  FontWeight* {.size: sizeof(cint), pure.} = enum
-    normal, bold
-
-type
-  SubpixelOrder* {.size: sizeof(cint), pure.} = enum
-    default, rgb,
-    bgr, vrgb, vbgr
-
-type
-  HintStyle* {.size: sizeof(cint), pure.} = enum
-    default, none, slight,
-    medium, full
-
-type
-  HintMetrics* {.size: sizeof(cint), pure.} = enum
-    default, off, on
 
 proc cairo_font_options_destroy*(options: ptr FontOptions00) {.importc, libcairo.}
 #
@@ -1059,8 +873,8 @@ proc getFontFace*(cr: Context): FontFace =
     result = cast[FontFace](d)
     assert(result.impl == h)
     #discard cairo_font_face_reference(result.impl) # should be not necessary?
-#
-#const fontFace* = getFontFace
+  #
+  #const fontFace* = getFontFace
 
 proc cairo_set_scaled_font*(cr: ptr Context00; scaledFont: ptr ScaledFont00) {.importc, libcairo.}
 #
@@ -1110,8 +924,8 @@ proc getScaledFont*(cr: Context): ScaledFont =
     result = cast[ScaledFont](d)
     assert(result.impl == h)
     #discard cairo_scaled_font_reference(result.impl) # should be not necessary?
-#
-#const scaledFont* = getScaledFont
+  #
+  #const scaledFont* = getScaledFont
 
 proc cairo_show_text*(cr: ptr Context00; utf8: cstring) {.importc, libcairo.}
 #
@@ -1129,10 +943,10 @@ proc cairo_show_text_glyphs*(cr: ptr Context00; utf8: cstring; utf8_len: cint;
                          clusters: ptr TextCluster00; numClusters: cint;
                          clusterFlags: TextClusterFlags) {.importc, libcairo.}
 
-proc cairo_text_path*(cr: ptr Context00; utf8: cstring) {.importc,libcairo.}
+proc cairo_text_path*(cr: ptr Context00; utf8: cstring) {.importc, libcairo.}
 #
-proc textPath*(cr: Context; utf8: string) = 
-  cairo_text_path(cr.impl, utf8) 
+proc textPath*(cr: Context; utf8: string) =
+  cairo_text_path(cr.impl, utf8)
 
 # TODO
 proc cairo_glyph_path*(cr: ptr Context00; glyphs: ptr Glyph00; num_glyphs: cint) {.importc, libcairo.}
@@ -1166,11 +980,6 @@ proc status*(fontFace: FontFace): Status =
   cairo_font_face_status(fontFace.impl)
 #
 #const getStatus* = status # does not compile
-
-type
-  FontType* {.size: sizeof(cint), pure.} = enum
-    toy, ft, win32,
-    quartz, user
 
 proc cairo_font_face_get_type*(fontFace: ptr FontFace00): FontType {.importc, libcairo.}
 #
@@ -1235,7 +1044,7 @@ proc cairo_scaled_font_text_to_glyphs*(scaled_font: ptr Scaled_font00; x, y: cdo
 proc cairo_scaled_font_get_font_face*(scaled_font: ptr ScaledFont00): ptr FontFace00 {.importc, libcairo.}
 #
 proc getFontFace*(scaledFont: ScaledFont): FontFace =
-  let h =cairo_scaled_font_get_font_face(scaledFont.impl)
+  let h = cairo_scaled_font_get_font_face(scaledFont.impl)
   let d = cairo_font_face_get_user_data(h, NUDK)
   if d.isNil:
     assert false # may this happen?
@@ -1287,7 +1096,7 @@ proc toyFontFaceCreate*(family: string; slant: FontSlant; weight: FontWeight): F
   result.impl = cairo_toy_font_face_create(family, slant, weight)
   ### discard cairo_font_face_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
-# returns: The family name. This string is owned by the font face and remains valid as long as the font face is alive (referenced). 
+# returns: The family name. This string is owned by the font face and remains valid as long as the font face is alive (referenced).
 proc cairo_toy_font_face_get_family*(fontFace: ptr Font_face00): cstring {.importc, libcairo.}
 #
 proc toyFontFaceGetFamily*(fontFace: FontFace): string =
@@ -1502,8 +1311,6 @@ proc cairo_surface_get_user_data*(surface: ptr Surface00; key: ptr UserDataKey):
 proc getUserData*(surface: Surface; key: ptr UserDataKey): pointer =
   cairo_surface_get_user_data(surface.impl, key)
 
-
-
 proc cairo_get_target*(cr: ptr Context00): ptr Surface00 {.importc, libcairo.}
 #
 proc getTarget*(cr: Context): Surface =
@@ -1580,12 +1387,6 @@ proc devicReference*(device: Device): Device =
   discard cairo_device_reference(device.impl)
   return device
 
-type
-  DeviceType* {.size: sizeof(cint), pure.} = enum
-    invalid = - 1, drm, gl,
-    script, xcb, xlib,
-    xml, cogl, win32
-
 proc cairo_device_get_type*(device: ptr Device00): DeviceType {.importc, libcairo.}
 #
 proc getType*(device: Device): DeviceType =
@@ -1637,7 +1438,7 @@ proc cairo_device_set_user_data*(device: ptr Device00; key: ptr UserDataKey;
 proc setUserData*(device: Device; key: ptr UserDataKey; userData: pointer; destroy: DestroyFunc00): Status =
   cairo_device_set_user_data(device.impl, key, userData, destroy)
 
-# TODO: problem is, that it may take too long until GC may release surfaces! 
+# TODO: problem is, that it may take too long until GC may release surfaces!
 proc cairo_surface_create_similar*(other: ptr Surface00; content: Content; width, height: cint):
   ptr Surface00 {.importc, libcairo.}
 
@@ -1746,19 +1547,6 @@ proc status*(surface: Surface): Status =
   cairo_surface_status(surface.impl)
 #
 #const getStatus* = status
-
-type
-  SurfaceType* {.size: sizeof(cint), pure.} = enum
-    image, pdf, ps,
-    xlib, xcb, glitz,
-    quartz, win32, beos,
-    directfb, svg, os2,
-    win32_printing, quartz_image,
-    script, qt,
-    recording, vg, gl,
-    drm, tee, xml,
-    skia, subsurface,
-    cogl
 
 proc cairo_surface_get_type*(surface: ptr Surface00): SurfaceType {.importc, libcairo.}
 #
@@ -1948,9 +1736,9 @@ when CAIRO_HAS_PNG_FUNCTIONS:
     result.impl = cairo_image_surface_create_from_png_stream(readFunc, closure)
     ### discard cairo_surface_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
-proc cairo_recording_surface_create*(content: Content; extents: Rectangle00): ptr Surface00 {.importc, libcairo.}
+proc cairo_recording_surface_create*(content: Content; extents: Rectangle): ptr Surface00 {.importc, libcairo.}
 #
-proc recordingSurfaceCreate*(content: Content; extents: Rectangle00): Surface =
+proc recordingSurfaceCreate*(content: Content; extents: Rectangle): Surface =
   new(result, destroy)
   result.impl = cairo_recording_surface_create(content, extents)
   ### discard cairo_surface_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
@@ -1965,9 +1753,9 @@ proc recordingSurfaceInkExtents*(surface: Surface; x0, y0, width, height: var fl
   width = width0.float
   height = height0.float
 
-proc cairo_recording_surface_get_extents*(surface: ptr Surface00; extents: Rectangle00): Bool00 {.importc, libcairo.}
+proc cairo_recording_surface_get_extents*(surface: ptr Surface00; extents: Rectangle): Bool00 {.importc, libcairo.}
 #
-proc recordingSurfaceGetExtents*(surface: Surface; extents: Rectangle00): bool =
+proc recordingSurfaceGetExtents*(surface: Surface; extents: Rectangle): bool =
   cairo_recording_surface_get_extents(surface.impl, extents).bool
 
 type
@@ -2001,7 +1789,7 @@ proc patternCreateRasterSource*(userData: pointer; content: Content; width, heig
   result.impl = cairo_pattern_create_raster_source(userData, content, width.cint, height.cint)
   ### discard cairo_pattern_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
-proc cairo_raster_source_pattern_set_callback_data*(pattern: ptr Pattern00; data: pointer) {.importc,libcairo.}
+proc cairo_raster_source_pattern_set_callback_data*(pattern: ptr Pattern00; data: pointer) {.importc, libcairo.}
 #
 proc rasterSourcePatternSetCallbackData*(pattern: Pattern; data: pointer) =
   cairo_raster_source_pattern_set_callback_data(pattern.impl, data)
@@ -2095,18 +1883,10 @@ proc patternCreateMesh*(): Pattern =
   result.impl = cairo_pattern_create_mesh()
   ### discard cairo_pattern_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
-
-
 proc cairo_pattern_status*(pattern: ptr Pattern00): Status {.importc, libcairo.}
 #
 proc status*(pattern: Pattern): Status =
   cairo_pattern_status(pattern.impl)
-
-type
-  PatternType* {.size: sizeof(cint), pure.} = enum
-    solid, surface,
-    linear, radial, mesh,
-    raster_source
 
 proc cairo_pattern_get_type*(pattern: ptr Pattern00): PatternType {.importc, libcairo.}
 #
@@ -2175,10 +1955,6 @@ proc cairo_pattern_get_matrix*(pattern: ptr Pattern00; matrix: var Matrix) {.imp
 proc patternGetMatrix*(pattern: Pattern; matrix: var Matrix) =
   cairo_pattern_get_matrix(pattern.impl, matrix)
 
-type
-  Extend* {.size: sizeof(cint), pure.} = enum
-    none, repeat, reflect, pad
-
 proc cairo_pattern_set_extend*(pattern: ptr Pattern00; extend: Extend) {.importc, libcairo.}
 #
 proc setExtend*(pattern: Pattern; extend: Extend) =
@@ -2190,11 +1966,6 @@ proc cairo_pattern_get_extend*(pattern: ptr Pattern00): Extend {.importc, libcai
 #
 proc getExtend*(pattern: Pattern): Extend =
   cairo_pattern_get_extend(pattern.impl)
-
-type
-  Filter* {.size: sizeof(cint), pure.} = enum
-    fast, good, best, nearest,
-    bilinear, gaussian
 
 proc cairo_pattern_set_filter*(pattern: ptr Pattern00; filter: Filter) {.importc, libcairo.}
 #
@@ -2342,14 +2113,14 @@ proc scale*(matrix: var Matrix; sx, sy: float) =
 
 proc cairo_matrix_rotate*(matrix: var Matrix; radians: cdouble) {.importc, libcairo.}
 #
-proc rotate*(matrix: var Matrix; radians: float) =  
-  cairo_matrix_rotate(matrix, radians.cdouble) 
+proc rotate*(matrix: var Matrix; radians: float) =
+  cairo_matrix_rotate(matrix, radians.cdouble)
 
 proc cairo_matrix_invert*(matrix: var Matrix): Status {.importc, libcairo.}
 #
 const invert* = cairo_matrix_invert
-#proc invert*(matrix: var Matrix): Status =
-#  cairo_matrix_invert(matrix)
+ #proc invert*(matrix: var Matrix): Status =
+ #  cairo_matrix_invert(matrix)
 
 proc cairo_matrix_multiply*(result: var Matrix; a: Matrix; b: Matrix) {.importc, libcairo.}
 #
@@ -2370,10 +2141,6 @@ proc transformPoint*(matrix: var Matrix; x, y: var float) =
   cairo_matrix_transform_point(matrix, x0, y0)
   x = x0
   y = y0
-
-type
-  RegionOverlap* {.size: sizeof(cint), pure.} = enum
-    `in`, `out`, part
 
 proc cairo_region_destroy*(region: ptr Region00) {.importc, libcairo.}
 #
@@ -2507,7 +2274,7 @@ when CAIRO_HAS_PDF_SURFACE:
       v1_4, v1_5
   proc cairo_pdf_surface_create*(filename: cstring; widthInPoints, heightInPoints: cdouble): ptr Surface00 {.
     importc, libcairo.}
-#pong
+
   proc pdfSurfaceCreate*(filename: string; widthInPoints, heightInPoints: float): Surface =
     new(result, destroy)
     result.impl = cairo_pdf_surface_create(filename, widthInPoints.cdouble, heightInPoints.cdouble)
@@ -2578,8 +2345,8 @@ when CAIRO_HAS_PDF_SURFACE:
 
   proc cairo_pdf_surface_set_thumbnail_size*(surface: ptr Surface00; width, height: cint) {.importc, libcairo.}
 #
-  proc pdfSurfaceSetThumbnailSize*(surface: Surface; width, height: int) = 
-    cairo_pdf_surface_set_thumbnail_size(surface.impl, width.cint, height.cint) 
+  proc pdfSurfaceSetThumbnailSize*(surface: Surface; width, height: int) =
+    cairo_pdf_surface_set_thumbnail_size(surface.impl, width.cint, height.cint)
 
 when CAIRO_HAS_PS_SURFACE:
   type
@@ -2835,5 +2602,5 @@ when CAIRO_HAS_TEE_SURFACE:
     discard cairo_tee_surface_index(surface.impl, index.cuint)
     return surface
 
-# 2851 lines
- 
+# 2605 lines
+
