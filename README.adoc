@@ -27,8 +27,10 @@ The `combinatorics` module was kindly provided by R. Behrends.
 
 NOTE: Starting with current version v.0.6.0 we support gstreamer (gst). At the same time we have split
 cairo module into an gobject-introspection basic part and an manually created part. Unfortunately the
-gobject-introspection is not available for very old cairo libraries, so installation may fail for you.
+gobject-introspection is not available for very old GTK/cairo libraries, so installation may fail for you.
 Use v0.5.5 in this case. Also we support gBoxed types now, this is assumed to work well but is not well tested yet.
+Command to install older releases should be something like
+`nimble uninstall gintro` followed by `nimble install gintro@v0.5.5`
 
 NOTE: Starting with release 0.5.3 we do not generate field entries for objects and we do
 not generate class structs and private objects. Also we stopped exporting the low level functions
