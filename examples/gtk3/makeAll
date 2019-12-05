@@ -7,6 +7,7 @@ nim c count_button.nim
 nim c darea_test.nim
 nim c drawingarea.nim
 nim c gaction.nim
+nim c gaction2.nim
 nim c gsettings.nim
 nim c label.nim
 nim c listview.nim
@@ -19,3 +20,4 @@ nim c cairoImage.nim
 nim c gstBasicTutorial1.nim
 nim c sourceview_test.nim
 nim c overlay_tree1.nim
+nim c celldatafunction.nim

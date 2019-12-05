@@ -23,3 +23,4 @@ proc main =
   discard run(app)
 
 main()
+

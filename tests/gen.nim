@@ -1,5 +1,5 @@
 # High level gobject-introspection based GTK3/GTK4 bindings for the Nim programming language
-# v 0.6.0 2019-OCT-28
+# v 0.6.1 2019-DEC-05
 # (c) S. Salewski 2018
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -199,6 +199,7 @@ fixedProcNames.add("gst_element_factory_find", "findElementFactory")
 
 defaultParameters.add("gtk_window_new", "`type` WindowType WindowType.toplevel")
 defaultParameters.add("gtk_application_new", "flags gio.ApplicationFlags {}")
+defaultParameters.add("gtk_builder_new_from_string", "length int64 -1")
 
 for i in keywords: mangledNames.add(i, '`' & i & '`')
 
@@ -1706,6 +1707,8 @@ const GTK_EPI = """
 #proc loadFromData*(self: CssProvider; data: cstring): bool =
 #  loadFromData(self, uint8Array(data), -1)
 
+proc mainQuit*(w: Window) = mainQuit()
+
 proc gtk_file_chooser_dialog_new*(title: cstring; parent: ptr Window00; action: FileChooserAction; 
     firstButtonText: cstring = nil): ptr FileChooserDialog00 {.varargs,
     importc: "gtk_file_chooser_dialog_new", libprag.}
@@ -2036,6 +2039,18 @@ proc uint8ArrayZT2seq*(p: pointer): seq[uint8] =
           assert false
         else:
           provInt[name] = interf
+
+  # Cross module interfaces -- maybe only a few, so we add it manually
+  # GSimpleActionGroup implements GActionGroup and GActionMap.
+  if namespace == "Gtk":
+    provInt["gio.SimpleActionGroup"] = @["gio.ActionGroup", "gio.ActionMap", "ActionGroup", "ActionMap"]
+    #provInt["gio.SimpleActionGroup"] = @["ActionGroup", "ActionMap"]
+  # The next two do not work, as gio does not import gtk! So we have to use converter proc.
+  # GtkApplication implements GActionGroup and GActionMap.
+  # provInt["Application"] = @["ActionGroup", "ActionMap"]
+  # GtkApplicationWindow implements AtkImplementorIface, GtkBuildable, GActionGroup and GActionMap.
+  # provInt["ApplicationWindow"] = @["ImplementorIface", "Buildable", "ActionGroup", "ActionMap"]
+
   for obj, ifaces in provInt:
     for i in ifaces:
       if not interfaceProvider.contains(i):
@@ -2187,7 +2202,11 @@ proc init* =
     else:
       output.write("include gisup4\n")
       output.write("include gimpl\n")
+    buildableList.add("MenuModel")
     for i in buildableList:
+      var prefix = "gtk"
+      if i == "MenuModel":
+        prefix = "g"
       if i == "": continue
       output.write(
           """
@@ -2207,8 +2226,9 @@ proc get$1*(builder: Builder; name: string): $1 =
     g_object_set_qdata(result.impl, Quark, addr(result[]))
   assert(toBool(g_type_check_instance_is_a(cast[ptr TypeInstance00](result.impl), gt)))
 
-""" % [i, "gtk_" & myCamelToSnake(i) & "_get_type()"])
+""" % [i, prefix & "_" & myCamelToSnake(i) & "_get_type()"])
     output.write("")
+
   if namespace == "Gio":
     output.write(GIO_EPI)
 
@@ -2336,4 +2356,4 @@ proc launch() =
     supmod4.close
 
 launch()
-# 2339 lines
+# 2360 lines

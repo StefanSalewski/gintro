@@ -1,7 +1,7 @@
 # This is the high level cairo module for Nim -- based on the low level ngtk3 module, manually tuned.
 # (c) S. Salewski 2017, cairo 1.15.6
 # v0.6.0
-# 28-OCT-2019
+# 03-DEC-2019
 
 # starting with gintro v.0.6.0 we split cairo into the gobject-introspection generated cairo.nim and this file.
 
@@ -242,6 +242,7 @@ proc cairo_pop_group*(cr: ptr Context00): ptr Pattern00 {.importc, libcairo.}
 proc popGroup*(cr: Context): Pattern =
   new(result, patternDestroy)
   result.impl = cairo_pop_group(cr.impl)
+  GC_Ref(result)
   discard cairo_pattern_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
 proc cairo_pop_group_to_source*(cr: ptr Context00) {.importc, libcairo.}
@@ -271,6 +272,11 @@ proc setSource*(cr: Context; red, green, blue: float) =
   cairo_set_source_rgb(cr.impl, red.cdouble, green.cdouble, blue.cdouble)
 #
 #const `source=`* = setSourceRgb
+proc setSource*(cr: Context; rgb: array[3, float]) =
+  cairo_set_source_rgb(cr.impl, rgb[0], rgb[1], rgb[2])
+#
+proc setSource*(cr: Context; rgb: tuple[r, g, b: float]) =
+  cairo_set_source_rgb(cr.impl, rgb[0], rgb[1], rgb[2])
 
 proc cairo_set_source_rgba*(cr: ptr Context00; red, green, blue, alpha: cdouble) {.importc, libcairo.}
 #
@@ -279,6 +285,12 @@ proc setSource*(cr: Context; red, green, blue, alpha: float) =
   cairo_set_source_rgba(cr.impl, red.cdouble, green.cdouble, blue.cdouble, alpha.cdouble)
 #
 #const `sourceRgba=`* = setSourceRgba
+#
+proc setSource*(cr: Context; rgba: array[4, float]) =
+  cairo_set_source_rgba(cr.impl, rgba[0],  rgba[1], rgba[2], rgba[3])
+#
+proc setSource*(cr: Context; rgba: tuple[r, g, b, a: float]) =
+  cairo_set_source_rgba(cr.impl, rgba[0],  rgba[1], rgba[2], rgba[3])
 
 proc cairo_surface_get_reference_count*(surface: ptr Surface00): cuint {.importc, libcairo.}
 #
@@ -389,33 +401,53 @@ proc cairo_user_to_device*(cr: ptr Context00; x, y: var cdouble) {.importc, libc
 #
 proc userToDevice*(cr: Context; x, y: var float) =
   var x1, y1: cdouble
+  (x1, y1) = (x, y)
   cairo_user_to_device(cr.impl, x1, y1)
   x = x1.float
   y = y1.float
+#
+proc userToDevice*(cr: Context; x, y: float): array[2, float] =
+  result = [x, y]
+  cairo_user_to_device(cr.impl, result[0], result[1])
 
 proc cairo_user_to_device_distance*(cr: ptr Context00; dx, dy: var cdouble) {.importc, libcairo.}
 #
 proc userToDeviceDistance*(cr: Context; dx, dy: var float) =
   var dx1, dy1: cdouble
+  (dx1, dy1) = (dx, dy)
   cairo_user_to_device_distance(cr.impl, dx1, dy1)
   dx = dx1.float
   dy = dy1.float
+#
+proc userToDeviceDistance*(cr: Context; dx, dy: float): array[2, float] =
+  result = [dx, dy]
+  cairo_user_to_device_distance(cr.impl, result[0], result[1])
 
 proc cairo_device_to_user*(cr: ptr Context00; x, y: var cdouble) {.importc, libcairo.}
 #
 proc deviceToUser*(cr: Context; x, y: var float) =
   var x1, y1: cdouble
+  (x1, y1) = (x, y)
   cairo_device_to_user(cr.impl, x1, y1)
   x = x1.float
   y = y1.float
+#
+proc deviceToUser*(cr: Context; x, y: float): array[2, float] =
+  result = [x, y]
+  cairo_device_to_user(cr.impl, result[0], result[1])
 
 proc cairo_device_to_user_distance*(cr: ptr Context00; dx, dy: var cdouble) {.importc, libcairo.}
 #
 proc deviceToUserDistance*(cr: Context; dx, dy: var float) =
   var dx1, dy1: cdouble
+  (dx1, dy1) = (dx, dy)
   cairo_device_to_user_distance(cr.impl, dx1, dy1)
   dx = dx1.float
   dy = dy1.float
+#
+proc deviceToUserDistance*(cr: Context; dx, dy: float): array[2, float] =
+  result = [dx, dy]
+  cairo_device_to_user_distance(cr.impl, result[0], result[1])
 
 proc cairo_new_path*(cr: ptr Context00) {.importc, libcairo.}
 #
