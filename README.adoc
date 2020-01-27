@@ -25,7 +25,35 @@ with code inserted from files directly.
 NOTE: This work is partly based on earlier works of J. Mansour and has been supported by A. Rumpf, E. Bassi and other _Nim_ and _GTK/Gnome_ developers.
 The `combinatorics` module was kindly provided by R. Behrends.
 
-NOTE: Starting with current version v.0.6.0 we support gstreamer (gst). At the same time we have split
+
+NOTE: Starting with current version v0.7.0 we support the new Nim memory management called ARC, see
+https://forum.nim-lang.org/t/5734. Just compile your programs with `--gc:arc`. The main advantage is that
+ARC is deterministic, so it is easier to find bugs in the bindings or in your programs. And
+manually freeing resources, as we did previous for some cairo data structures to free them
+without GC delay should be now unnecessary. Generally this version should be more stable:
+Nim without option `--gc:arc` compiled new() calls silently with and without a finalizer proc parameter for
+the same data type, but the finalizer was then always called. This behaviour was stated in the Nim manual,
+but it was easy to forget this strange behaviour, so unintentionally finalizer calls may have ocurred.
+Nim with --gc:arc detects at least some of these errors, and for gintro we now try hard to not mix these calls.
+Generally we specify a finalizer, and use a field in the ref object to ignore the call when necessary.
+For a type always the same finalizer has to be used (or always none) and finalizer must be defined in the
+same module as the object type itself. For this to work reliable we have generally to qualify the
+finalizer proc with its module prefix. All that made a larger rewrite of gen.nim generator script
+necessary, with the danger of introducing bugs. We have not tested v0.7 much yet, the examples in
+gtk3 directory compile and seems to start at least. We would still have to check the macros in gimpl.nim more
+carefully -- we had to replace deepcopy by a plain copy and removed a (wrong?) GC_ref(). Generally we have
+to investigate possible memory leaks. One leak is unavoidable: If we subclass Widgets, then
+finalizer are not applied to the GTK object, so its memory leaks. See https://forum.nim-lang.org/t/5825#36241.
+But that should be not a too serious problem, subclassed objects are generally only allocated once
+in a program and generally live as long as the program is running any way. For the next version of
+gintro we do consider using only destructors and no finalizers, see https://forum.nim-lang.org/t/5854
+and https://forum.nim-lang.org/t/5786. That may simplify the code and enable subclassed GTK objects
+to release its memory, but require rewriting gen.nim again. But then we would have to use `--gc:arc`
+always. Maybe we can join both by specifying some conditional `when` expression -- we will see.
+If for you installation or compiling with v0.7 should not work, then please report issues on
+github issue tracker and continue using v0.6.1 for now. 
+
+NOTE: Starting with version v.0.6.0 we support gstreamer (gst). At the same time we have split
 cairo module into an gobject-introspection basic part and an manually created part. Unfortunately the
 gobject-introspection is not available for very old GTK/cairo libraries, so installation may fail for you.
 Use v0.5.5 in this case. Also we support gBoxed types now, this is assumed to work well but is not well tested yet.
@@ -152,7 +180,7 @@ or function arguments or results may be so called _glists_,
 list structures of `glib` library. These cases can not be processed automatically but needs carefully manual investigations. And there may be still functions and data
 types missing: {GIR} query gives us many thousand lines of Nim interface code, and it is not really obvious if and what is missing.
 Some functions and data types are missing for sure -- at least some low level ones, which are considered unneeded for high level bindings by {GIR}.
-But maybe more is missing, we have to investigate that. Until now these bindings have been tested only for 64 bit Linux systems with GTK 3.22.
+But maybe more is missing, we have to investigate that. Until now these bindings have been tested only for 64 bit Linux systems with GTK 3.24.
 
 These basic libraries are already partly tested:
 
@@ -180,7 +208,7 @@ get a longer error message which may help you to solve the issue.
 NOTE: Nimble prepare should run for about 20 seconds, it compiles and executes the generator program `gen.nim`.
 Unfortunately we can not guarantee that the generator command  will be able to really build all the
 desired modules. The built process highly depends on your OS and installed GTK version. For 64 bit Linux systems
-with GTK 3.22 and all required dependencies installed it should work. For never GTK versions it may fail, when that GTK
+with GTK 3.24 and all required dependencies installed it should work. For never GTK versions it may fail, when that GTK
 release introduces for example new unknown data types like array containers. In that case manual fixes may be necessary.
 The {GIR} based built process generates bindings customized to the OS where the generator is executed,
 so for older GTK releases or a 32 bit system different files are created. Later we may also provide pre-generated

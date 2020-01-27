@@ -1,7 +1,7 @@
 # This is the high level cairo module for Nim -- based on the low level ngtk3 module, manually tuned.
 # (c) S. Salewski 2017, cairo 1.15.6
-# v0.6.0
-# 03-DEC-2019
+# v0.7.0
+# 27-JAN-2020
 
 # starting with gintro v.0.6.0 we split cairo into the gobject-introspection generated cairo.nim and this file.
 
@@ -183,7 +183,7 @@ proc setUserData*(surface: Surface; key: ptr UserDataKey; userData: pointer; des
 proc cairo_create*(target: ptr Surface00): ptr Context00 {.importc, libcairo.}
 #
 proc newContext*(target: Surface): Context =
-  new(result, destroy)
+  new(result, gBoxedFreeCairoContext)
   GC_ref(target)
   result.impl = cairo_create(target.impl)
   discard cairo_surface_set_user_data(target.impl, NUDK, cast[pointer](target), gcuref)
@@ -226,7 +226,6 @@ proc cairo_pattern_destroy*(pattern: ptr Pattern00) {.importc, libcairo.}
 #
 proc patternDestroy*(pattern: Pattern) =
   #cairo_pattern_destroy(pattern.impl)
-
   if pattern != nil and pattern.impl != nil:
     cairo_pattern_destroy(pattern.impl)
     pattern.impl = nil
@@ -240,7 +239,7 @@ proc setUserData*(pattern: Pattern; key: ptr UserDataKey; userData: pointer; des
 proc cairo_pop_group*(cr: ptr Context00): ptr Pattern00 {.importc, libcairo.}
 #
 proc popGroup*(cr: Context): Pattern =
-  new(result, patternDestroy)
+  new(result, gBoxedFreeCairoPattern)
   result.impl = cairo_pop_group(cr.impl)
   GC_Ref(result)
   discard cairo_pattern_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
@@ -723,21 +722,21 @@ type
 
 proc cairo_font_options_destroy*(options: ptr FontOptions00) {.importc, libcairo.}
 #
-proc fontOptionsDestroy(options: FontOptions) =
-  cairo_font_options_destroy(options.impl)
+#proc fontOptionsDestroy(options: FontOptions) =
+#  cairo_font_options_destroy(options.impl)
 
 # FontOptions00 is special -- there is no cairo_font_options_set_user_data() and no cairo_font_options_reference()
 proc cairo_font_options_create*(): ptr FontOptions00 {.importc, libcairo.}
 #
 proc newFontOptions*(): FontOptions =
-  new(result, fontOptionsDestroy)
+  new(result, gBoxedFreeCairoFontOptions)
   result.impl = cairo_font_options_create()
   ###discard cairo_font_options_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
 proc cairo_font_options_copy*(original: ptr FontOptions00): ptr FontOptions00 {.importc, libcairo.}
 #
 proc fontOptionsCopy*(original: FontOptions): FontOptions =
-  new(result, fontOptionsDestroy)
+  new(result, gBoxedFreeCairoFontOptions)
   result.impl = cairo_font_options_copy(original.impl)
 
 proc cairo_font_options_status*(options: ptr FontOptions00): Status {.importc, libcairo.}
@@ -849,8 +848,8 @@ proc setFontOptions*(cr: Context; options: FontOptions) =
 proc cairo_get_font_options*(cr: ptr Context00; options: ptr FontOptions00) {.importc, libcairo.}
 #
 proc getFontOptions*(cr: Context; options: var FontOptions) =
-  ###new(options, fontOptionsDestroy)
-  new(options, fontOptionsDestroy)
+  ###new(options, gBoxedFreeCairoFontOptions)
+  new(options, gBoxedFreeCairoFontOptions)
   options.impl = cairo_font_options_create()
   cairo_get_font_options(cr.impl, options.impl)
 
@@ -918,8 +917,8 @@ proc setScaledFont*(cr: Context; scaledFont: ScaledFont) =
 
 proc cairo_scaled_font_destroy*(scaled_font: ptr ScaledFont00) {.importc, libcairo.}
 #
-proc scaledFontDestroy*(scaledFont: ScaledFont) =
-  cairo_scaled_font_destroy(scaledFont.impl)
+#proc scaledFontDestroy*(scaledFont: ScaledFont) =
+#  cairo_scaled_font_destroy(scaledFont.impl)
 
 proc cairo_scaled_font_get_user_data*(scaledFont: ptr ScaledFont00;
   key: ptr UserDataKey): pointer {.importc, libcairo.}
@@ -948,7 +947,7 @@ proc getScaledFont*(cr: Context): ScaledFont =
   let d = cairo_scaled_font_get_user_data(h, NUDK)
   if d.isNil:
     #assert false # may this happen?
-    new(result, scaledFontDestroy)
+    new(result, gBoxedFreeCairoScaledFont)
     result.impl = h
     discard cairo_scaled_font_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
     discard cairo_scaled_font_reference(result.impl)
@@ -1022,7 +1021,7 @@ proc cairo_scaled_font_create*(fontFace: ptr FontFace00;
   fontMatrix: Matrix; ctm: Matrix; options: ptr FontOptions00): ptr ScaledFont00 {.importc, libcairo.}
 #
 proc scaledFontCreate*(fontFace: FontFace; fontMatrix: Matrix; ctm: Matrix; options: FontOptions): ScaledFont =
-  new(result, scaledFontDestroy)
+  new(result, gBoxedFreeCairoScaledFont)
   GC_ref(fontFace)
   result.impl = cairo_scaled_font_create(fontFace.impl, fontMatrix, ctm, options.impl)
   discard cairo_scaled_font_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
@@ -1114,7 +1113,7 @@ proc cairo_scaled_font_get_font_options*(scaledFont: ptr ScaledFont00;
   options: ptr FontOptions00) {.importc, libcairo.}
 #
 proc getFontOptions*(scaledFont: ScaledFont; options: var FontOptions) =
-  new(options, fontOptionsDestroy)
+  new(options, gBoxedFreeCairoFontOptions)
   options.impl = cairo_font_options_create()
   cairo_scaled_font_get_font_options(scaledFont.impl, options.impl)
 #
@@ -1244,7 +1243,7 @@ proc getSource*(cr: Context): Pattern =
   let h = cairo_get_source(cr.impl)
   let d = cairo_pattern_get_user_data(h, NUDK)
   if d.isNil:
-    new(result, patternDestroy)
+    new(result, gBoxedFreeCairoPattern)
     result.impl = cairo_pattern_reference(h)
   else:
     result = cast[Pattern](d)
@@ -1351,7 +1350,7 @@ proc getTarget*(cr: Context): Surface =
   let d = cairo_surface_get_user_data(h, NUDK)
   if d.isNil:
     assert false # may this happen?
-    new(result, destroy)
+    new(result, gBoxedFreeCairoSurface)
     result.impl = h
     discard cairo_surface_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
     discard cairo_surface_reference(result.impl)
@@ -1368,7 +1367,7 @@ proc getGroupTarget*(cr: Context): Surface =
   let d = cairo_surface_get_user_data(h, NUDK)
   if d.isNil:
     #assert false # may this happen?
-    new(result, destroy)
+    new(result, gBoxedFreeCairoSurface)
     result.impl = h
     ### discard cairo_surface_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
     ### discard cairo_surface_reference(result.impl)
@@ -1475,7 +1474,7 @@ proc cairo_surface_create_similar*(other: ptr Surface00; content: Content; width
   ptr Surface00 {.importc, libcairo.}
 
 proc createSimilar*(other: Surface; content: Content; width, height: int): Surface =
-  new(result, destroy)
+  new(result, gBoxedFreeCairoSurface)
   result.impl = cairo_surface_create_similar(other.impl, content, width.cint, height.cint)
   ### discard cairo_surface_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
@@ -1483,7 +1482,7 @@ proc cairo_surface_create_similar_image*(other: ptr Surface00; format: Format; w
   ptr Surface00 {.importc, libcairo.}
 #
 proc createSimilarImage*(other: Surface; format: Format; width, height: int): Surface =
-  new(result, destroy)
+  new(result, gBoxedFreeCairoSurface)
   result.impl = cairo_surface_create_similar_image(other.impl, format, width.cint, height.cint)
   ### discard cairo_surface_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
@@ -1496,14 +1495,14 @@ proc cairo_surface_map_to_image*(surface: ptr Surface00; extents: RectangleInt):
 #
 proc mapToImage*(surface: Surface; extents: RectangleInt): Surface =
   #new(result, destroy) # no idea currently
-  new(result)
+  new(result, gBoxedFreeCairoSurface)
   result.impl = cairo_surface_map_to_image(surface.impl, extents)
 
 proc cairo_surface_create_for_rectangle*(target: ptr Surface00; x, y, width, height: cdouble):
   ptr Surface00 {.importc, libcairo.}
 #
 proc surfaceCreateForRectangle*(target: Surface; x, y, width, height: float): Surface =
-  new(result, destroy)
+  new(result, gBoxedFreeCairoSurface)
   result.impl = cairo_surface_create_for_rectangle(target.impl, x.cdouble, y.cdouble, width.cdouble, height.cdouble)
   ### discard cairo_surface_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
@@ -1516,7 +1515,7 @@ proc cairo_surface_create_observer*(target: ptr Surface00;
   mode: SurfaceObserverMode): ptr Surface00 {.importc, libcairo.}
 #
 proc createObserver*(target: Surface; mode: SurfaceObserverMode): Surface =
-  new(result, destroy)
+  new(result, gBoxedFreeCairoSurface)
   result.impl = cairo_surface_create_observer(target.impl, mode)
   ### discard cairo_surface_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
@@ -1640,7 +1639,7 @@ proc supportsMimeType*(surface: Surface; mimeType: string): bool =
 proc cairo_surface_get_font_options*(surface: ptr Surface00; options: ptr FontOptions00) {.importc, libcairo.}
 
 proc getFontOptions*(surface: Surface; options: var FontOptions) =
-  new(options, fontOptionsDestroy)
+  new(options, gBoxedFreeCairoFontOptions)
   options.impl = cairo_font_options_create()
   cairo_surface_get_font_options(surface.impl, options.impl)
 
@@ -1717,7 +1716,7 @@ proc hasShowTextGlyphs*(surface: Surface): bool =
 proc cairo_image_surface_create*(format: Format; width, height: cint): ptr Surface00 {.importc, libcairo.}
 #
 proc imageSurfaceCreate*(format: Format; width, height: int): Surface =
-  new(result, destroy)
+  new(result, gBoxedFreeCairoSurface)
   result.impl = cairo_image_surface_create(format, width.cint, height.cint)
   ### discard cairo_surface_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
@@ -1756,7 +1755,7 @@ when CAIRO_HAS_PNG_FUNCTIONS:
   proc cairo_image_surface_create_from_png*(filename: cstring): ptr Surface00 {.importc, libcairo.}
 
   proc imageSurfaceCreateFromPng*(filename: string): Surface =
-    new(result, destroy)
+    new(result, gBoxedFreeCairoSurface)
     result.impl = cairo_image_surface_create_from_png(filename)
     ### discard cairo_surface_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
@@ -1764,14 +1763,14 @@ when CAIRO_HAS_PNG_FUNCTIONS:
     closure: pointer): ptr Surface00 {.importc, libcairo.}
 #
   proc imageSurfaceCreateFromPngStream*(readFunc: ReadFunc00; closure: pointer): Surface =
-    new(result, destroy)
+    new(result, gBoxedFreeCairoSurface)
     result.impl = cairo_image_surface_create_from_png_stream(readFunc, closure)
     ### discard cairo_surface_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
 proc cairo_recording_surface_create*(content: Content; extents: Rectangle): ptr Surface00 {.importc, libcairo.}
 #
 proc recordingSurfaceCreate*(content: Content; extents: Rectangle): Surface =
-  new(result, destroy)
+  new(result, gBoxedFreeCairoSurface)
   result.impl = cairo_recording_surface_create(content, extents)
   ### discard cairo_surface_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
@@ -1817,7 +1816,7 @@ proc cairo_pattern_create_raster_source*(userData: pointer; content: Content; wi
   ptr Pattern00 {.importc, libcairo.}
 #
 proc patternCreateRasterSource*(userData: pointer; content: Content; width, height: int): Pattern =
-  new(result, patternDestroy)
+  new(result, gBoxedFreeCairoPattern)
   result.impl = cairo_pattern_create_raster_source(userData, content, width.cint, height.cint)
   ### discard cairo_pattern_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
@@ -1876,42 +1875,42 @@ proc rasterSourcePatternGetFinish*(pattern: Pattern): RasterSourceFinishFunc00 =
 proc cairo_pattern_create_rgb*(red, green, blue: cdouble): ptr Pattern00 {.importc, libcairo.}
 #
 proc patternCreateRgb*(red, green, blue: float): Pattern =
-  new(result, patternDestroy)
+  new(result, gBoxedFreeCairoPattern)
   result.impl = cairo_pattern_create_rgb(red.cdouble, green.cdouble, blue.cdouble)
   ### discard cairo_pattern_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
 proc cairo_pattern_create_rgba*(red, green, blue, alpha: cdouble): ptr Pattern00 {.importc, libcairo.}
 #
 proc patternCreateRgba*(red, green, blue, alpha: float): Pattern =
-  new(result, patternDestroy)
+  new(result, gBoxedFreeCairoPattern)
   result.impl = cairo_pattern_create_rgba(red.cdouble, green.cdouble, blue.cdouble, alpha.cdouble)
   ### discard cairo_pattern_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
 proc cairo_pattern_create_for_surface*(surface: ptr Surface00): ptr Pattern00 {.importc, libcairo.}
 #
 proc patternCreateForSurface*(surface: Surface): Pattern =
-  new(result, patternDestroy)
+  new(result, gBoxedFreeCairoPattern)
   result.impl = cairo_pattern_create_for_surface(surface.impl)
   ### discard cairo_pattern_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
 proc cairo_pattern_create_linear*(x0, y0, x1, y1: cdouble): ptr Pattern00 {.importc, libcairo.}
 #
 proc patternCreateLinear*(x0, y0, x1, y1: float): Pattern =
-  new(result, patternDestroy)
+  new(result, gBoxedFreeCairoPattern)
   result.impl = cairo_pattern_create_linear(x0.cdouble, y0.cdouble, x1.cdouble, y1.cdouble)
   ### discard cairo_pattern_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
 proc cairo_pattern_create_radial*(cx0, cy0, radius0, cx1, cy1, radius1: cdouble): ptr Pattern00 {.importc, libcairo.}
 #
 proc patternCreateRadial*(cx0, cy0, radius0, cx1, cy1, radius1: float): Pattern =
-  new(result, patternDestroy)
+  new(result, gBoxedFreeCairoPattern)
   result.impl = cairo_pattern_create_radial(cx0.cdouble, cy0.cdouble, radius0.cdouble, cx1.cdouble, cy1.cdouble, radius1.cdouble)
   ### discard cairo_pattern_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
 proc cairo_pattern_create_mesh*(): ptr Pattern00 {.importc, libcairo.}
 #
 proc patternCreateMesh*(): Pattern =
-  new(result, patternDestroy)
+  new(result, gBoxedFreeCairoPattern)
   result.impl = cairo_pattern_create_mesh()
   ### discard cairo_pattern_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
@@ -2031,7 +2030,7 @@ proc getSurface*(pattern: Pattern; surface: var Surface): Status =
   let d = cairo_surface_get_user_data(h, NUDK)
   if d.isNil:
     assert false # may this happen?
-    new(surface, destroy)
+    new(surface, gBoxedFreeCairoSurface)
     surface.impl = h
     discard cairo_surface_set_user_data(surface.impl, NUDK, cast[pointer](surface), gcuref)
     discard cairo_surface_reference(surface.impl)
@@ -2183,14 +2182,14 @@ proc destroy*(region: Region) =
 proc cairo_region_create*(): ptr Region00 {.importc, libcairo.}
 #
 proc regionCreate*(): Region =
-  new(result, destroy)
+  new(result, gBoxedFreeCairoRegion)
   result.impl = cairo_region_create()
   ### discard cairo_region_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
 proc cairo_region_create_rectangle*(rectangle: RectangleInt): ptr Region00 {.importc, libcairo.}
 #
 proc regionCreateRectangle*(rectangle: RectangleInt): Region =
-  new(result, destroy)
+  new(result, gBoxedFreeCairoRegion)
   result.impl = cairo_region_create_rectangle(rectangle)
 
 # TODO
@@ -2200,7 +2199,7 @@ proc cairo_region_create_rectangles*(rects: RectangleInt; count: cint): ptr Regi
 proc cairo_region_copy*(original: ptr Region00): ptr Region00 {.importc, libcairo.}
 #
 proc regionCopy*(original: Region): Region =
-  new(result, destroy)
+  new(result, gBoxedFreeCairoRegion)
   result.impl = cairo_region_copy(original.impl)
 
 proc cairo_region_reference*(region: ptr Region00): ptr Region00 {.importc, libcairo.}
@@ -2308,7 +2307,7 @@ when CAIRO_HAS_PDF_SURFACE:
     importc, libcairo.}
 
   proc pdfSurfaceCreate*(filename: string; widthInPoints, heightInPoints: float): Surface =
-    new(result, destroy)
+    new(result, gBoxedFreeCairoSurface)
     result.impl = cairo_pdf_surface_create(filename, widthInPoints.cdouble, heightInPoints.cdouble)
     ### discard cairo_surface_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
@@ -2316,7 +2315,7 @@ when CAIRO_HAS_PDF_SURFACE:
     closure: pointer; widthInPoints, heightInPoints: cdouble): ptr Surface00 {.importc, libcairo.}
 #
   proc pdfSurfaceCreateForStream*(writeFunc: WriteFunc00; closure: pointer; widthInPoints, heightInPoints: float): Surface =
-    new(result, destroy)
+    new(result, gBoxedFreeCairoSurface)
     result.impl = cairo_pdf_surface_create_for_stream(writeFunc, closure, widthInPoints.cdouble, heightInPoints.cdouble)
     ### discard cairo_surface_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
@@ -2389,7 +2388,7 @@ when CAIRO_HAS_PS_SURFACE:
     importc, libcairo.}
 #
   proc psSurfaceCreate*(filename: string; widthInPoints, heightInPoints: float): Surface =
-    new(result, destroy)
+    new(result, gBoxedFreeCairoSurface)
     result.impl = cairo_ps_surface_create(filename, widthInPoints.cdouble, heightInPoints.cdouble)
     ### discard cairo_surface_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
@@ -2397,7 +2396,7 @@ when CAIRO_HAS_PS_SURFACE:
     widthInPoints, heightInPoints: cdouble): ptr Surface00 {.importc, libcairo.}
 #
   proc psSurfaceCreateForStream*(writeFunc: WriteFunc00; closure: pointer; widthInPoints, heightInPoints: float): Surface =
-    new(result, destroy)
+    new(result, gBoxedFreeCairoSurface)
     result.impl = cairo_ps_surface_create_for_stream(writeFunc, closure, widthInPoints.cdouble, heightInPoints.cdouble)
     ### discard cairo_surface_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
@@ -2456,7 +2455,7 @@ when CAIRO_HAS_SVG_SURFACE:
     importc, libcairo.}
 #
   proc svgSurfaceCreate*(filename: string; widthInPoints, heightInPoints: float): Surface =
-    new(result, destroy)
+    new(result, gBoxedFreeCairoSurface)
     result.impl = cairo_svg_surface_create(filename, widthInPoints.cdouble, heightInPoints.cdouble)
     ### discard cairo_surface_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
@@ -2464,7 +2463,7 @@ when CAIRO_HAS_SVG_SURFACE:
     closure: pointer; widthInPoints, heightInPoints: cdouble): ptr Surface00 {.importc, libcairo.}
 #
   proc svgSurfaceCreateForstream*(writeFunc: WriteFunc00; closure: pointer; widthInPoints, heightInPoints: float): Surface =
-    new(result, destroy)
+    new(result, gBoxedFreeCairoSurface)
     result.impl = cairo_svg_surface_create_for_stream(writeFunc, closure, widthInPoints.cdouble, heightInPoints.cdouble)
     ### discard cairo_surface_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
@@ -2503,7 +2502,7 @@ when CAIRO_HAS_XML_SURFACE:
     importc, libcairo.}
 #
   proc xmlSurfaceCreate*(xml: Device; content: Content; width, height: float): Surface =
-    new(result, destroy)
+    new(result, gBoxedFreeCairoSurface)
     result.impl = cairo_xml_surface_create(xml.impl, content, width.cdouble, height.cdouble)
     ### discard cairo_surface_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
@@ -2550,7 +2549,7 @@ when CAIRO_HAS_SCRIPT_SURFACE:
     importc, libcairo.}
 #
   proc scriptSurfaceCreate*(script: Device; content: Content; width, height: float): Surface =
-    new(result, destroy)
+    new(result, gBoxedFreeCairoSurface)
     result.impl = cairo_script_surface_create(script.impl, content, width.cdouble, height.cdouble)
     ### discard cairo_surface_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
@@ -2558,7 +2557,7 @@ when CAIRO_HAS_SCRIPT_SURFACE:
     target: ptr Surface00): ptr Surface00 {.importc, libcairo.}
 #
   proc scriptSurfaceCreateForTarget*(script: Device; target: Surface): Surface =
-    new(result, destroy)
+    new(result, gBoxedFreeCairoSurface)
     result.impl = cairo_script_surface_create_for_target(script.impl, target.impl)
     ### discard cairo_surface_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
@@ -2572,7 +2571,7 @@ when CAIRO_HAS_SKIA_SURFACE:
   proc cairo_skia_surface_create*(format: Format; width, height: cint): ptr Surface00 {.importc, libcairo.}
 #
   proc skiaSurfaceCreate*(format: Format; width, height: int): Surface =
-    new(result, destroy)
+    new(result, gBoxedFreeCairoSurface)
     result.impl = cairo_skia_surface_create(format, width.cint, height.cint)
     ### discard cairo_surface_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
@@ -2614,7 +2613,7 @@ when CAIRO_HAS_TEE_SURFACE:
   proc cairo_tee_surface_create*(master: ptr Surface00): ptr Surface00 {.importc, libcairo.}
 #
   proc teeSurfaceCreate*(master: Surface): Surface =
-    new(result, destroy)
+    new(result, gBoxedFreeCairoSurface)
     result.impl = cairo_tee_surface_create(master.impl)
     ### discard cairo_surface_set_user_data(result.impl, NUDK, cast[pointer](result), gcuref)
 
@@ -2634,5 +2633,5 @@ when CAIRO_HAS_TEE_SURFACE:
     discard cairo_tee_surface_index(surface.impl, index.cuint)
     return surface
 
-# 2605 lines
+# 2636 lines
 

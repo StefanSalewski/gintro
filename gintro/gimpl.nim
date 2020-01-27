@@ -154,6 +154,7 @@ proc $1$2 {.cdecl.} =
           r1s.add("  var " & names[i] & "1 {.global.}: " & types[i] & "\n")
           r1s.add("  if " & names[i] & "1" & ".isNil:\n")
           r1s.add("    new " & names[i] & "1" & "\n")
+          r1s.add("    " & names[i] & "1.ignoreFinalizer = true" & "\n")
           r1s.add("  " & names[i] & "1.impl = " & names[i] & "\n")
     if not ignoreArg.boolVal:
       if getTypeInst(arg).typeKind == ntyRef:
@@ -191,7 +192,8 @@ proc $1(self: $2;  p: proc $3; a: $4): culong {.discardable.} =
   else:
     var ar: ref $4
     new(ar)
-    deepCopy(ar[], a)
+    #deepCopy(ar[], a)
+    ar[] = a
     GC_ref(ar)
     # sc$5(self, $6, cast[pointer](ar[]))
     sc$5(self, $6, cast[pointer](ar))
@@ -218,7 +220,8 @@ $1($7, $8, $9)
 proc $1(self: $2;  p: proc $3; a: $4): culong {.discardable.} =
   var ar: ref $4
   new(ar)
-  deepCopy(ar[], a)
+  #deepCopy(ar[], a)
+  ar[] = a
   GC_ref(ar)
   # sc$5(self, $6, cast[pointer](ar[]))
   sc$5(self, $6, cast[pointer](ar), $10)
@@ -256,7 +259,7 @@ proc $1(p: pointer): gboolean {.cdecl.} =
   let a = cast[$3](p)
   result = $2(a).gboolean
   #when (a is ref object) or (a is seq):
-  GC_unref(a)
+  #GC_unref(a)
 """ % [$procNameCdecl, $p, ats]
  
   let r2s ="""
@@ -267,7 +270,8 @@ proc $1(a: $2): culong {.discardable.} =
   else:
     var ar: ref $2
     new(ar)
-    deepCopy(ar[], a)
+    #deepCopy(ar[], a)
+    ar[] = a
     GC_ref(ar)
     return g_timeout_add_full(PRIORITY_DEFAULT, $3, $4, cast[pointer](ar), nil)
 $1($5)
@@ -285,7 +289,7 @@ proc $1(p: pointer): gboolean {.cdecl.} =
   let a = cast[$3](p)
   result = $2(a).gboolean
   #when (a is ref object) or (a is seq):
-  GC_unref(a)
+  #GC_unref(a)
 """ % [$procNameCdecl, $p, ats]
  
   let r2s ="""
@@ -296,7 +300,8 @@ proc $1(a: $2): culong {.discardable.} =
   else:
     var ar: ref $2
     new(ar)
-    deepCopy(ar[], a)
+    #deepCopy(ar[], a)
+    ar[] = a
     GC_ref(ar)
     return g_idle_add_full(PRIORITY_DEFAULT_IDLE, $3, cast[pointer](ar[]), nil)
 $1($4)
@@ -413,7 +418,8 @@ $1(column, renderer, $6)
 proc $1(column: TreeViewColumn; renderer: CellRenderer; pdata: $2) =
     var ar: ref $2
     new(ar)
-    deepCopy(ar[], pdata)
+    #deepCopy(ar[], pdata)
+    ar[] = pdata
     GC_ref(ar)
     setCellDataFunc($3, $4, $5, cast[pointer](ar), $7)
 $1(column, renderer, $6)
