@@ -1,6 +1,6 @@
 = High level GTK3 (and GTK4) bindings for the Nim programming language
 (c) Stefan Salewski                                     
-//Version 0.6.1
+//Version 0.7.1
 :experimental:
 :imagesdir: http://ssalewski.de/tmp
 :source-highlighter: pygments
@@ -25,8 +25,15 @@ with code inserted from files directly.
 NOTE: This work is partly based on earlier works of J. Mansour and has been supported by A. Rumpf, E. Bassi and other _Nim_ and _GTK/Gnome_ developers.
 The `combinatorics` module was kindly provided by R. Behrends.
 
+NOTE: Starting with version v0.7.1 we have added destructor support when compiled with `--gc:arc`,
+so we have no memory leak for subclassed objects any more, see the example in `Subclassing` section.
+When compiled with default (refc) GC finalizers are used as before. And for objects marked with `nullable`
+tag in gobject-introspection we now return nil value for the proxy object when the C lib has returned NULL.
+So according to the C API docs, you can check for nil result for the few functions which may return NULL.
+Nil objects returned by GTK Builder causes now a program termination (by assert()) because in that case
+nil should indicate a programming error. 
 
-NOTE: Starting with current version v0.7.0 we support the new Nim memory management called ARC, see
+NOTE: Starting with version v0.7.0 we support the new Nim memory management called ARC, see
 https://forum.nim-lang.org/t/5734. Just compile your programs with `--gc:arc`. The main advantage is that
 ARC is deterministic, so it is easier to find bugs in the bindings or in your programs. And
 manually freeing resources, as we did previous for some cairo data structures to free them
@@ -601,6 +608,14 @@ done separately by the user. The following code shows a GTK button, which is
 extended with a counter member field. That counter is decreased for
 each button click. The amount of decrease (5) is passed to the callback as a int parameter.
 
+Since gintro version 0.7.1 we support destructors when compile option `--gc:arc` is used.
+To destroy subclassed widgets we have to create a `=destroy()` proc as shown in the code below.
+This may look a bit verbose, and it is only necessary to avoid memory leaks for widgets
+which are created and destroyed multiple times during program execution. Most widgets are
+created at startup and live until program terminates, so there is no noticeable leak even
+without a matching destroy. (In `examples/gtk3` there is a extended file called `subclassArcDestructorTest.nim`
+to test the destructor behaviour.)
+
 [[count_button.nim]]
 [source,nim]
 .count_button.nim
@@ -611,6 +626,10 @@ import gintro/[gtk, glib, gobject, gio]
 type
   CountButton = ref object of Button
     counter: int
+
+when compileOption("gc", "arc"):
+  proc `=destroy`(x: var typeof(CountButton()[])) =
+    gtk.`=destroy`(typeof(Button()[])(x))
 
 proc buttonClicked (button: CountButton; decrement: int) =
   dec(button.counter, decrement)

@@ -1,4 +1,4 @@
-#
+# https://forum.nim-lang.org/t/5937
 #
 #            Nimrod Combinatorics Module
 #        (c) Copyright 2014 Reimer Behrends
@@ -167,15 +167,22 @@ when isMainModule:
       i
   proc mcoeff(a, b: int): int =
     binom(a+b-1, b)
-  doAssert count(permutations[int]([])) == 1
-  doAssert count(permutations([1,2,3,4,5])) == fac(5)
-  doAssert count(permutations(["a", "b", "c"])) == fac(3)
-  doAssert count(combinations([1,2,3,4], 1)) == binom(4, 1)
-  doAssert count(combinations([1,2,3,4], 2)) == binom(4, 2)
-  doAssert count(combinations([1,2,3,4], 3)) == binom(4, 3)
-  doAssert count(combinations(["a", "b", "c", "d", "e"], 3)) == 10
-  doAssert count(multicombinations([1,2,3,4], 1)) == mcoeff(4, 1)
-  doAssert count(multicombinations([1,2,3,4], 2)) == mcoeff(4, 2)
-  doAssert count(multicombinations([1,2,3,4], 3)) == mcoeff(4, 3)
-  doAssert count(tuples([1,2,3,4], 3)) == 4*4*4
-  doAssert count(tuples([1,2], 10)) == 1024
+
+  for x in combinations([1,2,3], 2):
+    echo x
+
+
+  #doAssert count(permutations[int]([])) == 1
+  assert toSeq(permutations([1,2,3,4,5])).len == fac(5)
+  assert toSeq(permutations([1,2,3,4,5])).len == fac(5)
+  assert toSeq(permutations(["a", "b", "c"])).len == fac(3)
+  assert toSeq(combinations([1,2,3,4], 1)).len == binom(4, 1)
+  assert toSeq(combinations([1,2,3,4], 2)).len == binom(4, 2)
+  assert toSeq(combinations([1,2,3,4], 3)).len == binom(4, 3)
+  assert toSeq(combinations(["a", "b", "c", "d", "e"], 3)).len == 10
+  assert toSeq(multicombinations([1,2,3,4], 1)).len == mcoeff(4, 1)
+  assert toSeq(multicombinations([1,2,3,4], 2)).len == mcoeff(4, 2)
+  assert toSeq(multicombinations([1,2,3,4], 3)).len == mcoeff(4, 3)
+  assert toSeq(tuples([1,2,3,4], 3)).len == 4*4*4
+  assert toSeq(tuples([1,2], 10)).len == 1024
+

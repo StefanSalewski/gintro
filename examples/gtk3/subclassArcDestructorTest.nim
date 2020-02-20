@@ -1,4 +1,4 @@
-# nim c count_button.nim
+# nim c --gc:arc count_button.nim
 import gintro/[gtk, glib, gobject, gio]
 
 type
@@ -7,6 +7,8 @@ type
 
 when compileOption("gc", "arc"):
   proc `=destroy`(x: var typeof(CountButton()[])) =
+    echo "CountButtonDestroy"
+    echo cast[CountButton](addr(x)).label # really ugly, only for test
     gtk.`=destroy`(typeof(Button()[])(x))
 
 proc buttonClicked (button: CountButton; decrement: int) =
@@ -15,10 +17,12 @@ proc buttonClicked (button: CountButton; decrement: int) =
   echo "Counter is now: ", button.counter
 
 proc appActivate (app: Application) =
-  var button: CountButton
+  var button, d: CountButton
   let window = newApplicationWindow(app)
   window.title = "Count Button"
   initButton(button, "Counting down from 100 by 5")
+  initButton(d, "Dummy Button") # to test call of destroy
+  echo d.getLabel
   button.counter = 100
   window.add(button)
   button.connect("clicked",  buttonClicked, 5)
