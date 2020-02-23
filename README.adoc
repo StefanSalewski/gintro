@@ -1,6 +1,6 @@
 = High level GTK3 (and GTK4) bindings for the Nim programming language
 (c) Stefan Salewski                                     
-//Version 0.7.1
+//Version 0.7.2
 :experimental:
 :imagesdir: http://ssalewski.de/tmp
 :source-highlighter: pygments

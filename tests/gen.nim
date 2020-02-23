@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK3/GTK4 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.7.1 2020-FEB-20
+# v 0.7.2 2020-FEB-23
 # (c) S. Salewski 2018
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -1170,7 +1170,8 @@ template genBoxedFree =
       else:
         output.writeLine("  if not self.ignoreFinalizer:")
         output.writeLine("    boxedFree(", getTypeProc, "(), ", "cast[ptr " & mangleName(gBaseInfoGetName(info)) & "00](self.impl))")
-      output.writeLine("\nwhen compileOption(\"gc\", \"arc\"):") # the when is not really needed, currently default gc ignores destructor
+      #output.writeLine("\nwhen compileOption(\"gc\", \"arc\"):") # the when is not really needed, currently default gc ignores destructor
+      output.writeLine("\nwhen defined(gcDestructors):")
       output.writeLine("  proc `=destroy`*(self: var typeof(" & mangleName(gBaseInfoGetName(info)) & "()[])) =")
       output.writeLine("    if not self.ignoreFinalizer and self.impl != nil:")
       output.writeLine("      boxedFree(", getTypeProc, "(), ", "cast[ptr " & mangleName(gBaseInfoGetName(info)) & "00](self.impl))")
@@ -1214,7 +1215,8 @@ template genDestroyFreeUnref =
           if freeMe.isNil:
             freeMe = gStructInfoFindMethod(info, "unref")
         if freeMe != nil and gCallableInfoGetNArgs(freeMe) == (if gCallableInfoIsMethod(freeMe): 0 else: 1):
-          methodBuffer.writeLine("\nwhen compileOption(\"gc\", \"arc\"):")
+          # methodBuffer.writeLine("\nwhen compileOption(\"gc\", \"arc\"):")
+          methodBuffer.writeLine("\nwhen defined(gcDestructors):")
           methodBuffer.writeLine("  proc `=destroy`*(self: var typeof(" & mangleName(gBaseInfoGetName(info)) & "()[])) =")
           methodBuffer.writeLine("    if not self.ignoreFinalizer and self.impl != nil:")
           methodBuffer.writeLine("      $1(self.impl)" % [$gFunctionInfoGetSymbol(freeMe)])
@@ -1687,7 +1689,8 @@ proc writeObj(info: GIObjectInfo) =
     output.writeLine("    impl*: ptr Object00")
     output.writeLine("    ignoreFinalizer*: bool")
   if gObjectInfoGetFundamental(info) == GFalse: # guess work, ignore fake GObjects like GParamSpec and such
-    output.writeLine("\nwhen compileOption(\"gc\", \"arc\"):")
+    #output.writeLine("\nwhen compileOption(\"gc\", \"arc\"):")
+    output.writeLine("\nwhen defined(gcDestructors):")
     output.writeLine("  proc `=destroy`*(self: var typeof(" & mangleName(gBaseInfoGetName(info)) & "()[])) =")
     output.writeLine("    if not self.ignoreFinalizer and self.impl != nil:")
     output.writeLine("      g_object_remove_toggle_ref(self.impl, toggleNotify, addr(self))")
@@ -2089,7 +2092,7 @@ proc main(namespace: string; version: cstring = nil) =
     output.writeLine("""
 #proc fnew*[T](a: var ref T; finalizer: proc (x: ref T)) =
 template fnew*(a: untyped; finalizer: untyped) =
-  when compileOption("gc", "arc"):
+  when defined(gcDestructors):
     new(a)
   else:
     new(a, finalizer)
@@ -2516,10 +2519,13 @@ proc get$1*(builder: Builder; name: string): $1 =
     echo gBaseInfoGetName(el[1])
 
 proc launch() =
-  when compileOption("gc", "arc"):
-    echo "GC is arc"
-  when compileOption("gc", "refc"):
-    echo "GC is refc"
+  when defined(gcDestructors):
+    echo "defined(gcDestructors)"
+    echo "maybe GC is arc"
+  #when compileOption("gc", "arc"):
+  #  echo "GC is arc"
+  #when compileOption("gc", "refc"):
+  #  echo "GC is refc"
 
   ISGTK3 = paramCount() == 0 # we have to launch the generator two times, as typelibs can not be unloaded!
   supmod3 = newStringStream()
@@ -2598,4 +2604,4 @@ proc launch() =
     supmod4.close
 
 launch()
-# 2601 lines construct benil
+# 2607 lines

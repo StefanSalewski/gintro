@@ -1,7 +1,7 @@
 # This is the high level cairo module for Nim -- based on the low level ngtk3 module, manually tuned.
 # (c) S. Salewski 2017, cairo 1.15.6
-# v0.7.1
-# 01-FEB-2020
+# v0.7.2
+# 23-FEB-2020
 
 # starting with gintro v.0.6.0 we split cairo into the gobject-introspection generated cairo.nim and this file.
 
@@ -138,7 +138,8 @@ var NUDK: ptr UserDataKey = cast[ptr UserDataKey](alloc(sizeof(UserDataKey)))
 
 # copy from glib.nim
 template fnew(a: untyped; finalizer: untyped) =
-  when compileOption("gc", "arc"):
+  # when compileOption("gc", "arc"):
+  when defined(gcDestructors):
     new(a)
   else:
     new(a, finalizer)
@@ -2640,5 +2641,5 @@ when CAIRO_HAS_TEE_SURFACE:
     discard cairo_tee_surface_index(surface.impl, index.cuint)
     return surface
 
-# 2636 lines new(
+# 2644 lines
 
