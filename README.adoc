@@ -1,6 +1,6 @@
 = High level GTK3 (and GTK4) bindings for the Nim programming language
 (c) Stefan Salewski                                     
-//Version 0.7.2
+//Version 0.7.3
 :experimental:
 :imagesdir: http://ssalewski.de/tmp
 :source-highlighter: pygments
@@ -25,8 +25,14 @@ with code inserted from files directly.
 NOTE: This work is partly based on earlier works of J. Mansour and has been supported by A. Rumpf, E. Bassi and other _Nim_ and _GTK/Gnome_ developers.
 The `combinatorics` module was kindly provided by R. Behrends.
 
+NOTE: Starting with current version v0.7.3 we allow passing a type descriptor as first parameter to the
+new() procs like `newButton(MyButtonSubclass)` to support subclassing and extending Widgets in OOP style.
+See <<Extending or sub-classing Widgets>> for an complete example. The init() procs which were used
+before for this task are now deprecated and will be removed later. This new approach generally saves
+one line of source code, allows using `let` instead of `var`, and the naming of procs is more consistent.
+
 NOTE: Starting with version v0.7.1 we have added destructor support when compiled with `--gc:arc`,
-so we have no memory leak for subclassed objects any more, see the example in `Subclassing` section.
+so we have no memory leak for subclassed objects any more, see the example in <<Extending or sub-classing Widgets>> section.
 When compiled with default (refc) GC finalizers are used as before. And for objects marked with `nullable`
 tag in gobject-introspection we now return nil value for the proxy object when the C lib has returned NULL.
 So according to the C API docs, you can check for nil result for the few functions which may return NULL.
@@ -597,13 +603,17 @@ Remember the GTK `devhelp` tool, and use also `grep` or the `nimgrep` variant.
 
 == Extending or sub-classing Widgets
 
-I may occur that we want to attach additional information to GTK widgets
-by extending or subclassing them. Doing this is supported
+It may occur that we want to attach additional information to GTK widgets
+by extending or subclassing them. [line-through]#Doing this is supported
 by providing for each widget class not only a corresponding new() proc which returns 
 the newly created widget, but also
 a init() proc, which gets an uninitialized variable of the (extended) widget type as argument and
 initializes that variable with a newly created
-GTK widget . Initializing the added fields is
+GTK widget.#
+Doing this is supported
+by providing for each widget class an additional new() proc which takes an type descriptor
+as first argument, like `newButton(CountButton, "Counting down from 100 by 5")` in the example below.
+Initializing the added fields is
 done separately by the user. The following code shows a GTK button, which is
 extended with a counter member field. That counter is decreased for
 each button click. The amount of decrease (5) is passed to the callback as a int parameter.
@@ -621,29 +631,30 @@ to test the destructor behaviour.)
 .count_button.nim
 ----
 # nim c count_button.nim
-import gintro/[gtk, glib, gobject, gio]
+import gintro/[gtk, gobject, gio]
 
 type
   CountButton = ref object of Button
     counter: int
 
-when compileOption("gc", "arc"):
+when defined(gcDestructors):
   proc `=destroy`(x: var typeof(CountButton()[])) =
     gtk.`=destroy`(typeof(Button()[])(x))
 
 proc buttonClicked (button: CountButton; decrement: int) =
   dec(button.counter, decrement)
-  button.label = "Counter: " & $button.counter 
+  button.label = "Counter: " & $button.counter
   echo "Counter is now: ", button.counter
 
 proc appActivate (app: Application) =
-  var button: CountButton
+  #var button: CountButton
   let window = newApplicationWindow(app)
   window.title = "Count Button"
-  initButton(button, "Counting down from 100 by 5")
+  #initButton(button, "Counting down from 100 by 5") # deprecated
+  let button = newButton(CountButton, "Counting down from 100 by 5")
   button.counter = 100
   window.add(button)
-  button.connect("clicked",  buttonClicked, 5)
+  button.connect("clicked", buttonClicked, 5)
   window.showAll
 
 proc main =

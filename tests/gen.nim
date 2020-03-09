@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK3/GTK4 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.7.2 2020-FEB-23
+# v 0.7.3 2020-MAR-09
 # (c) S. Salewski 2018
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -900,21 +900,29 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
           for j in 0.cint ..< gCallableInfoGetNArgs(minfo):
             let arg = gCallableInfoGetArg(minfo, j)
             assert gArgInfoGetDirection(arg) notin {GIDirection.OUT, INOUT} # so we can ignore this case!
-          for i in 0 .. 1: # generate the new() and the init() proc
+          for itt in 0 .. 2: # generate the new(), the new(typedesc) and the init() proc
             var hhh = "\nproc " & asym & EM & plist
-            if i > 0:
+            if itt == 1: # new(typedesc)
+              let semi = if hhh.contains("()"): "" else: "; "
+              let p = hhh.find("): ")
+              hhh.setLen(p + 1)
+              hhh = hhh.replace("*(", "*(tdesc: typedesc" & semi)
+              hhh.add(": tdesc")
+            if itt == 2: # init(), deprecated
               let semi = if hhh.contains("()"): "" else: "; "
               let p = hhh.find("): ")
               hhh.setLen(p + 1)
               hhh = hhh.replace("new", "init")
               hhh = hhh.replace("*(", "*[T](result: var T" & semi)
+            if itt == 2:
+              depStr = " {.deprecated.}"
             methodBuffer.writeLine(hhh & depStr & " =")
             methodBuffer.write(arrLex)
             methodBuffer.write(sss)
             if gCallableInfoCanThrowGerror(minfo):
               methodBuffer.writeLine("  var gerror: ptr glib.Error")
-              if i == 0: arglist.insert(", addr gerror", arglist.high)
-            if i > 0:
+              if itt == 0: arglist.insert(", addr gerror", arglist.high)
+            if itt == 1 or itt == 2:
               methodBuffer.writeLine("  assert(result is $1)" % [manglename(gBaseInfoGetName(info))])
             if isGObject:
               # CAUTION: some procs are advertised as constructor but do not construct new objects,
@@ -2604,4 +2612,4 @@ proc launch() =
     supmod4.close
 
 launch()
-# 2607 lines
+# 2615 lines
