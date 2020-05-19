@@ -1,6 +1,6 @@
 # app0.nim -- minimal application style example
 # nim c app0.nim
-import gintro/[gtk, glib, gobject, gio]
+import gintro/[gtk, gobject, gio]
 
 proc appActivate(app: Application) =
   let window = newApplicationWindow(app)

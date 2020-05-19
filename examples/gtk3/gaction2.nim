@@ -62,9 +62,9 @@ proc radio(action: SimpleAction; parameter: Variant; label: Label) =
   let str: string = "From Radio menu item " & getString(newState, l)
   label.setLabel(str)
 
-proc bye(w: Window) =
-  mainQuit()
-  echo "Bye..."
+#proc bye(w: Window) =
+#  mainQuit()
+#  echo "Bye..."
 
 proc main =
   gtk.init()

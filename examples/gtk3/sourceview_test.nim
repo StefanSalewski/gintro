@@ -1,4 +1,4 @@
-import gintro/[gtk, glib, gobject, gio, gtksource]
+import gintro/[gtk, gobject, gio, gtksource]
 
 proc appActivate (app: Application) =
   let window = newApplicationWindow(app)

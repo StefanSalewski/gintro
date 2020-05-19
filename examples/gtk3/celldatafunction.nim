@@ -1,6 +1,6 @@
 # This example shows how to apply a CellDataFunc to a GtkTreeView
 # C example code was provided by A.Krause in chapter 8 of his book
-import gintro/[gtk, gobject, glib]
+import gintro/[gtk, gobject]
 
 const
   Color = 0

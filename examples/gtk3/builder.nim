@@ -1,7 +1,7 @@
 # https://developer.gnome.org/gtk3/stable/ch01s03.html
 # builder.nim -- application style example using builder/glade xml file for user interface
 # nim c builder.nim
-import gintro/[gtk, glib, gobject, gio]
+import gintro/[gtk, gobject, gio]
 
 proc hello(b: Button; msg: string) =
   echo "Hello", msg

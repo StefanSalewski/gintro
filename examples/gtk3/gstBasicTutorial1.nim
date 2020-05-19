@@ -15,6 +15,7 @@ proc main =
   ##  Wait until error or EOS
   bus = gst.getBus(pipeline)
   msg = gst.timedPopFiltered(bus, gst.Clock_Time_None, {gst.MessageFlag.error, gst.MessageFlag.eos})
+  echo msg.getType
   discard gst.setState(pipeline, gst.State.null) # is this necessary?
 
 main()

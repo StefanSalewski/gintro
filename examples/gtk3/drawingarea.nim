@@ -60,7 +60,7 @@ type
     handlerID: uint64
 
 proc newPosAdj: PosAdj =
-  initAdjustment(result, 0, 0, 1, 1, 10, 1)
+  newAdjustment(PosAdj, 0, 0, 1, 1, 10, 1)
 
 type
   PDA_Data* = object
@@ -104,7 +104,7 @@ proc drawingAreaDrawCb(darea: DrawingArea; cr: Context; this: PDA): bool =
   if this.selecting:
     cr.rectangle(this.lastButtonDownPosX, this.lastButtonDownPosY,
       this.zoomRectX1 - this.lastButtonDownPosX, this.zoomRectY1 - this.lastButtonDownPosY)
-    cr.setSource(0, 0, 1, 0.5) # SELECT_RECT_COL) # 0, 0, 1, 0.5
+    cr.setSource(SelectRectCol) # SELECT_RECT_COL) # 0, 0, 1, 0.5
     cr.fillPreserve
     cr.setSource(0, 0, 0)
     cr.setLineWidth(2)
@@ -256,7 +256,7 @@ proc onAdjustmentEvent(this: PosAdj; pda: PDA) =
   pda.darea.queueDrawArea(0, 0, pda.darea.allocatedWidth, pda.darea.allocatedHeight)
 
 proc newPDA: PDA =
-  initGrid(result)
+  result = newGrid(PDA)
   let da = newDrawingArea()
   result.darea = da
   da.setHExpand

@@ -1,13 +1,13 @@
 # gsettings.nim -- basic use of gsettings
 # nim c gsettings.nim
 # https://blog.gtk.org/2017/05/01/first-steps-with-gsettings/
-import gintro/[gtk, glib, gobject, gio]
+import gintro/[gtk, gobject, gio]
 
 # unused
-proc toggle(b: CheckButton) = 
-  echo b.active
-  let s = newSettings("org.gnome.Recipes")
-  discard s.setBoolean("like-nim", b.active)
+#proc toggle(b: CheckButton) = 
+#  echo b.active
+#  let s = newSettings("org.gnome.Recipes")
+#  discard s.setBoolean("like-nim", b.active)
 
 proc appActivate(app: Application) =
   let window = newApplicationWindow(app)
