@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK3/GTK4 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.7.4 2020-MAY-19
+# v 0.7.5 2020-MAY-20
 # (c) S. Salewski 2018
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -1446,7 +1446,7 @@ template writeSignal() =
     memo.add(RecSep)
     (plist, arglist, replist) = genPars(signalInfo, false, info)
     memo.add(plist)
-    memo = memo.replace("\n    ", "")
+    memo = memo.replace("\n    ", " ")
     memo = memo.replace("\"", "\\\"")
     if moduleNamespace == "gtk" or moduleNamespace == "gdk" or moduleNamespace == "gdkX11":
       if ISGTK3:
