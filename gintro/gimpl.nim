@@ -158,14 +158,14 @@ proc $1$2 {.cdecl.} =
           r1s.add("  " & names[i] & "1.impl = " & names[i] & "\n")
     if not ignoreArg.boolVal:
       if getTypeInst(arg).typeKind == ntyRef:
-        resu.add(", cast[$5](data)")
+        resu.add(", cast[$5](user_data)")
       else:
-        resu.add(", cast[ptr $5](data)[]")
+        resu.add(", cast[ptr $5](user_data)[]")
     resu.add(")")
     if resl == "gboolean":
       resu.add(".ord.gboolean")
     r1s.add(resu & "\n")
-    all = all.replace(")", "; data: pointer)")
+    all = all.replace(")", "; user_data: pointer)")
   r1s = r1s % [$procNameCdecl, all, $p, wts, ats]
   # echo r1s
   result = parseStmt(r1s)
@@ -426,4 +426,4 @@ $1(column, renderer, $6)
 """ % [$procName, ats, $column, $renderer, $procNameCdecl, argStr, $procNameDestroy]
 
   result = parseStmt(r0s & r1s & r2s)
-# 423 lines
+# 429 lines
