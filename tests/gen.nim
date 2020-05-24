@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK3/GTK4 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.7.5 2020-MAY-20
+# v 0.7.6 2020-MAY-24
 # (c) S. Salewski 2018
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -646,7 +646,7 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil): (
         info) and (
         gFunctionInfoGetFlags(info).int and
             GIFunctionInfoFlags.WRAPS_VFUNC.ord) == 0:
-      if userAlloc and mayBeNil:
+      if userAlloc and mayBeNil:# or (sym == "gdk_window_set_geometry_hints" and str == "Geometry"): # gir bug!
         var h = str
         h.removePrefix("var ")
         str.add(" = cast[ptr " & h & "](nil)[]")
@@ -1505,7 +1505,7 @@ proc writeInterface(info: GIInterfaceInfo) =
 # write a few of the strange enum sets
 proc writeModifierType(info: GIEnumInfo) =
   let we = gBaseInfoGetName(info)
-  assert(we in ["ModifierType", "EventMask", "AccelFlags", "AttachOptions", "MessageType"])
+  assert(we in ["ModifierType", "EventMask", "AccelFlags", "AttachOptions", "MessageType", "WindowHints"])
   type T = tuple[v: int64; n: string]
   var s: seq[T]
   var alias: seq[string]
@@ -1522,7 +1522,8 @@ proc writeModifierType(info: GIEnumInfo) =
     if result == 0:
       result = cmp(x.n, y.n)
   var tname = mangleName(gBaseInfoGetName(info))
-  firstPart(tname)
+  if tname != "WindowHints":
+    firstPart(tname)
   output.writeLine("  ", tname & "Flag" & EM, " {.size: sizeof(cint), pure.} = enum")
   if s[0].v != 0 and s[0].v != 1: # flags may start with none = 0 or with flag1 = 1
     output.writeLine("    ignoreThisDummyValue = 0") # Nim needs start with 0 for these low level sets
@@ -1554,14 +1555,14 @@ proc writeModifierType(info: GIEnumInfo) =
     writeMethod(info, minfo)
 
 proc writeEnum(info: GIEnumInfo) =
-  if mangleName(gBaseInfoGetName(info)) in ["ModifierType", "EventMask", "AccelFlags", "AttachOptions"] or
+  if mangleName(gBaseInfoGetName(info)) in ["ModifierType", "EventMask", "AccelFlags", "AttachOptions", "WindowHints"] or
     (moduleNameSpace == "gst" and mangleName(gBaseInfoGetName(info)) == "MessageType"):
     writeModifierType(info)
     return
   type T = tuple[v: int64; n: string]
   var s: seq[T]
   var alias: seq[string]
-  var flags = ($gBaseInfoGetName(info)).endsWith("Flags")
+  var flags = ($gBaseInfoGetName(info)).endsWith("Flags")# or $gBaseInfoGetName(info) == "WindowHints"
   output.writeLine("type")
   let n = info.gEnumInfoGetNValues()
   for j in 0.cint ..< n:
@@ -2708,4 +2709,4 @@ proc launch() =
     supmod4.close
 
 launch()
-# 2711 lines
+# 2712 lines
