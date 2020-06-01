@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK3/GTK4 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.7.6 2020-MAY-24
+# v 0.7.7 2020-JUN-01
 # (c) S. Salewski 2018
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -646,7 +646,7 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil): (
         info) and (
         gFunctionInfoGetFlags(info).int and
             GIFunctionInfoFlags.WRAPS_VFUNC.ord) == 0:
-      if userAlloc and mayBeNil:# or (sym == "gdk_window_set_geometry_hints" and str == "Geometry"): # gir bug!
+      if userAlloc and mayBeNil: # or (sym == "gdk_window_set_geometry_hints" and str == "Geometry"): # gir bug!
         var h = str
         h.removePrefix("var ")
         str.add(" = cast[ptr " & h & "](nil)[]")
@@ -709,9 +709,17 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil): (
 
 proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
 
+  template checkForGerror(): untyped =
+    if gCallableInfoCanThrowGerror(minfo):
+      methodBuffer.writeLine("  if gerror != nil:")
+      methodBuffer.writeLine("    let msg = $gerror.message")
+      methodBuffer.writeLine("    g_error_free(gerror[])")
+      methodBuffer.writeLine("    raise newException(GException, msg)")
+
   template gobjectTemp(): untyped =
     assert(gCallableInfoGetCallerOwns(minfo) in {GITransfer.NOTHING, EVERYTHING}) # both occur
     methodBuffer.writeLine("  let gobj = " & sym & arglist)
+    checkForGerror()
     if gCallableInfoMayReturnNull(minfo):
       methodBuffer.writeLine("  if gobj.isNil:")
       methodBuffer.writeLine("    return nil") # https://github.com/StefanSalewski/gintro/issues/63
@@ -956,7 +964,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
                 methodBuffer.writeLine("  result.ignoreFinalizer = true") # as we have always to attach one with ARC.
             elif gCallableInfoGetCallerOwns(minfo) == GITransfer.CONTAINER:
               assert false
-            elif gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING or #: ###################
+            elif gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING or
               gCallableInfoGetCallerOwns(minfo) == GITransfer.NOTHING: # and gBaseInfoGetName(info) == "Variant":
               if false: #sym == "g_closure_new_simple":
                 let nMethods = gStructInfoGetNMethods(info)
@@ -968,9 +976,15 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
               var freeMeName: string
               var boxedFreeMeName: string
               findFreeProc(info, gCallableInfoGetCallerOwns(minfo) == GITransfer.NOTHING)
-              #if sym == "g_closure_new_simple" or sym == "g_closure_new_object":
-              #  freeMeName = "unref" # TODO GI bug?
-              #assert(gCallableInfoGetCallerOwns(minfo) in {GITransfer.EVERYTHING, GITransfer.NOTHING})
+              if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo):
+                methodBuffer.writeLine("  let impl0 = " & sym & arglist) # fast return in case of error
+                checkForGerror()
+                if gCallableInfoMayReturnNull(minfo):
+                  methodBuffer.writeLine("  if impl0.isNil:")
+                  methodBuffer.writeLine("    return nil")
+                #if sym == "g_closure_new_simple" or sym == "g_closure_new_object":
+                #  freeMeName = "unref" # TODO GI bug?
+                #assert(gCallableInfoGetCallerOwns(minfo) in {GITransfer.EVERYTHING, GITransfer.NOTHING})
               if false: #i > 0: # with ARC we have no finalizer support for user defined subclasses, so we have to leak mem!
                 methodBuffer.writeLine("  new(result)")
               elif boxedFreeMeName != "":
@@ -981,7 +995,10 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
                 methodBuffer.writeLine("  new(result)")
               else:
                 methodBuffer.writeLine("  fnew(result, $1)" % freeMeName)
-              methodBuffer.writeLine("  result.impl = " & sym & arglist)
+              if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo):
+                methodBuffer.writeLine("  result.impl = impl0")
+              else:
+                methodBuffer.writeLine("  result.impl = " & sym & arglist)
               #if gBaseInfoGetName(info) == "Variant":
               #  methodBuffer.writeLine("  discard g_variant_ref_sink(result.impl)")
               if ((gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) == 0 and
@@ -989,22 +1006,19 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
                 ((gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) != 0 and
                 gBaseInfoGetName(info) == "Variant"):
                 methodBuffer.writeLine("  result.ignoreFinalizer = true") # as we have always to attach one with ARC.
-              if gCallableInfoMayReturnNull(minfo):
-                methodBuffer.writeLine("  if result.impl.isNil:")
-                methodBuffer.writeLine("    return nil")
             else:
               echo "skipped ", sym
               assert false
-              #assert gCallableInfoGetCallerOwns(minfo) == GITransfer.NOTHING
-              #methodBuffer.writeLine("  new(result)")
-              #methodBuffer.writeLine("  result.ignoreFinalizer = true")
-              #methodBuffer.writeLine("  result.impl = " & sym & arglist)
-            #if (gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) == 0 and
-            #  gCallableInfoGetCallerOwns(minfo) == GITransfer.NOTHING:
-            #  methodBuffer.writeLine("  result.ignoreFinalizer = true") # as we have always to attach one with ARC.
             for k, v in replist:
               assert false
               methodBuffer.writeLine("  $1 = $2($3_00)" % [k, ct3nt(v), k.strip(chars = {'`'})])
+            # we need the gerror code in this constructor for loop!
+            if false: #gCallableInfoCanThrowGerror(minfo):
+              methodBuffer.writeLine("  if gerror != nil:")
+              methodBuffer.writeLine("    let msg = $gerror.message")
+              methodBuffer.writeLine("    g_error_free(gerror[])")
+              methodBuffer.writeLine("    raise newException(GException, msg)")
+          # end of for itt in 0 .. 2:
         elif isProxyCandidate(ret2): # BLOCKMARK8
           assert (gCallableInfoGetCallerOwns(minfo) in {GITransfer.NOTHING, GITransfer.EVERYTHING}) # both occur
           methodBuffer.writeLine("\nproc " & asym & EM & plist & " =")
@@ -1023,21 +1037,19 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
             assert tag == GITypeTag.INTERFACE
             var iface = gTypeInfoGetInterface(ret2)
             if gBaseInfoGetType(iface) == GIInfoType.INTERFACE:
-              #methodBuffer.writeLine("#GIInfoType.INTERFACE")
               gobjectTemp()
-              #iface = gInterfaceInfoGetIfaceStruct(iface)
-              #methodBuffer.writeLine("  fnew(result, $1genericGObjectUnref) # Interface" % [mprefix])
-              #methodBuffer.writeLine("  result.impl = " & sym & arglist)
-            elif false: #gBaseInfoGetType(iface) == GIInfoType.OBJECT: # rare, ParamSpec in gobject.nim
-              #echo "XXXXXXXXXXXXXXXXX what shall we do? for ", sym
-              methodBuffer.writeLine("  fnew(result, $1genericGObjectUnref) # Object" % [mprefix])
-              methodBuffer.writeLine("  result.impl = " & sym & arglist)
             else:
               assert(gBaseInfoGetType(iface) in {GIInfoType.STRUCT, GIInfoType.UNION, GIInfoType.OBJECT})
               var freeMeName: string
               var freeMe: GIFunctionInfo
               var boxedFreeMeName: string
               findFreeProc(iface, gCallableInfoGetCallerOwns(minfo) == GITransfer.NOTHING)
+              if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo):
+                methodBuffer.writeLine("  let impl0 = " & sym & arglist) # fast return in case of error
+                checkForGerror()
+                if gCallableInfoMayReturnNull(minfo):
+                  methodBuffer.writeLine("  if impl0.isNil:")
+                  methodBuffer.writeLine("    return nil")
               if boxedFreeMeName != "":
                 methodBuffer.writeLine("  fnew(result, $1)" % boxedFreeMeName)
               elif freeMeName == "":
@@ -1046,12 +1058,12 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
                 methodBuffer.writeLine("  new(result)")
               else:
                 methodBuffer.writeLine("  fnew(result, $1)" % freeMeName)
-              methodBuffer.writeLine("  result.impl = " & sym & arglist)
+              if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo):
+                methodBuffer.writeLine("  result.impl = impl0")
+              else:
+                methodBuffer.writeLine("  result.impl = " & sym & arglist)
             if gCallableInfoGetCallerOwns(minfo) == GITransfer.NOTHING:
               methodBuffer.writeLine("  result.ignoreFinalizer = true") # as we have always to attach one with ARC.
-            if gCallableInfoMayReturnNull(minfo):
-              methodBuffer.writeLine("  if result.impl.isNil:")
-              methodBuffer.writeLine("    return nil")
           elif false: #else:
             assert gCallableInfoGetCallerOwns(minfo) == GITransfer.NOTHING
             methodBuffer.writeLine("  new(result)")
@@ -1091,7 +1103,6 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
                 methodBuffer.writeLine("  fnew(" & h2 & ", " & boxedFreeMeName & ")")
               elif freeMeName == "":
                 methodBuffer.writeLine("  new(" & h2 & ")")
-                #############methodBuffer.writeLine("  $1.ignoreFinalizer = true" % [h2])
               else:
                 methodBuffer.writeLine("  fnew(" & h2 & ", " & freeMeName & ")")
               #if gCallableInfoGetCallerOwns(minfo) == GITransfer.NOTHING:
@@ -1113,36 +1124,96 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
             else:
               methodBuffer.writeLine("  var $1_00 = $2($3)" % [k.strip(chars = {'`'}), v, k])
           if (let (r0, r1) = genRec(ret2); r0 in UnnamedArrays and r1 == intA0):
-            methodBuffer.writeLine("  let resul0 = " & sym & arglist)
-            methodBuffer.writeLine("  result = $1ZT2seq(resul0)" % [uncap(r0)])
+            if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo) or gCallableInfoGetCallerOwns(minfo) ==
+                GITransfer.EVERYTHING:
+              methodBuffer.writeLine("  let resul0 = " & sym & arglist)
+              checkForGerror()
+              if gCallableInfoMayReturnNull(minfo):
+                methodBuffer.writeLine("  if resul0.isNil:")
+                methodBuffer.writeLine("    return")
+              methodBuffer.writeLine("  result = $1ZT2seq(resul0)" % [uncap(r0)])
+            else:
+              methodBuffer.writeLine("  result = $1ZT2seq($2)" % [uncap(r0), sym & arglist])
             assert(gCallableInfoGetCallerOwns(minfo) in {GITransfer.EVERYTHING, GITransfer.NOTHING, GITransfer.CONTAINER})
             if gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING:
               methodBuffer.writeLine("  cogfree(resul0)")
           elif isString(ret2):
-            methodBuffer.writeLine("  let resul0 = " & sym & arglist)
-            methodBuffer.writeLine("  result = $resul0")
+            if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo) or gCallableInfoGetCallerOwns(minfo) ==
+                GITransfer.EVERYTHING:
+              methodBuffer.writeLine("  let resul0 = " & sym & arglist)
+              checkForGerror()
+              if gCallableInfoMayReturnNull(minfo):
+                methodBuffer.writeLine("  if resul0.isNil:")
+                methodBuffer.writeLine("    return")
+              methodBuffer.writeLine("  result = $resul0")
+            else:
+              methodBuffer.writeLine("  result = $" & sym & arglist)
             assert(gCallableInfoGetCallerOwns(minfo) in {GITransfer.EVERYTHING, GITransfer.NOTHING})
             if gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING:
               methodBuffer.writeLine("  cogfree(resul0)")
           elif genRec(ret2)[0] in NamedArrays:
             let h = genRec(ret2)[0]
-            methodBuffer.writeLine("  let resul0 = " & sym & arglist)
-            methodBuffer.writeLine("  result = $1ToSeq(resul0, $2_00.int)" % [h.replace("00").unCap, blex])
-          elif (replist.len > 0 or gCallableInfoCanThrowGerror(minfo)) and genRec(ret2)[0] != "void":
-            methodBuffer.write("  result = ")
-            if ct2nt.contains(genRec(ret2)[0]):
-              methodBuffer.writeLine(ct3nt(genRec(ret2)[0]) & '(' & sym & arglist & ')')
-            else:
-              methodBuffer.writeLine(sym & arglist)
-          elif ct2nt.contains(genRec(ret2)[0]):
-            if genRec(ret2)[0] == "cstringArray" and gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING:
+            if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo) or gCallableInfoGetCallerOwns(minfo) ==
+                GITransfer.EVERYTHING:
               methodBuffer.writeLine("  let resul0 = " & sym & arglist)
-              methodBuffer.writeLine("  result = cstringArrayToSeq(resul0)")
-              methodBuffer.writeLine("  g_strfreev(resul0)")
+              checkForGerror()
+              if gCallableInfoMayReturnNull(minfo):
+                methodBuffer.writeLine("  if resul0.isNil:")
+                methodBuffer.writeLine("    return")
+              methodBuffer.writeLine("  result = $1ToSeq(resul0, $2_00.int)" % [h.replace("00").unCap, blex])
+            else:
+              methodBuffer.writeLine("  result = $1ToSeq($3, $2_00.int)" % [h.replace("00").unCap, blex, sym & arglist])
+            assert(gCallableInfoGetCallerOwns(minfo) in {GITransfer.EVERYTHING, GITransfer.NOTHING})
+            if gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING:
+              methodBuffer.writeLine("  cogfree(resul0)")
+          elif (replist.len > 0 or gCallableInfoCanThrowGerror(minfo)) and genRec(ret2)[0] != "void":
+            # caution dragons like g_key_file_get_locale_string_list()
+            if gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING:
+              discard # echo "Untamed dragon: ", sym
+            if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo) or gCallableInfoGetCallerOwns(minfo) ==
+                GITransfer.EVERYTHING:
+              methodBuffer.writeLine("  let resul0 = " & sym & arglist)
+              checkForGerror()
+              if gCallableInfoMayReturnNull(minfo):
+                methodBuffer.writeLine("  if resul0.isNil:")
+                methodBuffer.writeLine("    return")
+              methodBuffer.write("  result = ")
+              if ct2nt.contains(genRec(ret2)[0]):
+                methodBuffer.writeLine(ct3nt(genRec(ret2)[0]) & '(' & "resul0" & ')')
+              else:
+                methodBuffer.writeLine("resul0")
+            else:
+              methodBuffer.write("  result = ")
+              if ct2nt.contains(genRec(ret2)[0]):
+                methodBuffer.writeLine(ct3nt(genRec(ret2)[0]) & '(' & sym & arglist & ')')
+              else:
+                methodBuffer.writeLine(sym & arglist)
+          elif ct2nt.contains(genRec(ret2)[0]):
+            if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo) or gCallableInfoGetCallerOwns(minfo) ==
+                GITransfer.EVERYTHING:
+              methodBuffer.writeLine("  let resul0 = " & sym & arglist)
+              checkForGerror()
+              if gCallableInfoMayReturnNull(minfo):
+                methodBuffer.writeLine("  if resul0.isNil:")
+                methodBuffer.writeLine("    return")
+              if genRec(ret2)[0] == "cstringArray" and gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING:
+                #methodBuffer.writeLine("  let resul0 = " & sym & arglist)
+                methodBuffer.writeLine("  result = cstringArrayToSeq(resul0)")
+                methodBuffer.writeLine("  g_strfreev(resul0)")
+              else:
+                methodBuffer.writeLine("  " & ct3nt(genRec(ret2)[0]) & '(' & "resul0" & ')')
             else:
               methodBuffer.writeLine("  " & ct3nt(genRec(ret2)[0]) & '(' & sym & arglist & ')')
           else:
-            methodBuffer.writeLine("  " & sym & arglist)
+            if gCallableInfoCanThrowGerror(minfo) and genRec(ret2)[0] != "void":
+              assert false
+              methodBuffer.writeLine("  let resul0 = " & sym & arglist)
+            else:
+              methodBuffer.writeLine("  " & sym & arglist)
+            checkForGerror()
+            if gCallableInfoCanThrowGerror(minfo) and genRec(ret2)[0] != "void":
+              assert false
+              methodBuffer.writeLine("  resul0 #####")
           for k, v in replist:
             if v in UnnamedArrays:
               methodBuffer.writeLine("  $1.setLen($2)" % [k, blex])
@@ -1153,11 +1224,6 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
             else:
               methodBuffer.writeLine("  $1 = $2($3_00)" % [k, ct3nt(v), k.strip(chars = {'`'})])
         # BLOCKMARK8
-        if gCallableInfoCanThrowGerror(minfo):
-          methodBuffer.writeLine("  if gerror != nil:")
-          methodBuffer.writeLine("    let msg = $gerror.message")
-          methodBuffer.writeLine("    g_error_free(gerror[])")
-          methodBuffer.writeLine("    raise newException(GException, msg)")
       else: # } end of large proxy block BLOCK7
         asym = fixedProcNames.getOrDefault(sym, asym)
         (plist, arglist, replist, arrLex) = genPars(mInfo, false, info)
@@ -1178,9 +1244,8 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
       methodBuffer.writeLine("\nproc genericGObjectUnref*(self: Object) =")
       methodBuffer.writeLine("  if not self.ignoreFinalizer:")
       methodBuffer.writeLine("    g_object_unref(cast[ptr Object00](self.impl))")
-
-    #if gBaseInfoGetType(info) == GIInfoType.Object and isgobject
     if info != nil and gBaseInfoGetType(info) == GIInfoType.Object and gObjectInfoGetFundamental(info) == GTrue and sym.endsWith("unref"):
+      assert false
       when false: # we can not use baseName, we have to use generics.
         var parent = info
         while true:
@@ -1562,7 +1627,7 @@ proc writeEnum(info: GIEnumInfo) =
   type T = tuple[v: int64; n: string]
   var s: seq[T]
   var alias: seq[string]
-  var flags = ($gBaseInfoGetName(info)).endsWith("Flags")# or $gBaseInfoGetName(info) == "WindowHints"
+  var flags = ($gBaseInfoGetName(info)).endsWith("Flags") # or $gBaseInfoGetName(info) == "WindowHints"
   output.writeLine("type")
   let n = info.gEnumInfoGetNValues()
   for j in 0.cint ..< n:
@@ -1727,22 +1792,6 @@ proc writeObj(info: GIObjectInfo) =
     var h = genPars(signalInfo, false)[0][1..^1]
     let zzzu = gCallableInfoGetReturnType(signalinfo)
     writeSignal()
-  #for j in 0.cint ..< gObjectInfoGetNMethods(info):
-  #  let mInfo = gObjectInfoGetMethod(info, j)
-  #  writeMethod(info, minfo)
-
-  var mseq: seq[GIFunctionInfo]
-  var freePos = -1
-  for j in 0.cint ..< gObjectInfoGetNMethods(info):
-    mseq.add(gObjectInfoGetMethod(info, j))
-    if freePos < 0 and gBaseInfoGetName(gObjectInfoGetMethod(info, j)) in ["free", "unref"]:
-      #assert false executed for gtk3
-      freePos = j
-  if freePos > 0: swap(mseq[0], mseq[freePos])
-  for i, mInfo in mseq:
-    writeMethod(info, minfo)
-    #if i == 0:
-    #  genDestroyFreeUnref()
 
   if class != nil and not allSyms.contains(mangleName(gBaseInfoGetName(class))):
     assert false
@@ -1762,10 +1811,10 @@ proc writeObj(info: GIObjectInfo) =
 
   if gBaseInfoGetName(info) == "ParamSpec" and moduleNamespace == "gobject":
     ## for ParamSpec no unref proc is provided by gobject-introspection, and it asks for uref!
-    output.writeLine("\nproc g_param_spec_unref(self: ptr ParamSpec00) {.")
+    output.writeLine("\nproc g_param_spec_unref*(self: ptr ParamSpec00) {.")
     output.writeLine("    importc, libprag.}")
 
-    output.writeLine("\nproc g_param_spec_uref(self: ptr ParamSpec00) {.")
+    output.writeLine("\nproc g_param_spec_uref*(self: ptr ParamSpec00) {.")
     output.writeLine("    importc: \"g_param_spec_unref\", libprag.}")
 
     output.writeLine("\nproc unref*(self: ParamSpec) =")
@@ -1787,17 +1836,30 @@ proc writeObj(info: GIObjectInfo) =
         break
       parent = h
     let freeMeName = $g_object_info_get_unref_function(parent)
+
     if freeMeName != "":
-      output.writeLine("\nwhen defined(gcDestructors):")
       let n = mangleName(gBaseInfoGetName(info))
-      output.writeLine("  proc destroy_" & freeMeName & "(self: ptr " & n & "00) {.importc: \"" & freeMeName & "\", libprag.}\n")
+      if freeMeName != "g_param_spec_uref":
+        output.writeLine("\nproc " & freeMeName & "*(self: ptr " & n & "00) {.importc, libprag.}")
+        output.writeLine("\nproc generic_$1*(self: $2) =" % [freeMeName, n])
+        output.writeLine("  if not self.ignoreFinalizer:")
+        output.writeLine("    $1(self.impl)" % [freeMeName])
+      output.writeLine("\nwhen defined(gcDestructors):")
       output.writeLine("  proc `=destroy`*(self: var typeof(" & mangleName(gBaseInfoGetName(info)) & "()[])) =")
       output.writeLine("    if not self.ignoreFinalizer and self.impl != nil:")
       if n in ["ParamArray", "ParamFraction"]:
-        output.writeLine("      destroy_$#(cast[ptr $#00](self.impl))" % [freeMeName, n])
+        output.writeLine("      $#(cast[ptr $#00](self.impl))" % [freeMeName, n])
       else:
-        output.writeLine("      destroy_$1(self.impl)" % [freeMeName])
+        output.writeLine("      $1(self.impl)" % [freeMeName])
       output.writeLine("      self.impl = nil")
+
+    for j in 0.cint ..< gObjectInfoGetNMethods(info):
+      if  gFunctionInfoGetSymbol(gObjectInfoGetMethod(info, j)) != freeMeName:
+        writeMethod(info, gObjectInfoGetMethod(info, j))
+  else:
+    for j in 0.cint ..< gObjectInfoGetNMethods(info):
+      #if  gFunctionInfoGetSymbol(gObjectInfoGetMethod(info, j)) != freeMeName:
+      writeMethod(info, gObjectInfoGetMethod(info, j))
 
 proc extractFromUnion(tag: GITypeTag; arg: GIArgumentObj): string =
   result =
@@ -2152,7 +2214,8 @@ proc main(namespace: string; version: cstring = nil) =
     output.writeLine("const GobjectLib* = \"$1\"" % GobjectLib)
     output.writeLine("{.pragma: gobjectlibprag, cdecl, dynlib: GobjectLib.}")
 
-    output.writeLine("type\n  GException* = object of Exception")
+    #output.writeLine("type\n  GException* = object of Exception")
+    output.writeLine("type\n  GException* = object of CatchableError")
     output.writeLine("type\n  OptionEntry00Array* = pointer")
     output.writeLine("type\n  GArray00* = pointer")
     output.writeLine("type\n  int8Array* = pointer")
@@ -2265,6 +2328,7 @@ proc uint8ArrayZT2seq*(p: pointer): seq[uint8] =
     output.writeLine("type\n  StockItemArray* = pointer")
     output.writeLine("type\n  PageRangeArray* = pointer")
     output.writeLine("type\n  PadActionEntry00Array* = pointer")
+    output.writeLine("type\n  Expression00Array* = pointer")
     output.writeLine("type\n  Widget00Array* = pointer")
     output.writeLine("type\n  Array* = pointer")
   elif namespace == "Atk":
@@ -2709,4 +2773,4 @@ proc launch() =
     supmod4.close
 
 launch()
-# 2712 lines
+# 2776 lines
