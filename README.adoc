@@ -1,6 +1,6 @@
 = High level GTK3 (and GTK4) bindings for the Nim programming language
 (c) Stefan Salewski                                     
-//Version 0.7.7
+//Version 0.7.8
 :experimental:
 :imagesdir: http://ssalewski.de/tmp
 :source-highlighter: pygments
@@ -25,7 +25,12 @@ with code inserted from files directly.
 NOTE: This work is partly based on earlier works of J. Mansour and has been supported by A. Rumpf, E. Bassi and other _Nim_ and _GTK/Gnome_ developers.
 The `combinatorics` module was kindly provided by R. Behrends.
 
-NOTE: This is version 0.7.7 which contains the fixes from https://github.com/StefanSalewski/gintro/issues/75.
+NOTE: This is version 0.7.8 which contains again some changes. The two GTK4 examples from http://ssalewski.de/gtkprogramming.html
+should work now, and the existing GTK3 examples seems still to work. But maybe other programs don't work any
+more now?
+
+
+NOTE: Version 0.7.7 contains the fixes from https://github.com/StefanSalewski/gintro/issues/75.
 Mr lscrd has tested it already by use of nimble install gintro@#head some weeks ago, so we may assume that
 it works properly. Next version will again have serious modifications for GTK4, see http://ssalewski.de/gtkprogramming.html.
 So it may be a good idea to have a version 0.7.7 available as a fallback.

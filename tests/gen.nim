@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK3/GTK4 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.7.7 2020-JUN-01
+# v 0.7.8 2020-JUL-07
 # (c) S. Salewski 2018
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -44,6 +44,7 @@ import sets
 import bitops
 import tables
 import algorithm
+# from sugar import dup
 from combinatorics import combinations
 
 template isCallbackInfo(info: untyped): untyped =
@@ -81,6 +82,11 @@ template try tuple type using var when while xor yield
   nims = """
 int int8 int16 int32 int64 uint uint8 uint16 uint32 uint64 float float32 float64 pointer false true string char bool
 """.split
+
+# for Nim < v1.2, avoid use of sugar.dup()
+proc prefixRemoved(s, prefix: string): string =
+  result = s
+  result.removePrefix(prefix)
 
 proc unCap(s: var string) =
   s[0] = s[0].toLowerAscii
@@ -161,6 +167,7 @@ var fixedDestroyNames: Table[string, string]
 var mangledNames: Table[string, string]
 var mangledTypes: Table[string, string]
 
+var arrayCollector: HashSet[string]
 var allSyms: HashSet[string]
 var droppedSyms: HashSet[string]
 var privStr: HashSet[string]
@@ -398,14 +405,23 @@ proc genRec(t: GITypeInfo; genProxy = false; fullQualified: bool = false): (stri
       elif gTypeInfoIsZeroTerminated(t):
         result[0] = child & "Array"
         result[1] = intA0
+        if result[0].find('.') < 0:
+          # arrayCollector.incl(result[0].dup(removePrefix("ptr ")))
+          arrayCollector.incl(result[0].prefixRemoved("ptr "))
         return
       else:
         if child in UnnamedArrayCandidates:
           result[1] = intA0 # yes we need this
           result[0] = child & "Array"
+          if result[0].find('.') < 0:
+            # arrayCollector.incl(result[0].dup(removePrefix("ptr ")))
+            arrayCollector.incl(result[0].prefixRemoved("ptr "))
           return # we call it Array and return -- so we mark it for now, but it does not really help :-(
         else:
           result[0] = child & "Array"
+          if result[0].find('.') < 0:
+            # arrayCollector.incl(result[0].dup(removePrefix("ptr ")))
+            arrayCollector.incl(result[0].prefixRemoved("ptr "))
           return # we call it Array and return -- so we mark it for now, but it does not really help :-(
   elif tag == GITypeTag.INTERFACE:
     let iface = gTypeInfoGetInterface(t)
@@ -716,7 +732,8 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
       methodBuffer.writeLine("    g_error_free(gerror[])")
       methodBuffer.writeLine("    raise newException(GException, msg)")
 
-  template gobjectTemp(): untyped =
+  template oldgobjectTemp(): untyped =
+    assert sym notin ["g_object_ref_sink", "g_object_ref"]
     assert(gCallableInfoGetCallerOwns(minfo) in {GITransfer.NOTHING, EVERYTHING}) # both occur
     methodBuffer.writeLine("  let gobj = " & sym & arglist)
     checkForGerror()
@@ -724,22 +741,77 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
       methodBuffer.writeLine("  if gobj.isNil:")
       methodBuffer.writeLine("    return nil") # https://github.com/StefanSalewski/gintro/issues/63
     methodBuffer.writeLine("  let qdata = g_object_get_qdata(gobj, Quark)")
-    methodBuffer.writeLine("  if qdata != nil:")
+    methodBuffer.writeLine("  if qdata != nil:") # gtk_widget_get_toplevel, gdk_display_get_default, gtk_widget_get_window
+    #if (gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) != 0:
+    #  methodBuffer.writeLine("    assert false") # caution: i.e. gdk_cursor_new_from_name ()
     methodBuffer.writeLine("    result = cast[type(result)](qdata)")
     methodBuffer.writeLine("    assert(result.impl == gobj)")
+    #methodBuffer.writeLine("    echo \"<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\"")
+    #methodBuffer.writeLine("    echo \"YXC $1 \", result.refCount" % [sym])
     methodBuffer.writeLine("  else:")
-    if sym == "g_object_ref" or sym == "g_object_ref_sink":
-      methodBuffer.writeLine("    assert(false)")
-      assert false
+    if (gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) == 0 and
+      gCallableInfoGetCallerOwns(minfo) == GITransfer.NOTHING:
+      methodBuffer.writeLine("    fnew(result, $1finalizeGObject)" % [mprefix])
+      methodBuffer.writeLine("    result.impl = gobj")
+      # methodBuffer.writeLine("    assert(g_object_is_floating(result.impl).cint == 0)") # can't assert due to gst
+      # https://discourse.gnome.org/t/got-assert-error-for-nim-version-of-gst-basic-tutorial/3732
+      methodBuffer.writeLine("    assert(g_object_get_qdata(result.impl, Quark) == nil)")
+      methodBuffer.writeLine("    g_object_set_qdata(result.impl, Quark, addr(result[]))")
+      methodBuffer.writeLine("    result.ignoreFinalizer = true")
     else:
+      assert((gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) != 0 or
+        gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING)
       methodBuffer.writeLine("    fnew(result, $1finalizeGObject)" % [mprefix])
       methodBuffer.writeLine("    result.impl = gobj")
       methodBuffer.writeLine("    GC_ref(result)")
-      methodBuffer.writeLine("    discard g_object_ref_sink(result.impl)")
+      methodBuffer.writeLine("    if g_object_is_floating(result.impl).cint != 0.cint:")
+      methodBuffer.writeLine("      discard g_object_ref_sink(result.impl)")
       methodBuffer.writeLine("    g_object_add_toggle_ref(result.impl, toggleNotify, addr(result[]))")
+      if sym in ["gtk_window_new", "gtk_application_window_new"]: # GC_ref() so we never free the main window!
+        methodBuffer.writeLine("    GC_ref(result)")
+        methodBuffer.writeLine("    result.ignoreFinalizer = true")
       methodBuffer.writeLine("    g_object_unref(result.impl)")
       methodBuffer.writeLine("    assert(g_object_get_qdata(result.impl, Quark) == nil)")
       methodBuffer.writeLine("    g_object_set_qdata(result.impl, Quark, addr(result[]))")
+    #methodBuffer.writeLine("    echo \"YXC $1 \", result.refCount" % [sym])
+
+  # new for v0.7.8: we ref all gobjects now, even if transfer is none. So result.ignoreFinalizer = false always for gobjects!
+  template gobjectTemp(): untyped =
+    assert sym notin ["g_object_ref_sink", "g_object_ref"]
+    assert(gCallableInfoGetCallerOwns(minfo) in {GITransfer.NOTHING, EVERYTHING}) # both occur
+    methodBuffer.writeLine("  let gobj = " & sym & arglist)
+    checkForGerror()
+    if gCallableInfoMayReturnNull(minfo):
+      methodBuffer.writeLine("  if gobj.isNil:")
+      methodBuffer.writeLine("    return nil") # https://github.com/StefanSalewski/gintro/issues/63
+    methodBuffer.writeLine("  let qdata = g_object_get_qdata(gobj, Quark)")
+    methodBuffer.writeLine("  if qdata != nil:") # gtk_widget_get_toplevel, gdk_display_get_default, gtk_widget_get_window
+    #if (gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) != 0:
+    #  methodBuffer.writeLine("    assert false") # constructors should always allocate new objects -- lets verify that
+    # no, will fail i.e. for gdk_cursor_new_from_name()
+    methodBuffer.writeLine("    result = cast[type(result)](qdata)")
+    methodBuffer.writeLine("    assert(result.impl == gobj)")
+    #methodBuffer.writeLine("    echo \"<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\"")
+    #methodBuffer.writeLine("    echo \"YXC $1 \", result.refCount" % [sym])
+    methodBuffer.writeLine("  else:")
+    #assert((gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) != 0 or
+    #  gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING)
+    methodBuffer.writeLine("    fnew(result, $1finalizeGObject)" % [mprefix])
+    methodBuffer.writeLine("    result.impl = gobj")
+    methodBuffer.writeLine("    GC_ref(result)")
+    if sym in ["gtk_window_new", "gtk_application_window_new"]: # GC_ref() so we never free the main window!
+      methodBuffer.writeLine("    GC_ref(result)")
+      methodBuffer.writeLine("    result.ignoreFinalizer = true")
+    elif gCallableInfoGetCallerOwns(minfo) == GITransfer.NOTHING:
+      methodBuffer.writeLine("    discard g_object_ref_sink(result.impl)")
+    else:
+      methodBuffer.writeLine("    if g_object_is_floating(result.impl).int != 0:")
+      methodBuffer.writeLine("      discard g_object_ref_sink(result.impl)")
+    methodBuffer.writeLine("    g_object_add_toggle_ref(result.impl, toggleNotify, addr(result[]))")
+    methodBuffer.writeLine("    g_object_unref(result.impl)")
+    methodBuffer.writeLine("    assert(g_object_get_qdata(result.impl, Quark) == nil)")
+    methodBuffer.writeLine("    g_object_set_qdata(result.impl, Quark, addr(result[]))")
+  #methodBuffer.writeLine("    echo \"YXC $1 \", result.refCount" % [sym])
 
   # prefer gboxed_free() but fall back for GVariant
   template findFreeProc(info: GIBaseInfo; noWarning: bool): untyped =
@@ -884,12 +956,13 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
           asym = asym[3 .. ^1].unCap
           asym = '`' & asym & '=' & '`'
         if keywords.contains(asym) or nims.contains(asym): continue
+        if asym == "`tings=`": continue # result of get_settings
       # the large proxy block BLOCK7 {
       let b7 = needProxyProc(mInfo) or isString(ret2) or replist.len > 0 or ct2nt.contains(genRec(ret2)[0])
       # export only low level symbols that are needed internally -- maybe we should export only a private name for them
       if run == 0:
         if sym in ["g_quark_from_static_string", "g_error_free", "g_object_get_qdata", "g_object_ref_sink", "g_object_unref",
-          "g_timeout_add_full",
+          "g_timeout_add_full", "g_object_is_floating",
           "g_type_from_name", "g_type_check_instance_is_a", "g_idle_add_full", "g_quark_try_string", "vte_regex_unref",
           "gtk_builder_get_object"]:
           methodBuffer.write("\nproc " & sym & EM & plist)
@@ -959,9 +1032,9 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
               # CAUTION: some procs are advertised as constructor but do not construct new objects,
               # they just return existing ones as gdk_cursor_new_from_name()
               gobjectTemp()
-              if (gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) == 0 and
-                gCallableInfoGetCallerOwns(minfo) == GITransfer.NOTHING:
-                methodBuffer.writeLine("  result.ignoreFinalizer = true") # as we have always to attach one with ARC.
+              ###if (gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) == 0 and
+              ###  gCallableInfoGetCallerOwns(minfo) == GITransfer.NOTHING:
+              ###  methodBuffer.writeLine("  result.ignoreFinalizer = true") # as we have always to attach one with ARC.
             elif gCallableInfoGetCallerOwns(minfo) == GITransfer.CONTAINER:
               assert false
             elif gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING or
@@ -1005,6 +1078,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
                 gCallableInfoGetCallerOwns(minfo) == GITransfer.NOTHING) or
                 ((gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) != 0 and
                 gBaseInfoGetName(info) == "Variant"):
+                assert((gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) != 0)
                 methodBuffer.writeLine("  result.ignoreFinalizer = true") # as we have always to attach one with ARC.
             else:
               echo "skipped ", sym
@@ -1062,8 +1136,8 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
                 methodBuffer.writeLine("  result.impl = impl0")
               else:
                 methodBuffer.writeLine("  result.impl = " & sym & arglist)
-            if gCallableInfoGetCallerOwns(minfo) == GITransfer.NOTHING:
-              methodBuffer.writeLine("  result.ignoreFinalizer = true") # as we have always to attach one with ARC.
+              if gCallableInfoGetCallerOwns(minfo) == GITransfer.NOTHING: # for the none gobjects
+                methodBuffer.writeLine("  result.ignoreFinalizer = true") # as we have always to attach one with ARC.
           elif false: #else:
             assert gCallableInfoGetCallerOwns(minfo) == GITransfer.NOTHING
             methodBuffer.writeLine("  new(result)")
@@ -1105,7 +1179,6 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
                 methodBuffer.writeLine("  new(" & h2 & ")")
               else:
                 methodBuffer.writeLine("  fnew(" & h2 & ", " & freeMeName & ")")
-              #if gCallableInfoGetCallerOwns(minfo) == GITransfer.NOTHING:
               if gArgInfoGetOwnershipTransfer(arg) == GITransfer.NOTHING:
                 methodBuffer.writeLine("  " & h2 & ".ignoreFinalizer = true") # as we have always to attach one with ARC.
           if gCallableInfoCanThrowGerror(minfo):
@@ -1771,6 +1844,8 @@ proc writeObj(info: GIObjectInfo) =
     output.writeLine("  else:")
     output.writeLine("    GC_unref(cast[RootRef](data))")
     output.writeLine("\nproc finalizeGObject*[T](o: ref T) =")
+    #output.writeLine("  echo ")
+    output.writeLine("  g_object_set_qdata(o.impl, Quark, nil)")
     output.writeLine("\n  if not o.ignoreFinalizer:")
     output.writeLine("    g_object_remove_toggle_ref(o.impl, toggleNotify, addr(o[]))")
 
@@ -1782,7 +1857,6 @@ proc writeObj(info: GIObjectInfo) =
       output.writeLine("{.importc, " & libprag & ".}")
 
   let numsig = info.gObjectInfoGetNSignals
-  #if numsig > 0: signalbuffer.writeLine("")
   for j in 0.cint ..< numsig:
     let signalInfo = gObjectInfoGetSignal(info, j)
     let c = gSignalInfoGetClassClosure(signalInfo)
@@ -1801,13 +1875,23 @@ proc writeObj(info: GIObjectInfo) =
     output.writeLine("type\n  Object* = ref object of RootRef")
     output.writeLine("    impl*: ptr Object00")
     output.writeLine("    ignoreFinalizer*: bool")
+
+    output.writeLine("\nproc refCount*(o: gobject.Object): int =")
+    output.writeLine("  let p = cast[ptr cuint](cast[int](o.impl) + sizeof(pointer))")
+    output.writeLine("  return p[].int")
+
   if gObjectInfoGetFundamental(info) == GFalse: # guess work, ignore fake GObjects like GParamSpec and such
     #output.writeLine("\nwhen compileOption(\"gc\", \"arc\"):")
-    output.writeLine("\nwhen defined(gcDestructors):")
-    output.writeLine("  proc `=destroy`*(self: var typeof(" & mangleName(gBaseInfoGetName(info)) & "()[])) =")
-    output.writeLine("    if not self.ignoreFinalizer and self.impl != nil:")
-    output.writeLine("      g_object_remove_toggle_ref(self.impl, toggleNotify, addr(self))")
-    output.writeLine("      self.impl = nil")
+    #if not (mangleName(gBaseInfoGetName(info)) == "Window" and moduleNamespace == "gtk"):
+    if not (mangleName(gBaseInfoGetName(info)) in ["Window", "ApplicationWindow"] and moduleNamespace == "gtk"):
+      output.writeLine("\nwhen defined(gcDestructors):")
+      output.writeLine("  proc `=destroy`*(self: var typeof(" & mangleName(gBaseInfoGetName(info)) & "()[])) =")
+      output.writeLine("    when defined(gintroDebug):")
+      output.writeLine("      echo \"destroy \", $typeof(self), ' ', cast[int](unsafeaddr self)")
+      output.writeLine("    g_object_set_qdata(self.impl, Quark, nil)")
+      output.writeLine("    if not self.ignoreFinalizer and self.impl != nil:")
+      output.writeLine("      g_object_remove_toggle_ref(self.impl, toggleNotify, addr(self))")
+      output.writeLine("      self.impl = nil")
 
   if gBaseInfoGetName(info) == "ParamSpec" and moduleNamespace == "gobject":
     ## for ParamSpec no unref proc is provided by gobject-introspection, and it asks for uref!
@@ -1844,6 +1928,7 @@ proc writeObj(info: GIObjectInfo) =
         output.writeLine("\nproc generic_$1*(self: $2) =" % [freeMeName, n])
         output.writeLine("  if not self.ignoreFinalizer:")
         output.writeLine("    $1(self.impl)" % [freeMeName])
+      #if not (mangleName(gBaseInfoGetName(info)) == "Window" and moduleNamespace == "gtk"):
       output.writeLine("\nwhen defined(gcDestructors):")
       output.writeLine("  proc `=destroy`*(self: var typeof(" & mangleName(gBaseInfoGetName(info)) & "()[])) =")
       output.writeLine("    if not self.ignoreFinalizer and self.impl != nil:")
@@ -1854,7 +1939,7 @@ proc writeObj(info: GIObjectInfo) =
       output.writeLine("      self.impl = nil")
 
     for j in 0.cint ..< gObjectInfoGetNMethods(info):
-      if  gFunctionInfoGetSymbol(gObjectInfoGetMethod(info, j)) != freeMeName:
+      if gFunctionInfoGetSymbol(gObjectInfoGetMethod(info, j)) != freeMeName:
         writeMethod(info, gObjectInfoGetMethod(info, j))
   else:
     for j in 0.cint ..< gObjectInfoGetNMethods(info):
@@ -2075,6 +2160,14 @@ proc run*(self: GApplication): int =
 
 """
 
+const GObject_EPI = """
+
+#proc refCount*(o: gobject.Object): int =
+#  let p = cast[ptr cuint](cast[int](o.impl) + sizeof(pointer))
+#  return p[].int
+
+"""
+
 const GTK3_EPI = """
 
 proc mainQuit*(w: Window) = mainQuit()
@@ -2142,6 +2235,7 @@ proc main(namespace: string; version: cstring = nil) =
   ct = initCountTable[string]()
   var delayedSyms: seq[GIBaseInfo]
   allSyms = initHashSet[string]()
+  arrayCollector = initHashSet[string]()
   provInt.clear
   interfaceProvider.clear
   var ig: HashSet[string]
@@ -2193,15 +2287,18 @@ proc main(namespace: string; version: cstring = nil) =
     Lib = Lib.replace("libpango-", "libpangocairo-") # GI bug?
   output.writeLine("const Lib = \"$1\"" % Lib)
   output.writeLine("{.pragma: libprag, cdecl, dynlib: Lib.}")
+
+  output.writeLine("\nPutAllTheArrayTypesHere")
+
   if namespace == "GObject": # declare array types to make it compile -- procs using these will need special care!
     output.writeLine("type\n  GCallback* = proc () {.cdecl.}")
-    output.writeLine("type\n  Parameter00Array* = pointer")
+    #output.writeLine("type\n  Parameter00Array* = pointer")
     output.writeLine("type\n  Object00Array* = pointer")
-    output.writeLine("type\n  Value00Array* = pointer")
-    output.writeLine("type\n  GTypeArray* = pointer")
-    output.writeLine("type\n  ParamSpec00Array* = pointer")
-    output.writeLine("type\n  TypePlugin00Array* = pointer")
-    output.writeLine("type\n  uint32Array* = pointer")
+    #output.writeLine("type\n  Value00Array* = pointer")
+    #output.writeLine("type\n  GTypeArray* = pointer")
+    #output.writeLine("type\n  ParamSpec00Array* = pointer")
+    #output.writeLine("type\n  TypePlugin00Array* = pointer")
+    #output.writeLine("type\n  uint32Array* = pointer")
     output.writeLine("type\n  VaClosureMarshal* = pointer")
 
     output.writeLine("\nproc boxedFree*(boxedType: GType; boxed: pointer) {.")
@@ -2216,22 +2313,22 @@ proc main(namespace: string; version: cstring = nil) =
 
     #output.writeLine("type\n  GException* = object of Exception")
     output.writeLine("type\n  GException* = object of CatchableError")
-    output.writeLine("type\n  OptionEntry00Array* = pointer")
+    #output.writeLine("type\n  OptionEntry00Array* = pointer")
     output.writeLine("type\n  GArray00* = pointer")
-    output.writeLine("type\n  int8Array* = pointer")
-    output.writeLine("type\n  uintArray* = pointer")
-    output.writeLine("type\n  gbooleanArray* = pointer")
-    output.writeLine("type\n  cdoubleArray* = pointer")
-    output.writeLine("type\n  int32Array* = pointer")
-    output.writeLine("type\n  PollFD00Array* = pointer")
-    output.writeLine("type\n  Variant00Array* = pointer")
-    output.writeLine("type\n  Regex00Array* = pointer")
-    output.writeLine("type\n  LogField00Array* = pointer")
-    output.writeLine("type\n  VariantType00Array* = pointer")
-    output.writeLine("type\n  DebugKey00Array* = pointer")
-    output.writeLine("type\n  utf8Array* = pointer")
-    output.writeLine("type\n  uint8Array* = pointer")
-    output.writeLine("type\n  ucstringArray* = pointer")
+    #output.writeLine("type\n  int8Array* = pointer")
+    #output.writeLine("type\n  uintArray* = pointer")
+    #output.writeLine("type\n  gbooleanArray* = pointer")
+    #output.writeLine("type\n  cdoubleArray* = pointer")
+    #output.writeLine("type\n  int32Array* = pointer")
+    #output.writeLine("type\n  PollFD00Array* = pointer")
+    #output.writeLine("type\n  Variant00Array* = pointer")
+    #output.writeLine("type\n  Regex00Array* = pointer")
+    #output.writeLine("type\n  LogField00Array* = pointer")
+    #output.writeLine("type\n  VariantType00Array* = pointer")
+    #output.writeLine("type\n  DebugKey00Array* = pointer")
+    #output.writeLine("type\n  utf8Array* = pointer")
+    #output.writeLine("type\n  uint8Array* = pointer")
+    #output.writeLine("type\n  ucstringArray* = pointer")
     output.writeLine("type\n  ucstring* = distinct cstring")
     output.writeLine("type\n  gboolean* = distinct cint")
     output.writeLine("const\n  GLIB_SIZEOF_VOID_P = sizeof(pointer)")
@@ -2306,77 +2403,83 @@ proc uint8ArrayZT2seq*(p: pointer): seq[uint8] =
     output.writeLine("proc safeStringToCString*(s: cstring): cstring = (if s.len == 0: nil else: s)")
     output.writeLine(PRO)
   elif namespace == "Gdk":
-    output.writeLine("type\n  ContentProvider00Array* = pointer")
-    output.writeLine("type\n  Atom00Array* = pointer")
-    output.writeLine("type\n  KeymapKeyArray* = pointer")
-    output.writeLine("type\n  VisualTypeArray* = pointer") # enums!
+    #output.writeLine("type\n  ContentProvider00Array* = pointer")
+    #output.writeLine("type\n  Atom00Array* = pointer")
+    #output.writeLine("type\n  KeymapKeyArray* = pointer")
+    #output.writeLine("type\n  VisualTypeArray* = pointer") # enums!
     output.writeLine("type\n  RGBAArray* = pointer")
     output.writeLine("type\n  AxisUseArray* = pointer")
     output.writeLine("type\n  ColorArray* = pointer")
     output.writeLine("type\n  Point00Array* = pointer")
-    output.writeLine("type\n  TimeCoord00Array* = pointer")
+    #output.writeLine("type\n  TimeCoord00Array* = pointer")
   elif namespace == "Gtk":
+    discard
     #output.writeLine(
     #    "# https://developer.gnome.org/gtk3/stable/GtkWidget.html#GtkWidget-draw")
     #output.writeLine(
     #    "# TRUE to stop other handlers from being invoked for the event. FALSE to propagate the event further.")
     #output.writeLine("const\n  SignalEventStopPropagation* = true")
     #output.writeLine("const\n  SignalEventContinuePropagation* = false")
-    output.writeLine("type\n  TargetEntry00Array* = pointer")
-    output.writeLine("type\n  AccelGroupEntry00Array* = pointer")
-    output.writeLine("type\n  BindingArg00Array* = pointer")
-    output.writeLine("type\n  StockItemArray* = pointer")
-    output.writeLine("type\n  PageRangeArray* = pointer")
-    output.writeLine("type\n  PadActionEntry00Array* = pointer")
-    output.writeLine("type\n  Expression00Array* = pointer")
-    output.writeLine("type\n  Widget00Array* = pointer")
-    output.writeLine("type\n  Array* = pointer")
+    #output.writeLine("type\n  TargetEntry00Array* = pointer")
+    #output.writeLine("type\n  AccelGroupEntry00Array* = pointer")
+    #output.writeLine("type\n  BindingArg00Array* = pointer")
+    #output.writeLine("type\n  StockItemArray* = pointer")
+    #output.writeLine("type\n  PageRangeArray* = pointer")
+    #output.writeLine("type\n  PadActionEntry00Array* = pointer")
+    #output.writeLine("type\n  Expression00Array* = pointer")
+    #output.writeLine("type\n  Widget00Array* = pointer")
+    #output.writeLine("type\n  Array* = pointer")
   elif namespace == "Atk":
-    output.writeLine("type\n  StateTypeArray* = pointer") # enums!
-    output.writeLine("type\n  TextRange00Array* = pointer")
+    discard
+    #output.writeLine("type\n  StateTypeArray* = pointer") # enums!
+    #output.writeLine("type\n  TextRange00Array* = pointer")
   elif namespace == "cairo":
     output.writeLine("\nfrom gobject import boxedFree")
     output.writeLine("from glib import GType")
   elif namespace == "Pango":
     output.writeLine("type\n  GlyphInfo00Array* = pointer")
-    output.writeLine("type\n  LogAttr00Array* = pointer")
-    output.writeLine("type\n  FontDescription00Array* = pointer")
-    output.writeLine("type\n  FontFamily00Array* = pointer")
-    output.writeLine("type\n  FontFace00Array* = pointer")
-    output.writeLine("type\n  ScriptArray* = pointer") # array of enums!
+    #output.writeLine("type\n  LogAttr00Array* = pointer")
+    #output.writeLine("type\n  FontDescription00Array* = pointer")
+    #output.writeLine("type\n  FontFamily00Array* = pointer")
+    #output.writeLine("type\n  FontFace00Array* = pointer")
+    #output.writeLine("type\n  ScriptArray* = pointer") # array of enums!
   elif namespace == "Gio":
-    output.writeLine("type\n  ActionEntry00Array* = pointer")
-    output.writeLine("type\n  DBusAnnotationInfo00Array* = pointer")
-    output.writeLine("type\n  DBusArgInfo00Array* = pointer")
-    output.writeLine("type\n  DBusMethodInfo00Array* = pointer")
-    output.writeLine("type\n  DBusSignalInfo00Array* = pointer")
-    output.writeLine("type\n  DBusPropertyInfo00Array* = pointer")
-    output.writeLine("type\n  DBusInterfaceInfo00Array* = pointer")
-    output.writeLine("type\n  DBusNodeInfo00Array* = pointer")
-    output.writeLine("type\n  DBusErrorEntry00Array* = pointer")
-    output.writeLine("type\n  InputVector00Array* = pointer")
-    output.writeLine("type\n  SocketControlMessage00Array* = pointer")
-    output.writeLine("type\n  InputMessage00Array* = pointer")
-    output.writeLine("type\n  OutputMessage00Array* = pointer")
-    output.writeLine("type\n  utf8ArrayArray* = pointer")
-    output.writeLine("type\n  cstringArrayArray* = pointer")
-    output.writeLine("type\n  File00Array* = pointer")
-    output.writeLine("type\n  Array* = pointer")
-    output.writeLine("type\n  OutputVector00Array* = pointer")
+    discard
+    #output.writeLine("type\n  ActionEntry00Array* = pointer")
+    #output.writeLine("type\n  DBusAnnotationInfo00Array* = pointer")
+    #output.writeLine("type\n  DBusArgInfo00Array* = pointer")
+    #output.writeLine("type\n  DBusMethodInfo00Array* = pointer")
+    #output.writeLine("type\n  DBusSignalInfo00Array* = pointer")
+    #output.writeLine("type\n  DBusPropertyInfo00Array* = pointer")
+    #output.writeLine("type\n  DBusInterfaceInfo00Array* = pointer")
+    #output.writeLine("type\n  DBusNodeInfo00Array* = pointer")
+    #output.writeLine("type\n  DBusErrorEntry00Array* = pointer")
+    #output.writeLine("type\n  InputVector00Array* = pointer")
+    #output.writeLine("type\n  SocketControlMessage00Array* = pointer")
+    #output.writeLine("type\n  InputMessage00Array* = pointer")
+    #output.writeLine("type\n  OutputMessage00Array* = pointer")
+    #output.writeLine("type\n  utf8ArrayArray* = pointer")
+    #output.writeLine("type\n  cstringArrayArray* = pointer")
+    #output.writeLine("type\n  File00Array* = pointer")
+    #output.writeLine("type\n  Array* = pointer")
+    #output.writeLine("type\n  OutputVector00Array* = pointer")
   elif namespace == "Graphene":
-    output.writeLine("type\n  Vec3Array* = pointer")
-    output.writeLine("type\n  Point3DArray* = pointer")
+    discard
+    #output.writeLine("type\n  Vec3Array* = pointer")
+    #output.writeLine("type\n  Point3DArray* = pointer")
   elif namespace == "Gsk":
-    output.writeLine("type\n  Shadow00Array* = pointer")
-    output.writeLine("type\n  RenderNode00Array* = pointer")
-    output.writeLine("type\n  ColorStop00Array* = pointer")
+    discard
+    #output.writeLine("type\n  Shadow00Array* = pointer")
+    #output.writeLine("type\n  RenderNode00Array* = pointer")
+    #output.writeLine("type\n  ColorStop00Array* = pointer")
   elif namespace == "GtkSource":
     output.writeLine("import glib")
   elif namespace == "Vte":
     output.writeLine("import glib\n")
-    output.writeLine("type\n  Regex00Array* = pointer")
+    #output.writeLine("type\n  Regex00Array* = pointer")
   elif namespace == "Gst":
-    output.writeLine("type\n  FormatArray* = pointer")
+    discard
+    #output.writeLine("type\n  FormatArray* = pointer")
   if namespace == "GObject":
     output.writeLine("\nimport times")
     output.writeLine("var qt = \"NGIQ\" & $epochTime()")
@@ -2637,6 +2740,9 @@ proc get$1*(builder: Builder; name: string): $1 =
   if namespace == "Gio":
     output.write(GIO_EPI)
 
+  if namespace == "GObject":
+    output.write(GObject_EPI)
+
   if namespace == "cairo":
     output.write("include cairoimpl\n")
 
@@ -2665,6 +2771,19 @@ proc get$1*(builder: Builder; name: string): $1 =
     #output.writeLine("\nproc g_type_get_type*(): GType = g_type_from_name(\"GType\")")
     output.writeLine("\nproc g_variant_get_type*(): GType = g_type_from_name(\"GVariant\")")
 
+  var arrayTypes: string = "type\n"
+  arrayCollector.excl("cstringArray")
+  arrayCollector.excl("ValueArray")
+  for el in arrayCollector:
+    var el = el
+    el.add("* = pointer\n")
+    arrayTypes.add("  " & el)
+  if arrayCollector.len == 0:
+    arrayTypes = "\n"
+
+  output.data = output.data.replace("PutAllTheArrayTypesHere", arrayTypes)
+  output.setPosition(output.data.len)
+
   if namespace == "Gdk":
     if ISGTK3:
       output.write(GDK3_EPI.replace("SomeEvent", "Event"))
@@ -2679,7 +2798,9 @@ proc get$1*(builder: Builder; name: string): $1 =
   o.write(output.data)
   o.close()
   output.close
-  stdout.write("Remaining delayed methods: ", delayedMethods.len)
+  var hs = fixedModName(moduleNameSpace) & "............................"
+  hs.setLen(24)
+  stdout.write(hs, ": Remaining delayed methods: ", delayedMethods.len)
   if delayedMethods.len == 0:
     echo " (Fine!)"
   else:
@@ -2724,6 +2845,7 @@ proc launch() =
     main("PangoFT2")
     main("fontconfig")
     main("freetype2")
+    main("HarfBuzz")
     main("Rsvg")
     main("xlib")
     main("Vte")
@@ -2750,6 +2872,7 @@ proc launch() =
     main("PangoFT2")
     main("fontconfig")
     main("freetype2")
+    main("HarfBuzz")
     main("Rsvg")
     main("xlib")
     # main("Vte") # not yet available for GTK4
@@ -2773,4 +2896,4 @@ proc launch() =
     supmod4.close
 
 launch()
-# 2776 lines
+# 2898 lines qdata

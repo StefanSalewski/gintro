@@ -154,6 +154,7 @@ proc $1$2 {.cdecl.} =
           r1s.add("  var " & names[i] & "1 {.global.}: " & types[i] & "\n")
           r1s.add("  if " & names[i] & "1" & ".isNil:\n")
           r1s.add("    new " & names[i] & "1" & "\n")
+          r1s.add("    GC_ref(" & names[i] & "1)" & "\n") # never call destroy/finalizer on this global variable
           r1s.add("    " & names[i] & "1.ignoreFinalizer = true" & "\n")
           r1s.add("  " & names[i] & "1.impl = " & names[i] & "\n")
     if not ignoreArg.boolVal:
