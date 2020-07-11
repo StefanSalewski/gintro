@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK3/GTK4 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.7.8 2020-JUL-07
+# v 0.7.9 2020-JUL-11
 # (c) S. Salewski 2018
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -861,6 +861,8 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
       assert(freeMeName != "")
 
   # assert(info != nil) # why can it be nil?
+  # if Lib.len == 0: # xlib, fontconfig, freetype2 # but Lib is local to main(), so let it crash
+  #   return
   assert(isCallableInfo(mInfo))
   assert(isFunctionInfo(mInfo))
   var plist, arglist, arrLex, blex: string
@@ -2260,6 +2262,7 @@ proc main(namespace: string; version: cstring = nil) =
     return
   #let loadedVersion = g_irepository_get_version(gi, namespace)
   let dep: cstringArray = gi.gIrepositoryGetDependencies(namespace)
+  var weImportGObject = false
   output.writeLine("# dependencies:")
   var importedModules = ""
   for j in 0 .. 12:
@@ -2267,7 +2270,10 @@ proc main(namespace: string; version: cstring = nil) =
     if j == 0:
       importedModules = "import "
     output.writeLine("# ", dep[j])
-    importedModules.add(fixedModName(($dep[j]).split('-', 2)[0].toLowerAscii) & ", ")
+    let h = fixedModName(($dep[j]).split('-', 2)[0].toLowerAscii) & ", "
+    importedModules.add(h)
+    if h == "gobject, ":
+      weImportGObject = true
   importedModules.removeSuffix(", ")
   strfreev(dep)
   let idep: cstringArray = gi.gIrepositoryGetImmediateDependencies(namespace)
@@ -2487,7 +2493,8 @@ proc uint8ArrayZT2seq*(p: pointer): seq[uint8] =
     output.writeLine("  qt = \"NGIQ\" & $epochTime()")
     output.writeLine("let Quark* = g_quark_from_static_string(qt)")
 
-  if namespace notin ["GObject", "GLib", "xlib", "GModule"]:
+  #if namespace notin ["GObject", "GLib", "xlib", "GModule"]: #
+  if weImportGObject:
     output.writeLine("\nproc finalizeGObject*[T](o: ref T) =")
     output.writeLine("  if not o.ignoreFinalizer:")
     output.writeLine("    gobject.g_object_remove_toggle_ref(o.impl, gobject.toggleNotify, addr(o[]))")
@@ -2779,7 +2786,7 @@ proc get$1*(builder: Builder; name: string): $1 =
     el.add("* = pointer\n")
     arrayTypes.add("  " & el)
   if arrayCollector.len == 0:
-    arrayTypes = "\n"
+    arrayTypes.setLen(0) # = "\n"
 
   output.data = output.data.replace("PutAllTheArrayTypesHere", arrayTypes)
   output.setPosition(output.data.len)
@@ -2896,4 +2903,4 @@ proc launch() =
     supmod4.close
 
 launch()
-# 2898 lines qdata
+# 2906 lines
