@@ -21,4 +21,4 @@ nim c --gc:arc overlay_tree1.nim
 nim c --gc:arc simpledrawingarea.nim
 nim c --gc:arc sourceview_test.nim
 nim c --gc:arc t0.nim
-
+nim c --gc:arc vte.nim

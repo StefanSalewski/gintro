@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK3/GTK4 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.7.9 2020-JUL-11
+# v 0.7.9 2020-JUL-13
 # (c) S. Salewski 2018
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -69,7 +69,7 @@ const
   NamedArrays = ["TargetEntry00Array", "PageRangeArray", "KeymapKeyArray"]
   #NamedArrayCandidates = NamedArrays.mapIt(it.replace("00Array").replace("Array"))
   StringArrayName = "fs469n23" # for seq -- cstringArray conversion
-  StringArrayEntries = 16
+  StringArrayEntries = 256 # initial 16, but that was too small for VTE environGetenv(). Stack allocated pointer array -- replace by heap or global?
 
   keywords = """
 addr and as asm bind block break case cast concept const continue converter
@@ -2328,7 +2328,7 @@ proc main(namespace: string; version: cstring = nil) =
     #output.writeLine("type\n  int32Array* = pointer")
     #output.writeLine("type\n  PollFD00Array* = pointer")
     #output.writeLine("type\n  Variant00Array* = pointer")
-    #output.writeLine("type\n  Regex00Array* = pointer")
+    output.writeLine("type\n  Regex00Array* = pointer")
     #output.writeLine("type\n  LogField00Array* = pointer")
     #output.writeLine("type\n  VariantType00Array* = pointer")
     #output.writeLine("type\n  DebugKey00Array* = pointer")
