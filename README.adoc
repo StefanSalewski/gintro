@@ -2711,6 +2711,37 @@ proc main =
 main()
 ----
 
+== A VTE example
+
+The following code shows how we can use the vte library to create a plain shell window:
+
+[[vte.nim]]
+[source,nim]
+.vte.nim
+----
+# https://vincent.bernat.im/en/blog/2017-write-own-terminal
+import gintro/[gtk, glib, gobject, gio, vte]
+
+proc appActivate(app: Application) =
+  let window = newApplicationWindow(app)
+  window.title = "GTK3 & Nim"
+  window.defaultSize = (600, 200)
+  let terminal = newTerminal()
+  let environ = getEnviron()
+  let command = environ.environGetenv("SHELL")
+  var pid = 0
+  echo terminal.spawnSync({}, nil, [command], [], {SpawnFlag.leaveDescriptorsOpen}, nil, nil, pid, nil)
+  window.add(terminal)
+  showAll(window)
+
+proc main =
+  let app = newApplication("org.gtk.example")
+  connect(app, "activate", appActivate)
+  discard run(app)
+
+main()
+----
+
 == A GStreamer example
 
 Recently someone asked about gstreamer support for gintro, see https://github.com/StefanSalewski/gintro/issues/59 .
@@ -2740,6 +2771,131 @@ proc main =
   msg = gst.timedPopFiltered(bus, gst.Clock_Time_None, {gst.MessageFlag.error, gst.MessageFlag.eos})
   echo msg.getType
   discard gst.setState(pipeline, gst.State.null) # is this necessary?
+
+main()
+----
+
+== Threading Examples
+
+A common problem with GTK GUI's is the fact that functions that run for a longer time period in the
+GTK main thread can block the GUI for display updates or user input. We can solve this problem
+by creating a separate thread which runs these functions in the background. 
+
+The GTK GUI is not really thread safe, so we can not update the GUI from other threads directly. An
+easy way to solve this problem is to use the glib functions g-idle-add() or g-timeout-add().
+
+https://developer.gnome.org/glib/stable/glib-The-Main-Event-Loop.html#g-idle-add
+
+https://developer.gnome.org/glib/stable/glib-The-Main-Event-Loop.html#g-timeout-add
+
+The glib function g-timeout-add() adds a user defined function to the GTK main loop that is called
+periodically, and the function g-idle-add() adds a user defined function to the GTK main loop
+that is called when GTK is not busy with other stuff. Both functions are executed in the GTK main
+thread, so both can update GUI widgets or call other GTK related functions.
+
+In our first example we create a Nim worker thread that sends data over a Nim channel to the main
+thread. We use timeoutAdd() to call periodically a function that reads data from the channel and
+updates the GUI. In this example the worker thread only does a plain countdown -- in a real
+work example it would do the hard work in the background, i.e. running a chess engine to find the
+next best move or sorting a large data base. The function updateGUI() receives the current
+counter value and updates the label of a button.
+
+[[thread1.nim]]
+[source,nim]
+.thread1.nim
+----
+# https://nim-lang.org/docs/channels.html
+# nim c --threads:on --gc:arc -r thread1.nim
+
+import gintro/[gtk, glib, gobject, gio]
+from  os import sleep
+
+var channel: Channel[int]
+var workThread: system.Thread[void]
+
+proc workProc =
+  var countdown {.global.} = 25
+  while countdown > 0:
+    sleep(1000)
+    dec(countdown)
+    channel.send(countdown)
+
+proc updateGUI(b: Button): bool =
+  let msg = channel.tryRecv()
+  if msg.dataAvailable:
+    b.label = $msg.msg
+    if msg.msg == 0:
+      workThread.joinThread
+      channel.close
+      return SOURCE_REMOVE
+  return SOURCE_CONTINUE
+
+proc buttonClicked (b: Button) =
+  b.label = utf8Strreverse(b.label, -1)
+
+proc activate (app: Application) =
+  let window = newApplicationWindow(app)
+  window.title = "Countdown"
+  window.defaultSize = (250, 50)
+  let button = newButton("Click Me")
+  window.add(button)
+  button.connect("clicked",  buttonClicked)
+  window.showAll
+  channel.open
+  createThread(workThread, workProc)
+  discard timeoutAdd(1000 div 60, updateGUI, button)
+
+proc main =
+  let app = newApplication("org.gtk.example")
+  connect(app, "activate", activate)
+  discard app.run
+
+main()
+----
+
+The next example uses the function g-idle-add() from inside the worker thread to call a user defined function
+that then updates a GUI widget:
+
+[[thread2.nim]]
+[source,nim]
+.thread2.nim
+----
+# nim c --threads:on --gc:arc -r thread2.nim
+
+import gintro/[gtk, glib, gobject, gio]
+from  os import sleep
+
+var workThread: system.Thread[void]
+var button: Button
+
+proc idleFunc(i: int): bool =
+  button.label = $i
+  return SOURCE_REMOVE
+
+proc workProc =
+  var countdown {.global.} = 25
+  while countdown > 0:
+    sleep(1000)
+    dec(countdown)
+    idleAdd(idleFunc, countdown)
+
+proc buttonClicked(button: Button) =
+  button.label = utf8Strreverse(button.label, -1)
+
+proc activate(app: Application) =
+  let window = newApplicationWindow(app)
+  window.title = "Countdown"
+  window.defaultSize = (250, 50)
+  button = newButton("Click Me")
+  window.add(button)
+  button.connect("clicked",  buttonClicked)
+  window.showAll
+  createThread(workThread, workProc)
+
+proc main =
+  let app = newApplication("org.gtk.example")
+  connect(app, "activate", activate)
+  discard app.run
 
 main()
 ----
