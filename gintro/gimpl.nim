@@ -1,3 +1,4 @@
+from sequtils import keepItIf
 const RecSep = "!" # Record separator for entries in gisup.nim, also defined in gen.nim
 
 # caution: $$ due to string interpolation
@@ -97,6 +98,7 @@ proc $1$2 {.cdecl.} =
     r1s.add(")\n")
   else: # signals with multiple arguments and maybe using interface providers
     (sn, wid, num, ahl, all) = sci.split(RecSep)
+    echo "ttt ", ahl
     if ahl.contains("|"): # we have to handle interface providers
       var hargs = ahl.split(";") # handler arguments
       for i in 0 .. hargs.high: # find the position of the providers, should be second or third argument
@@ -128,10 +130,24 @@ proc $1$2 {.cdecl.} =
     if all.find(";") > 0: # more than one argument
       var largs = all.split("; ")
       largs.delete(0)
-      largs[^1] = largs[^1].split(")")[0] 
+      largs[^1] = largs[^1].split(")")[0]
       var names, types: array[10, string]
-      for i in 0 .. largs.high:
-        if largs[i].endsWith("00"):
+      #for i in 0 .. largs.high:
+      var i = 0
+      var largslen = largs.len
+      while i < largslen:
+        if largs[i].endsWith("00Array"):
+          (names[i], types[i]) = largs[i].split(": ")
+          let al = largs[i + 1].split(": ")[0]
+          var h = types[i]
+          h[0] = h[0].toLowerAscii
+          h.add("2seq(" & names[i] & ", " & al & ")")
+          names[i] = h
+          types[i].setLen(0)
+          #largs.del(i + 1) # bug, should be delete!
+          largs.delete(i + 1)
+          dec(largslen)
+        elif largs[i].endsWith("00"):
           (names[i], types[i]) = largs[i].split(": ptr ")
           types[i].setLen(types[i].len - 2)
         else:
@@ -142,6 +158,7 @@ proc $1$2 {.cdecl.} =
           if h.len > 0:
             a1 = h & "(" & a1 & ")"
           names[i] = a1
+        inc(i)
  
       if ipos > 0:
         types[ipos - 1] = ipro
@@ -165,11 +182,17 @@ proc $1$2 {.cdecl.} =
     resu.add(")")
     if resl == "gboolean":
       resu.add(".ord.gboolean")
+
+    if resl == "int32":
+      resu.add(".int32")
+
     r1s.add(resu & "\n")
     all = all.replace(")", "; user_data: pointer)")
   r1s = r1s % [$procNameCdecl, all, $p, wts, ats]
-  # echo r1s
+  #echo r1s
+
   result = parseStmt(r1s)
+
   if not ignoreArg.boolVal:
     ahl = ahl.replace(")", "; arg: " & ats & ")")
   if ahl.find(";") > 0:
@@ -177,29 +200,27 @@ proc $1$2 {.cdecl.} =
   else:
     ahl = "(self: " & wts & ")" & ahl.split(")", 1)[1]
 
-  let r2sunused =
-    if ignoreArg.boolVal:
-      """
-proc $1(self: $2;  p: proc $3): culong {.discardable.} =
-  sc$4(self, $5, nil)
-$1($6, $7)
-""" % [$procName, wts, ahl, signalName,  $procNameCdecl, $(widget.toStrLit), $p]
-    else:
-      """
-proc $1(self: $2;  p: proc $3; a: $4): culong {.discardable.} =
-  when a is ref:
-    GC_ref(a)
-    sc$5(self, $6, cast[pointer](a))
-  else:
-    var ar: ref $4
-    new(ar)
-    #deepCopy(ar[], a)
-    ar[] = a
-    GC_ref(ar)
-    # sc$5(self, $6, cast[pointer](ar[]))
-    sc$5(self, $6, cast[pointer](ar))
-$1($7, $8, $9)
-""" % [$procName, wts,  ahl, ats, signalName,  $procNameCdecl, $(widget.toStrLit), $p, $(arg.toStrLit)]
+  if ahl.find("00Array") >= 0:
+    var hhh = ahl.split("; ")
+    let l = hhh.len
+    var i = 0
+    while i < l:
+      # files: seq[gio.File]
+      if hhh[i] .find("00Array") >= 0:
+        var a, b: string
+        (a, b) = hhh[i].split(": ")
+        b = b.replace("00Array", "]")
+        #if b == "File]":
+        #  b = "gio.File]"
+        b = "seq[" & b
+        hhh[i] = a & ": " & b
+        hhh[i + 1].setLen(0)
+      inc(i)
+    hhh.keepItIf(it.len > 0)
+    #echo ">>>>>>>>>> ", hhh.join("; ")
+    ahl = hhh.join("; ")
+
+  ahl = ahl.replace(": cstring", ": string")
 
   # maybe we write this better this way:
   let r2s =
@@ -228,7 +249,8 @@ proc $1(self: $2;  p: proc $3; a: $4): culong {.discardable.} =
   sc$5(self, $6, cast[pointer](ar), $10)
 $1($7, $8, $9)
 """ % [$procName, wts,  ahl, ats, signalName,  $procNameCdecl, $(widget.toStrLit), $p, $(arg.toStrLit), sfstr]
-  # echo r2s
+  #echo r2s
+
   result.add(parseStmt(r2s))
 
 template connect*(widget: gobject.Object; signal: string; p: typed; arg: typed): untyped =

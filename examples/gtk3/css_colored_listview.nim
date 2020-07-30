@@ -38,7 +38,7 @@ proc listStore(o: gobject.Object): gtk.ListStore =
   assert(typeTest(o, "GtkListStore"))
   cast[gtk.ListStore](o)
 
-proc updateRow(renderer: CellRendererText; path: cstring; newText: cstring; tree: TreeView) =
+proc updateRow(renderer: CellRendererText; path: string; newText: string; tree: TreeView) =
   var iter: TreeIter
   var value: Value
   let gtype = typeFromName("gchararray")

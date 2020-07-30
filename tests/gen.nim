@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK3/GTK4 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.7.9 2020-JUL-13
+# v 0.8.0 2020-JUL-30
 # (c) S. Salewski 2018
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -194,52 +194,52 @@ var suppressRaise = false
 # fixedDestroyNames.add("gdk_cairo_region_create_from_surface", "cairo.destroy")
 # fixedDestroyNames.add("gdk_cairo_surface_create_from_pixbuf", "cairo.destroy")
 
-fixedProcNames.add("gtk_button_new_with_label", "newButton")
-fixedProcNames.add("pango_font_description_from_string", "newFontDescription")
-fixedProcNames.add("pango_language_from_string", "languageFromString")
-fixedProcNames.add("atk_role_register", "registerAtkRole")
-fixedProcNames.add("atk_state_type_register", "registerStateType")
-fixedProcNames.add("atk_relation_type_register", "registerRelationType")
-fixedProcNames.add("atk_text_attribute_register", "registerTextAttribute")
-fixedProcNames.add("atk_role_for_name", "roleForName")
-fixedProcNames.add("atk_state_type_for_name", "stateTypeForName")
-fixedProcNames.add("atk_relation_type_for_name", "relationTypeForName")
-fixedProcNames.add("atk_text_attribute_for_name", "textAttributeForName")
-fixedProcNames.add("gtk_settings_get_for_screen", "getSettingsForScreen")
-fixedProcNames.add("gtk_icon_theme_get_for_screen", "getIconThemeForScreen")
-fixedProcNames.add("gtk_requisition_new", "newRequisition")
-fixedProcNames.add("gtk_text_attributes_new", "newTextAttributes")
-fixedProcNames.add("pango_script_for_unichar", "scriptForUnichar")
-fixedProcNames.add("pango_bidi_type_for_unichar", "bidiTypeForUnichar")
-fixedProcNames.add("gsk_shadow_node_get_child", "shadowNodeGetChild")
-fixedProcNames.add("gsk_transform_node_get_child", "transformNodeGetChild")
-fixedProcNames.add("gtk_settings_get_for_display", "getSettingsForDisplay")
-fixedProcNames.add("gtk_icon_theme_get_for_display", "getIconThemeForDisplay")
-fixedProcNames.add("gst_element_factory_find", "findElementFactory")
+fixedProcNames["gtk_button_new_with_label"] = "newButton"
+fixedProcNames["pango_font_description_from_string"] = "newFontDescription"
+fixedProcNames["pango_language_from_string"] = "languageFromString"
+fixedProcNames["atk_role_register"] = "registerAtkRole"
+fixedProcNames["atk_state_type_register"] = "registerStateType"
+fixedProcNames["atk_relation_type_register"] = "registerRelationType"
+fixedProcNames["atk_text_attribute_register"] = "registerTextAttribute"
+fixedProcNames["atk_role_for_name"] = "roleForName"
+fixedProcNames["atk_state_type_for_name"] = "stateTypeForName"
+fixedProcNames["atk_relation_type_for_name"] = "relationTypeForName"
+fixedProcNames["atk_text_attribute_for_name"] = "textAttributeForName"
+fixedProcNames["gtk_settings_get_for_screen"] = "getSettingsForScreen"
+fixedProcNames["gtk_icon_theme_get_for_screen"] = "getIconThemeForScreen"
+fixedProcNames["gtk_requisition_new"] = "newRequisition"
+fixedProcNames["gtk_text_attributes_new"] = "newTextAttributes"
+fixedProcNames["pango_script_for_unichar"] = "scriptForUnichar"
+fixedProcNames["pango_bidi_type_for_unichar"] = "bidiTypeForUnichar"
+fixedProcNames["gsk_shadow_node_get_child"] = "shadowNodeGetChild"
+fixedProcNames["gsk_transform_node_get_child"] = "transformNodeGetChild"
+fixedProcNames["gtk_settings_get_for_display"] = "getSettingsForDisplay"
+fixedProcNames["gtk_icon_theme_get_for_display"] = "getIconThemeForDisplay"
+fixedProcNames["gst_element_factory_find"] = "findElementFactory"
 
-fixedProcNames.add("gtk_shortcut_action_parse_string", "shortcutActionParseString")
-fixedProcNames.add("gtk_shortcut_trigger_parse_string", "shortcutTriggerParseString")
-fixedProcNames.add("g_main_context_default", "defaultMainContext")
+fixedProcNames["gtk_shortcut_action_parse_string"] = "shortcutActionParseString"
+fixedProcNames["gtk_shortcut_trigger_parse_string"] = "shortcutTriggerParseString"
+fixedProcNames["g_main_context_default"] = "defaultMainContext"
 
-defaultParameters.add("gtk_window_new", "`type` WindowType WindowType.toplevel")
-defaultParameters.add("gtk_application_new", "flags gio.ApplicationFlags {}")
-defaultParameters.add("gtk_builder_new_from_string", "length int64 -1")
-defaultParameters.add("gtk_box_new", "spacing int32 0")
+defaultParameters["gtk_window_new"] = "`type` WindowType WindowType.toplevel"
+defaultParameters["gtk_application_new"] = "flags gio.ApplicationFlags {}"
+defaultParameters["gtk_builder_new_from_string"] = "length int64 -1"
+defaultParameters["gtk_box_new"] = "spacing int32 0"
 
-for i in keywords: mangledNames.add(i, '`' & i & '`')
+for i in keywords: mangledNames[i] = '`' & i & '`'
 
-mangledNames.add("CSET_A_2_Z", "CSET_A_2_Z_U")
-mangledNames.add("CSET_a_2_z", "CSET_a_2_z_L")
-mangledNames.add("2big", "tooBig")
-mangledNames.add("2buttonPress", "twoButtonPress")
-mangledNames.add("3buttonPress", "threeButtonPress")
-mangledNames.add("result", "resu")
-mangledNames.add("3d", "d3")
-mangledNames.add("2d", "d2")
-mangledNames.add("2dAffine", "d2Affine")
-mangledNames.add("2dTranslate", "d2Translate")
-mangledNames.add("true", "true1")
-mangledNames.add("false", "false0")
+mangledNames["CSET_A_2_Z"] = "CSET_A_2_Z_U"
+mangledNames["CSET_a_2_z"] = "CSET_a_2_z_L"
+mangledNames["2big"] = "tooBig"
+mangledNames["2buttonPress"] = "twoButtonPress"
+mangledNames["3buttonPress"] = "threeButtonPress"
+mangledNames["result"] = "resu"
+mangledNames["3d"] = "d3"
+mangledNames["2d"] = "d2"
+mangledNames["2dAffine"] = "d2Affine"
+mangledNames["2dTranslate"] = "d2Translate"
+mangledNames["true"] = "true1"
+mangledNames["false"] = "false0"
 
 const someEvent: HashSet[string] = """"
   EventAny EventKey EventButton EventTouch EventScroll EventMotion EventExpose EventVisibility
@@ -257,6 +257,8 @@ proc gBaseInfoGetName(info: GIBaseInfo): string =
   let h = $(gir.gBaseInfoGetNamespace(info))
   if h == "Gio" and result == "Application":
     result = "GApplication"
+  if h == "Gio" and result == "File":
+    result = "GFile"
 
 proc mangleName(s: cstring): string =
   result = mysnakeToCamel(s)
@@ -265,23 +267,23 @@ proc mangleName(s: cstring): string =
     # assert(false)
     result = "xxx" # XXX
 
-mangledTypes.add("gint8", "int8")
-mangledTypes.add("gint16", "int16")
-mangledTypes.add("gint32", "int32")
-mangledTypes.add("gint64", "int64")
-mangledTypes.add("guint8", "uint8")
-mangledTypes.add("guint16", "uint16")
-mangledTypes.add("guint32", "uint32")
-mangledTypes.add("guint64", "uint64")
-mangledTypes.add("gfloat", "cfloat")
-mangledTypes.add("gdouble", "cdouble")
-mangledTypes.add("ptr void", "pointer")
-mangledTypes.add("ptr filename", "cstring")
-mangledTypes.add("ptr error", "ptr glib.Error")
-mangledTypes.add("ptr ghash", "ptr HashTable00")
-mangledTypes.add("ptr glist", "ptr pointer")
-mangledTypes.add("ptr gslist", "ptr pointer")
-mangledTypes.add("ptr utf8", "cstring")
+mangledTypes["gint8"] = "int8"
+mangledTypes["gint16"] = "int16"
+mangledTypes["gint32"] = "int32"
+mangledTypes["gint64"] = "int64"
+mangledTypes["guint8"] = "uint8"
+mangledTypes["guint16"] = "uint16"
+mangledTypes["guint32"] = "uint32"
+mangledTypes["guint64"] = "uint64"
+mangledTypes["gfloat"] = "cfloat"
+mangledTypes["gdouble"] = "cdouble"
+mangledTypes["ptr void"] = "pointer"
+mangledTypes["ptr filename"] = "cstring"
+mangledTypes["ptr error"] = "ptr glib.Error"
+mangledTypes["ptr ghash"] = "ptr HashTable00"
+mangledTypes["ptr glist"] = "ptr pointer"
+mangledTypes["ptr gslist"] = "ptr pointer"
+mangledTypes["ptr utf8"] = "cstring"
 
 #utf8StringArrays.incl("g_strv_length") # bugs in GIR files # TODO needs investigation
 #utf8StringArrays.incl("g_strfreev")
@@ -499,17 +501,17 @@ proc needProxyProc(info: GICallableInfo): bool =
 
 # type replacements
 var ct2nt: Table[string, string]
-ct2nt.add("uint32", "int")
-ct2nt.add("int32", "int")
-ct2nt.add("cstring", "string")
-ct2nt.add("gboolean", "bool")
-ct2nt.add("cstringArray", "seq[string]")
-ct2nt.add("int32Array", "seq[int32]")
-ct2nt.add("uint32Array", "seq[uint32]")
-ct2nt.add("uint8Array", "seq[uint8]")
-ct2nt.add("TargetEntry00Array", "seq[TargetEntry]")
-ct2nt.add("KeymapKeyArray", "seq[KeymapKey]")
-ct2nt.add("PageRangeArray", "seq[PageRange]")
+ct2nt["uint32"] = "int"
+ct2nt["int32"] = "int"
+ct2nt["cstring"] = "string"
+ct2nt["gboolean"] = "bool"
+ct2nt["cstringArray"] = "seq[string]"
+ct2nt["int32Array"] = "seq[int32]"
+ct2nt["uint32Array"] = "seq[uint32]"
+ct2nt["uint8Array"] = "seq[uint8]"
+ct2nt["TargetEntry00Array"] = "seq[TargetEntry]"
+ct2nt["KeymapKeyArray"] = "seq[KeymapKey]"
+ct2nt["PageRangeArray"] = "seq[PageRange]"
 
 # converter procs
 proc ct3nt(s: string): string =
@@ -636,11 +638,11 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil): (
       else:
         arglist.add(name)
     if not genProxy and ct2nt.contains(str) and (str != "cstring" or gArgInfoGetDirection(arg) in {GIDirection.OUT, INOUT}):
-      replist.add($name, $str)
+      replist[$name] = $str
     if genProxy and ct2nt.contains(str):
       if gArgInfoGetDirection(arg) in {GIDirection.OUT, INOUT} and (not gArgInfoIsCallerAllocates(arg) or (str in ["int32",
           "uint32", "cstringArray", "cstring"])):
-        replist.add($name, $str)
+        replist[$name] = $str
       if gArgInfoGetDirection(arg) in {GIDirection.OUT, INOUT} or str != "cstring": # new in 0.4.11 -- allow passing cstring if not a var
         str = ct2nt[str]
     if gArgInfoGetDirection(arg) in {GIDirection.OUT, INOUT} and not (str in UnnamedArrays and gArgInfoIsCallerAllocates(arg)):
@@ -666,13 +668,20 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil): (
         var h = str
         h.removePrefix("var ")
         str.add(" = cast[ptr " & h & "](nil)[]")
+
+    #if str == "var seq[string]": no var varargs support!
     if str == "seq[string]":
       if j == m:
         str = "varargs[string, `$`]"
       else:
         str = "openArray[string]"
     if str == "seq[uint8]": # allow to pass a string for a seq[uint8] argument too
+      # str = "seq[uint8] | openArray[char]" # maybe also seq[int8] and seq[char] ? # https://github.com/nim-lang/Nim/issues/15128
       str = "seq[uint8] | string"
+    if str == "var seq[uint8]": # allow to pass a string for a seq[uint8] argument too
+      str = "var (seq[uint8] | string)"
+      # str = "var (seq[uint8] | openArray[char])" # https://github.com/nim-lang/Nim/issues/15128
+
     resus.add((name, str))
     if j < m:
       arglist.add(", ")
@@ -791,8 +800,6 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
     # no, will fail i.e. for gdk_cursor_new_from_name()
     methodBuffer.writeLine("    result = cast[type(result)](qdata)")
     methodBuffer.writeLine("    assert(result.impl == gobj)")
-    #methodBuffer.writeLine("    echo \"<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\"")
-    #methodBuffer.writeLine("    echo \"YXC $1 \", result.refCount" % [sym])
     methodBuffer.writeLine("  else:")
     #assert((gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) != 0 or
     #  gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING)
@@ -811,7 +818,6 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
     methodBuffer.writeLine("    g_object_unref(result.impl)")
     methodBuffer.writeLine("    assert(g_object_get_qdata(result.impl, Quark) == nil)")
     methodBuffer.writeLine("    g_object_set_qdata(result.impl, Quark, addr(result[]))")
-  #methodBuffer.writeLine("    echo \"YXC $1 \", result.refCount" % [sym])
 
   # prefer gboxed_free() but fall back for GVariant
   template findFreeProc(info: GIBaseInfo; noWarning: bool): untyped =
@@ -893,7 +899,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
   if sym == "g_file_get_contents": return # fix later
   if sym == "g_spawn_command_line_sync": return # fix later
   if sym == "g_spawn_sync": return # fix later
-  if sym == "g_file_load_contents": return # fix later
+  ###if sym == "g_file_load_contents": return # fix later
   #if sym == "g_file_load_contents_finish": return # fix later
   if sym == "g_file_load_partial_contents_finish": return # fix later
   if sym == "g_converter_convert": return # fix later
@@ -1582,9 +1588,11 @@ template writeSignal() =
     var plist, arglist: string
     var replist: TableRef[string, string]
     (plist, arglist, replist) = genPars(signalInfo, true, info)
+    #echo plist
     memo.add(plist)
     memo.add(RecSep)
     (plist, arglist, replist) = genPars(signalInfo, false, info)
+    #echo plist
     memo.add(plist)
     memo = memo.replace("\n    ", " ")
     memo = memo.replace("\"", "\\\"")
@@ -2160,6 +2168,17 @@ const GIO_EPI = """
 proc run*(self: GApplication): int =
   int(g_application_run(cast[ptr GApplication00](self.impl), 0, nil))
 
+proc gFile00Array2seq*(p: GFile00Array; l: int32): seq[gio.GFile] =
+  let a = cast[ptr UncheckedArray[ptr GFile00]](p)
+  result = newSeq[gio.GFile]()
+  var i: int
+  while i < l:
+    let f = new gio.GFile
+    f.impl = a[i]
+    f.ignoreFinalizer = true
+    result.add(f)
+    inc(i)
+
 """
 
 const GObject_EPI = """
@@ -2564,7 +2583,7 @@ proc uint8ArrayZT2seq*(p: pointer): seq[uint8] =
         if gdkKeys.contains(h.toLowerAscii):
           gdkKeys[h.toLowerAscii].add(h)
         else:
-          gdkKeys.add(h.toLowerAscii, @[h])
+          gdkKeys[h.toLowerAscii] = @[h]
     for el in mvalues(gdkKeys):
       sort(el, system.cmp)
   var i: GIBaseInfo
@@ -2903,4 +2922,4 @@ proc launch() =
     supmod4.close
 
 launch()
-# 2906 lines
+# 2925 lines
