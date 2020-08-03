@@ -1,6 +1,6 @@
 = High level GTK3 (and GTK4) bindings for the Nim programming language
 (c) Stefan Salewski                                     
-//Version 0.7.9
+//Version 0.8.0
 :experimental:
 :imagesdir: http://ssalewski.de/tmp
 :source-highlighter: pygments
@@ -25,13 +25,16 @@ with code inserted from files directly.
 NOTE: This work is partly based on earlier works of J. Mansour and has been supported by A. Rumpf, E. Bassi and other _Nim_ and _GTK/Gnome_ developers.
 The `combinatorics` module was kindly provided by R. Behrends.
 
-NOTE: This is version 0.7.9 which contains again some changes. The two GTK4 examples from http://ssalewski.de/gtkprogramming.html
-should work now, and the existing GTK3 examples seems still to work. Unfortunately there is a tiny bug in this release when you
-are using VTE module, see https://github.com/StefanSalewski/gintro/issues/82. As only very few people are using VTE we will
-not make a new release to fix this issue, so please use the comand *"nimble install gintro@#head"* in this case to get latest fix.
-We have added a simple VTE example to the GTK3 example directory. If you are using Arch Linux you may have to ensure that
+NOTE: We fixed a few small bugs in the last weeks, so we decided to finally make a 0.8.0 release.
+The GTK4 examples from http://ssalewski.de/gtkprogramming.html
+should work now, and the existing GTK3 examples seems still to work. This release is already available since a few weeks by
+*"nimble install gintro@#head"* command, so we assume that there are no serious issues.
+We have added a simple VTE example to the GTK3 example directory.
+If you are using Arch Linux you may still have to ensure that
 curl or wget is available, see https://github.com/StefanSalewski/gintro/issues/83.
-
+Next release will get support for GList proc parameters and results, but providing that is some non trivial work
+and may break some other stuff unfortunately. Note that the File type of module gio is now called GFile to
+prevent name conflicts with Nims own File type.
 
 NOTE: Version 0.7.7 contains the fixes from https://github.com/StefanSalewski/gintro/issues/75.
 Mr lscrd has tested it already by use of nimble install gintro@#head some weeks ago, so we may assume that

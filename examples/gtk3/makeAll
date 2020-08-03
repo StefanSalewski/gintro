@@ -22,4 +22,6 @@ nim c simpledrawingarea.nim
 nim c spinbutton.nim
 nim c sourceview_test.nim
 nim c t0.nim
+nim c thread1.nim
+nim c thread2.nim
 nim c vte.nim
