@@ -98,7 +98,7 @@ proc $1$2 {.cdecl.} =
     r1s.add(")\n")
   else: # signals with multiple arguments and maybe using interface providers
     (sn, wid, num, ahl, all) = sci.split(RecSep)
-    echo "ttt ", ahl
+    #echo "ttt ", ahl
     if ahl.contains("|"): # we have to handle interface providers
       var hargs = ahl.split(";") # handler arguments
       for i in 0 .. hargs.high: # find the position of the providers, should be second or third argument

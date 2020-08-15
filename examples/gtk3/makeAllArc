@@ -22,6 +22,6 @@ nim c --gc:arc simpledrawingarea.nim
 nim c --gc:arc spinbutton.nim
 nim c --gc:arc sourceview_test.nim
 nim c --gc:arc t0.nim
-nim c --gc:arc thread1.nim
-nim c --gc:arc thread2.nim
+nim c --gc:arc --threads:on thread1.nim
+nim c --gc:arc --threads:on thread2.nim
 nim c --gc:arc vte.nim
