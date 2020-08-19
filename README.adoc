@@ -1,6 +1,6 @@
 = High level GTK3 (and GTK4) bindings for the Nim programming language
 (c) Stefan Salewski                                     
-//Version 0.8.0
+//Version 0.8.1
 :experimental:
 :imagesdir: http://ssalewski.de/tmp
 :source-highlighter: pygments
@@ -25,12 +25,12 @@ with code inserted from files directly.
 NOTE: This work is partly based on earlier works of J. Mansour and has been supported by A. Rumpf, E. Bassi and other _Nim_ and _GTK/Gnome_ developers.
 The `combinatorics` module was kindly provided by R. Behrends.
 
-NOTE: We fixed a few small bugs in the last weeks, so we decided to finally make a 0.8.0 release.
-The GTK4 examples from http://ssalewski.de/gtkprogramming.html
-should work now, and the existing GTK3 examples seems still to work. This release is already available since a few weeks by
-*"nimble install gintro@#head"* command, so we assume that there are no serious issues.
-We have added a simple VTE example to the GTK3 example directory.
-If you are using Arch Linux you may still have to ensure that
+NOTE: This is version 0.8.1 of gintro. Requested by FedericoCeratto we have added libhandy support.
+Libhandy is not yet available for GTK4 but seems to work with gtk+-3.24.20. As Gentoo Linux ships still
+only a very old libhandy, we tested with latest release from https://gitlab.gnome.org/GNOME/libhandy/
+Only available example is currently /examples/gtk3/handy.nim converted from example.py.
+
+NOTE: If you are using Arch Linux you may still have to ensure that
 curl or wget is available, see https://github.com/StefanSalewski/gintro/issues/83.
 Next release will get support for GList proc parameters and results, but providing that is some non trivial work
 and may break some other stuff unfortunately. Note that the File type of module gio is now called GFile to

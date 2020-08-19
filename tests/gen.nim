@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK3/GTK4 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.8.0 2020-JUL-30
+# v 0.8.1 2020-AUG-19
 # (c) S. Salewski 2018
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -2877,6 +2877,7 @@ proc launch() =
     main("Vte")
     main("Notify")
     main("Gst")
+    main("Handy")
     main("cairo")
   else:
     echo "First we try generating bindings for GTK4, this may fail when GTK4 is not properly installed"
@@ -2904,6 +2905,7 @@ proc launch() =
     # main("Vte") # not yet available for GTK4
     main("Notify")
     main("Gst")
+    # main("Handy") # not yet available for GTK4
     main("cairo")
 
   if ISGTK3:
@@ -2922,4 +2924,4 @@ proc launch() =
     supmod4.close
 
 launch()
-# 2925 lines
+# 2927 lines

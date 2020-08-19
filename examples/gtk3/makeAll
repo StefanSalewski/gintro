@@ -14,6 +14,7 @@ nim c gaction.nim
 nim c gearsmenu.nim
 nim c gsettings.nim
 nim c gstBasicTutorial1.nim
+nim c handy.nim
 nim c label.nim
 nim c listview.nim
 nim c menubar.nim

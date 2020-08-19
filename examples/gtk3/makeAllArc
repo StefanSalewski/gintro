@@ -14,6 +14,7 @@ nim c --gc:arc gaction.nim
 nim c --gc:arc gearsmenu.nim
 nim c --gc:arc gsettings.nim
 nim c --gc:arc gstBasicTutorial1.nim
+nim c --gc:arc handy.nim
 nim c --gc:arc label.nim
 nim c --gc:arc listview.nim
 nim c --gc:arc menubar.nim
