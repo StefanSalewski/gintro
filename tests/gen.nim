@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK3/GTK4 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.8.1 2020-AUG-19
+# v 0.8.2 2020-OCT-05
 # (c) S. Salewski 2018
 
 # https://wiki.gnome.org/Projects/GObjectIntrospection
@@ -220,6 +220,10 @@ fixedProcNames["gst_element_factory_find"] = "findElementFactory"
 fixedProcNames["gtk_shortcut_action_parse_string"] = "shortcutActionParseString"
 fixedProcNames["gtk_shortcut_trigger_parse_string"] = "shortcutTriggerParseString"
 fixedProcNames["g_main_context_default"] = "defaultMainContext"
+
+fixedProcNames["gst_value_list_init"] = "listInit" # or initList ?
+fixedProcNames["gst_value_array_init"] = "arrayInit" # or initArray ?
+
 
 defaultParameters["gtk_window_new"] = "`type` WindowType WindowType.toplevel"
 defaultParameters["gtk_application_new"] = "flags gio.ApplicationFlags {}"
@@ -924,6 +928,8 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
   if sym == "g_strfreev": return
   if sym == "g_signal_emitv": return
   if sym == "g_object_ref": return # supress Hint: 'g_object_ref' is declared but not used
+  if sym == "gst_structure_from_string": return # constructor with out param, not supported yet.
+  if sym == "gst_structure_take": return # first parameter is var but can be nil? See trouble at the bottom of this file.
 
   try:
     (plist, arglist, replist, arrLex) = genPars(mInfo, false, info)
@@ -1008,7 +1014,8 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
         asym = fixedProcNames.getOrDefault(sym, asym)
         # BLOCKMARK8 : 3 cases: constructor, isProxyCandidate(ret2), plain else
         if (gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) != 0:
-          assert replist.len == 0 # ok it's a fact for constructors, so we don't have to generate code for it
+          #echo "xxx", replist, sym
+          assert replist.len == 0 # ok it's a fact for constructors, so we don't have to generate code for it (exc. gst_structure_from_string)
           for j in 0.cint ..< gCallableInfoGetNArgs(minfo):
             let arg = gCallableInfoGetArg(minfo, j)
             assert gArgInfoGetDirection(arg) notin {GIDirection.OUT, INOUT} # so we can ignore this case!
@@ -1024,7 +1031,8 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
               let semi = if hhh.contains("()"): "" else: "; "
               let p = hhh.find("): ")
               hhh.setLen(p + 1)
-              hhh = hhh.replace("new", "init")
+              # hhh = hhh.replace("new", "init")
+              hhh = hhh.replace("proc new", "proc init") # v0.8.2
               hhh = hhh.replace("*(", "*[T](result: var T" & semi)
             if itt == 2:
               depStr = " {.deprecated.}"
@@ -2189,6 +2197,25 @@ const GObject_EPI = """
 
 """
 
+# for v0.8.2 we create this manually, as gst_structure_from_string() is a constructor
+# since gst 1.18 and constructor with out parameter is currently not supported by gintro
+# the code is taken from v0.8.1 with gst 1.16
+const Gst_EPI = """
+
+proc gst_structure_from_string(string: cstring; `end`: var cstring): ptr Structure00 {.
+    importc, libprag.}
+
+proc fromStringStructure*(string: cstring; `end`: var string): Structure =
+  var end_00 = cstring(`end`)
+  let impl0 = gst_structure_from_string(string, end_00)
+  if impl0.isNil:
+    return nil
+  fnew(result, gBoxedFreeGstStructure)
+  result.impl = impl0
+  `end` = $(end_00)
+
+"""
+
 const GTK3_EPI = """
 
 proc mainQuit*(w: Window) = mainQuit()
@@ -2769,6 +2796,9 @@ proc get$1*(builder: Builder; name: string): $1 =
   if namespace == "GObject":
     output.write(GObject_EPI)
 
+  if namespace == "Gst":
+    output.write(Gst_EPI)
+
   if namespace == "cairo":
     output.write("include cairoimpl\n")
 
@@ -2854,6 +2884,7 @@ proc launch() =
 
   if ISGTK3:
     echo "Generating bindings for GTK3..."
+    #when false:
     main("Gtk", "3.0") # the 3 new 4.0 releases in old version
     main("Gdk", "3.0")
     main("GdkX11", "3.0")
@@ -2924,4 +2955,13 @@ proc launch() =
     supmod4.close
 
 launch()
-# 2927 lines
+# 2958 lines init
+
+# troubles:
+#[
+proc gst_structure_take(oldstrPtr: var ptr Structure00; newstr: ptr Structure00): gboolean {.
+    importc, libprag.}
+
+proc take*(oldstrPtr: var Structure; newstr: Structure = nil): bool =
+  toBool(gst_structure_take(if oldstrPtr.isNil: nil else: cast[ptr Structure00](oldstrPtr.impl), if newstr.isNil: nil else: cast[ptr Structure00](newstr.impl)))
+]#
