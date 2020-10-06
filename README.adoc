@@ -1,6 +1,6 @@
 = High level GTK3 (and GTK4) bindings for the Nim programming language
 (c) Stefan Salewski                                     
-//Version 0.8.1
+//Version 0.8.2
 :experimental:
 :imagesdir: http://ssalewski.de/tmp
 :source-highlighter: pygments
@@ -25,8 +25,12 @@ with code inserted from files directly.
 NOTE: This work is partly based on earlier works of J. Mansour and has been supported by A. Rumpf, E. Bassi and other _Nim_ and _GTK/Gnome_ developers.
 The `combinatorics` module was kindly provided by R. Behrends.
 
-NOTE: This is version 0.8.1 of gintro. Requested by FedericoCeratto we have added libhandy support.
-Libhandy is not yet available for GTK4 but seems to work with gtk+-3.24.20. As Gentoo Linux ships still
+NOTE: This is version 0.8.2 of gintro. It is only a fix for recent gstreamer 1.18 which added some uncommon
+gobject-introspection stuff which brook the install of 0.8.1 for a few users. We where not yet able to
+verify that the gst example which is bases on the gst C tutorial1 works with gstreamer 1.18.
+
+NOTE: For version 0.8.1 of gintro, requested by FedericoCeratto, we have added libhandy support.
+Libhandy is not yet available for GTK4 but seems to work with gtk+-3.24.22. As Gentoo Linux ships still
 only a very old libhandy, we tested with latest release from https://gitlab.gnome.org/GNOME/libhandy/
 Only available example is currently /examples/gtk3/handy.nim converted from example.py.
 
