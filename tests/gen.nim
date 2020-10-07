@@ -2359,7 +2359,8 @@ proc main(namespace: string; version: cstring = nil) =
   elif namespace == "GLib":
     # we need gobject.
     let gobjectlibs = gi.gIrepositoryGetSharedLibrary("GObject")
-    var GobjectLib = if gobjectlibs.isNil: "" else: ($gobjectlibs).split(',', 2)[0]
+    doAssert not gobjectlibs.isNil
+    var GobjectLib = ($gobjectlibs).split(',', 2)[0]
     output.writeLine("const GobjectLib* = \"$1\"" % GobjectLib)
     output.writeLine("{.pragma: gobjectlibprag, cdecl, dynlib: GobjectLib.}")
 
@@ -2890,8 +2891,8 @@ proc launch() =
     main("GdkX11", "3.0")
     # main("Gsk") # not available for GTK3
     main("Graphene")
+    main("GObject") # GObject namespace must be loaded before calling main("GLib")
     main("GLib") # and the old common onces
-    main("GObject")
     main("Gio")
     main("GdkPixbuf")
     main("GModule")
@@ -2918,8 +2919,8 @@ proc launch() =
     main("GdkX11", "4.0")
     main("Gsk") # and two new ones for gtk4
     main("Graphene")
-    main("GLib") # and the old common onces
     main("GObject")
+    main("GLib") # and the old common onces
     main("Gio")
     main("GdkPixbuf")
     main("GModule")
