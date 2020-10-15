@@ -1,6 +1,6 @@
 = High level GTK3 (and GTK4) bindings for the Nim programming language
 (c) Stefan Salewski                                     
-//Version 0.8.2
+//Version 0.8.3
 :experimental:
 :imagesdir: http://ssalewski.de/tmp
 :source-highlighter: pygments
@@ -24,6 +24,56 @@ with code inserted from files directly.
 
 NOTE: This work is partly based on earlier works of J. Mansour and has been supported by A. Rumpf, E. Bassi and other _Nim_ and _GTK/Gnome_ developers.
 The `combinatorics` module was kindly provided by R. Behrends.
+
+NOTE: We are currently preparing v0.8.3. You may install it with command [black yellow-background]#nimble install gintro@#head#.
+This version will have some internal cleanup, which removes the temporary
+Array types. In the past we used that names to indicate array parameters, it was working well, but still
+it was ugly using names to indicates data types. So we fixed that. And we have added some better support for
+GList parameter. GLists are now converted to Nim seqs and vice versa. Not everywhere still, and this conversion
+is still untested, as GList parameters are used most of the time in exotic functions only. Another change is that
+we have support for libnice by a request of a user from Japan. We added the sdp_example.nim converted from
+a C example, it seems to compile and run. And finally with v0.8.3 the examples from the GTK4 book should work.
+For the GTK3 examples we had to do some minimal fixes, so you may have to do similar fixes for your own code as well.
+For gintro/examples/gtk3 this was
+
+----
+# examples modifications for v0.8.3:
+$ diff gintronew/examples/gtk3 gintro/examples/gtk3
+diff gintronew/examples/gtk3/celldatafunction.nim gintro/examples/gtk3/celldatafunction.nim
+3c3
+< import gintro/[gtk, gobject, glib]
+---
+> import gintro/[gtk, gobject]
+67c67
+<   let store = newListStore(Columns, cast[ptr GType](unsafeaddr gtype)) # ugly cast
+---
+>   let store = newListStore(Columns, cast[pointer](unsafeaddr gtype)) # ugly cast
+diff gintronew/examples/gtk3/css_colored_listview.nim gintro/examples/gtk3/css_colored_listview.nim
+64c64
+<   var store = newListStore(Columns,  cast[ptr GType]( unsafeaddr h)) # cast is ugly, we should fix it in bindings.
+---
+>   var store = newListStore(Columns,  cast[pointer]( unsafeaddr h)) # cast is ugly, we should fix it in bindings.
+diff gintronew/examples/gtk3/gearsmenu.nim gintro/examples/gtk3/gearsmenu.nim
+114c114
+<   echo fmt"GTK Version {getMajorVersion()}.{getMinorVersion()}.{getMicroVersion()}"
+---
+>   echo fmt"GTK Version {majorVersion()}.{minorVersion()}.{microVersion()}"
+diff gintronew/examples/gtk3/listview.nim gintro/examples/gtk3/listview.nim
+61c61
+<   let store = newListStore(N_COLUMNS, cast[ptr GType]( unsafeaddr gtype)) # cast due to bug in gtk.nim
+---
+>   let store = newListStore(N_COLUMNS, cast[pointer]( unsafeaddr gtype)) # cast due to bug in gtk.nim
+diff gintronew/examples/gtk3/menubar.nim gintro/examples/gtk3/menubar.nim
+101c101
+<   echo "GTK Version $1.$2.$3" % [$getMajorVersion(), $getMinorVersion(), $getMicroVersion()]
+---
+>   echo "GTK Version $1.$2.$3" % [$majorVersion(), $minorVersion(), $microVersion()]
+diff gintronew/examples/gtk3/overlay_tree1.nim gintro/examples/gtk3/overlay_tree1.nim
+71c71
+<   let store = newListStore(Columns, cast[ptr GType](unsafeaddr h)) # cast is ugly, we should fix it in bindings.
+---
+>   let store = newListStore(Columns, cast[pointer](unsafeaddr h)) # cast is ugly, we should fix it in bindings.
+----
 
 NOTE: This is version 0.8.2 of gintro. It is only a fix for recent gstreamer 1.18 which added some uncommon
 gobject-introspection stuff which brook the install of 0.8.1 for a few users. We where not yet able to

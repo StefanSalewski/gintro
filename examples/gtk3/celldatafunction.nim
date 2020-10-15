@@ -1,6 +1,6 @@
 # This example shows how to apply a CellDataFunc to a GtkTreeView
 # C example code was provided by A.Krause in chapter 8 of his book
-import gintro/[gtk, gobject]
+import gintro/[gtk, gobject, glib]
 
 const
   Color = 0
@@ -64,7 +64,7 @@ proc main =
   let treeview = newTreeView()
   setupTreeView(treeview)
   let gtype = typeFromName("gchararray")
-  let store = newListStore(Columns, cast[pointer](unsafeaddr gtype)) # ugly cast
+  let store = newListStore(Columns, cast[ptr GType](unsafeaddr gtype)) # ugly cast
   ##  Add all of the products to the GtkListStore.
   for i in 0 ..< 6:
     for j in 0 ..< 6:

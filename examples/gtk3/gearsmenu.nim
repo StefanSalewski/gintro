@@ -111,7 +111,7 @@ proc main =
   let app = newApplication("app.example")
   connect(app, "startup", appStartup)
   connect(app, "activate", appActivate)
-  echo fmt"GTK Version {majorVersion()}.{minorVersion()}.{microVersion()}"
+  echo fmt"GTK Version {getMajorVersion()}.{getMinorVersion()}.{getMicroVersion()}"
   let status = run(app)
   quit(status)
 

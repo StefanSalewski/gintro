@@ -68,7 +68,7 @@ proc main =
   var iter: TreeIter
   let h = [typeFromName("guint"), typeFromName("gchararray"), typeFromName("gchararray"),
     typeFromName("gchararray")]
-  let store = newListStore(Columns, cast[pointer](unsafeaddr h)) # cast is ugly, we should fix it in bindings.
+  let store = newListStore(Columns, cast[ptr GType](unsafeaddr h)) # cast is ugly, we should fix it in bindings.
   let progNames = ["Gedit", "Gimp", "Inkscape", "Firefox", "Calculator", "Devhelp"]
   for i, n in progNames:
     store.append(iter) # currently we have to use setValue() as there is no varargs proc as in C original

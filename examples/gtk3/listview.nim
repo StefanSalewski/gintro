@@ -58,7 +58,7 @@ proc initList(list: TreeView) =
   column.addAttribute(renderer, "text", LIST_ITEM)
   discard list.appendColumn(column)
   let gtype = gStringGetType() # typeFromName("gchararray")
-  let store = newListStore(N_COLUMNS, cast[pointer]( unsafeaddr gtype)) # cast due to bug in gtk.nim
+  let store = newListStore(N_COLUMNS, cast[ptr GType]( unsafeaddr gtype)) # cast due to bug in gtk.nim
   list.setModel(store)
 
 proc appActivate(app: Application) =

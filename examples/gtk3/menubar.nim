@@ -98,7 +98,7 @@ proc main =
   let app = newApplication("app.example")
   connect(app, "startup", appStartup)
   connect(app, "activate", appActivate)
-  echo "GTK Version $1.$2.$3" % [$majorVersion(), $minorVersion(), $microVersion()]
+  echo "GTK Version $1.$2.$3" % [$getMajorVersion(), $getMinorVersion(), $getMicroVersion()]
   let status = run(app)
   quit(status)
 

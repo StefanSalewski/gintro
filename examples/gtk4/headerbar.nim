@@ -117,7 +117,7 @@ proc main =
   content.setVexpand
   box.append(content)
   let footer = newActionBar()
-  footer.setCenterWidget(newCheckButtonWithLabel("Middle"))
+  footer.setCenterWidget(newCheckButton("Middle"))
   let button = newToggleButtonWithLabel("Custom")
   button.connect("clicked", changeHeader, window)
   footer.packStart(button)

@@ -1,4 +1,5 @@
-from sequtils import keepItIf
+#from sequtils import keepItIf
+import sequtils
 const RecSep = "!" # Record separator for entries in gisup.nim, also defined in gen.nim
 
 # caution: $$ due to string interpolation
@@ -188,6 +189,33 @@ proc $1$2 {.cdecl.} =
 
     r1s.add(resu & "\n")
     all = all.replace(")", "; user_data: pointer)")
+
+  #echo all
+
+  if all.find("00Array") >= 0:
+    var h = all.split(';')
+    for el in mitems(h):
+      var a, b: string
+      (a, b) = el.split(": ")
+      if b.find("Array") >= 0:
+        b = "ptr " & b.replace("Array")
+      el = a & ": " & b
+    all = h.join(";")
+
+  #echo all
+
+  # https://forum.nim-lang.org/t/6775#42155
+  const matcher = "Array" # is this good enough?
+  var ra: string
+  for (elem, isSep) in all.tokenize(Whitespace + {',', ';'}):
+    if elem.endsWith(matcher):
+      ra.add("ptr " & elem[0 .. ^(matcher.len + 1)])
+    else:
+      ra.add(elem)
+
+  #echo ra
+  #assert ra == all
+
   r1s = r1s % [$procNameCdecl, all, $p, wts, ats]
   #echo r1s
 
@@ -449,4 +477,4 @@ $1(column, renderer, $6)
 """ % [$procName, ats, $column, $renderer, $procNameCdecl, argStr, $procNameDestroy]
 
   result = parseStmt(r0s & r1s & r2s)
-# 429 lines
+# 429 lines echo
