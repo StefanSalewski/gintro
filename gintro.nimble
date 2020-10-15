@@ -36,6 +36,7 @@ proc prep =
 
   cpFile(this / "tests" / "gen.nim", td / wd / "gen.nim")
   cpFile(this / "tests" / "combinatorics.nim", td / wd / "combinatorics.nim")
+  cpFile(this / "tests" / "maxby.nim", td / wd / "maxby.nim")
 
   cd(td)
   cd(wd)
