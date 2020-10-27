@@ -9,11 +9,21 @@
 #    ./sdp-example 0 $(host -4 -t A stun.stunprotocol.org | awk '{ print $4 }')
 #    ./sdp-example 1 $(host -4 -t A stun.stunprotocol.org | awk '{ print $4 }')
 
-import gintro/[gtk, glib, gobject, nice]
-import gintro/gio except stdin
+
+# https://forum.nim-lang.org/t/3752
+when (compiles do: import gintro/gtk):
+  import gintro/[gtk, glib, gobject, gio, nice]
+else:
+  import gintro/[dummygtk, glib, gobject, gio, nice] # For windows with glib but no gtk
+
 from strutils import `%`
 from os import paramCount, paramStr
 from strutils import parseInt
+
+when defined(windows):
+  import winlean
+else:
+  discard # import posix
 
 var
   gloop: glib.MainLoop
@@ -70,7 +80,7 @@ proc cbComponentStateChanged(agent: nice.Agent; streamID: int; componentID: int;
     glib.quit(gloop)
 
 # proc nice_agent_attach_recv*(self: ptr Agent00; streamID: cuint; componentID: cuint; ctx: ptr glib.MainContext;
-#   fn: AgentRecvFunc; data: pointer): gboolean {.importc, libprag.}                 
+#   fn: AgentRecvFunc; data: pointer): gboolean {.importc, libprag.}
 #
 # this has to be a low level function!
 # AgentRecvFunc* = proc (agent: ptr Agent00; streamId: uint32; componentId: uint32; len: uint32;
@@ -89,10 +99,13 @@ proc exampleThread(data: pointer): pointer {.cdecl.} =
     line: string
     sdp: string
     sdp64: string
-  #when defined(G_OS_WIN32):
-  #  io_stdin = g_io_channel_win32_new_fd(_fileno(stdin))
-  #else:
-  ioStdin = unixNew(getFileHandle(stdin))
+
+  # https://gist.github.com/demotomohiro/c9d9ad7e17639c6acb9bd2be7c204f3f
+  when hostOS == "windows":
+    ioStdin = win32NewFd(system.stdin.getFileHandle)
+  else:
+    ioStdin = unixNew(system.stdin.getFileHandle)
+
   discard setFlags(ioStdin, glib.IOFlags.nonBlock)
   #  Create the nice agent
   agent = nice.newAgent(glib.getContext(gloop), nice.CompatibilityRfc5245)
@@ -141,8 +154,7 @@ proc exampleThread(data: pointer): pointer {.cdecl.} =
       var s: IOStatus = readLine(ioStdin, line, length, terminatorPos)
       if s == IOStatus.normal:
         var sdpLen: uint64
-        let sdpxxx = base64Decode(line, sdpLen) #seq[uint8]
-        sdp = cast[string](sdpxxx)
+        let sdp = cast[string](base64Decode(line, sdpLen)) #seq[uint8]
         #  Parse remote candidate list and set it on the agent
         if sdp.len > 0 and parseRemoteSdp(agent, sdp) > 0:
           break
@@ -183,9 +195,9 @@ proc exampleThread(data: pointer): pointer {.cdecl.} =
   return nil
 
 proc main =
-  echo paramCount()
-  for i in 0 .. paramCount():
-    echo paramStr(i)
+  #echo paramCount()
+  #for i in 0 .. paramCount():
+  #  echo paramStr(i)
   let argc = paramCount() + 1
   var argv = newSeq[string](argc)
   for i in 0 ..< argc:

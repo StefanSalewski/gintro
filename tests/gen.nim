@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK3/GTK4 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.8.3 2020-OCT-21
+# v 0.8.3 2020-OCT-26
 # (c) S. Salewski 2018
 
 # usefull for finding death code:
@@ -2678,6 +2678,8 @@ proc seq2GList*[T](s: seq[T]): ptr glib.List =
       discard # make it compile for these cases, of course will not work
   return l
 
+#include gimplgobj
+
 """
 
 # for v0.8.2 we create this manually, as gst_structure_from_string() is a constructor
@@ -2711,11 +2713,12 @@ proc attachRecv*(self: Agent; streamID: int; componentID: int; ctx: MainContext;
 
 const GLib_EPI = """
 
-proc g_thread_new(name: cstring; fn: ThreadFunc; data:pointer): ptr Thread00 {.importc, libprag.}
+when not defined(g_thread_new):
+  proc g_thread_new(name: cstring; fn: ThreadFunc; data:pointer): ptr Thread00 {.importc, libprag.}
 
-proc newThread*(name: string; fn: ThreadFunc; data:pointer): Thread =
-  fnew(result, finalizerunref)
-  result.impl = g_thread_new(name, fn, data)
+  proc newThread*(name: string; fn: ThreadFunc; data:pointer): Thread =
+    fnew(result, finalizerunref)
+    result.impl = g_thread_new(name, fn, data)
 
 """
 
@@ -3244,10 +3247,12 @@ proc init* =
     output.write(GTK_EPI % fixedModName("gtk"))
     if ISGTK3:
       output.write("include gisup3\n")
-      output.write("include gimpl\n")
+      output.write("include gimplgobj\n")
+      output.write("include gimplgtk\n")
     else:
       output.write("include gisup4\n")
-      output.write("include gimpl\n")
+      output.write("include gimplgobj\n")
+      output.write("include gimplgtk\n")
     buildableList.add("MenuModel")
     for i in buildableList:
       var prefix = "gtk"
@@ -3450,7 +3455,7 @@ launch()
 #  if not xcallerAlloc.contains(el):
 #    echo el
 
-# 3453 lines
+# 3453 lines include
 # troubles: gTypeFundamental(gRegisteredTypeInfoGetGType(info)) == G_TYPE_BOXED:
 #[
 
