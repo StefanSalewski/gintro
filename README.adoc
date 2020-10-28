@@ -25,7 +25,8 @@ with code inserted from files directly.
 NOTE: This work is partly based on earlier works of J. Mansour and has been supported by A. Rumpf, E. Bassi and other _Nim_ and _GTK/Gnome_ developers.
 The `combinatorics` module was kindly provided by R. Behrends.
 
-NOTE: We are currently preparing v0.8.3. You may install it with command [black yellow-background]#nimble install gintro@#head#.
+NOTE: This is finally gintro v0.8.3.
+// You may install it with command [black yellow-background]#nimble install gintro@#head#.
 This version will have some internal cleanup, which removes the temporary
 Array types. In the past we used that names to indicate array parameters, it was working well, but still
 it was ugly using names to indicates data types. So we fixed that. And we have added some better support for
@@ -37,7 +38,15 @@ into two units called gimplgobj.nim and gimplgtk.nim, and we added a module call
 which can be imported to make the connect() macro available while a real gtk module is not available.
 Please let us know if these changes should break something for ordinary gtk users.
 To test libnice we added the sdp_example.nim converted from
-a C example, it seems to compile and run. And finally with v0.8.3 the examples from the GTK4 book should work.
+a C example, it seems to compile and run. But we have not tested real communication between
+different computers yet, and not tested it on windows at all. If you have a use case for libnice you may test it yourself,
+possible issues may Nim's string vs seq[uint8] vs plain ptr char, or the uint data types in C example which we replaced
+by plain int as used in Nim prefereable. Debugging should be not hard, if you do not manage it yourself then you may
+open a github issue. Version v0.8.3 uses also some more light entities like gtk.TextIter or glib.Mutex, that are entities
+which are generally allocated on the stack and are only initialized to plain binary zero. For these types no
+proxy symbols are needed. Unfortunately discovering these entities by use of gobject-introspection works
+not reliable, so we are using a manually created list, which may contain errors.
+And finally with v0.8.3 the examples from the GTK4 book  (http://ssalewski.de/gtkprogramming.html) should work.
 For the GTK3 examples we had to do some minimal fixes, so you may have to do similar fixes for your own code as well.
 For gintro/examples/gtk3 this was
 
@@ -80,8 +89,8 @@ diff gintronew/examples/gtk3/overlay_tree1.nim gintro/examples/gtk3/overlay_tree
 >   let store = newListStore(Columns, cast[pointer](unsafeaddr h)) # cast is ugly, we should fix it in bindings.
 ----
 
-NOTE: This is version 0.8.2 of gintro. It is only a fix for recent gstreamer 1.18 which added some uncommon
-gobject-introspection stuff which brook the install of 0.8.1 for a few users. We where not yet able to
+NOTE: Version 0.8.2 of gintro was only a fix for recent gstreamer 1.18 which added some uncommon
+gobject-introspection stuff which brook the install of 0.8.1 for a few users. We were not yet able to
 verify that the gst example which is bases on the gst C tutorial1 works with gstreamer 1.18.
 
 NOTE: For version 0.8.1 of gintro, requested by FedericoCeratto, we have added libhandy support.

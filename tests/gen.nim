@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK3/GTK4 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.8.3 2020-OCT-26
+# v 0.8.3 2020-OCT-28
 # (c) S. Salewski 2018
 
 # usefull for finding death code:
@@ -2713,7 +2713,7 @@ proc attachRecv*(self: Agent; streamID: int; componentID: int; ctx: MainContext;
 
 const GLib_EPI = """
 
-when not defined(g_thread_new):
+when not declared(g_thread_new):
   proc g_thread_new(name: cstring; fn: ThreadFunc; data:pointer): ptr Thread00 {.importc, libprag.}
 
   proc newThread*(name: string; fn: ThreadFunc; data:pointer): Thread =
@@ -3455,7 +3455,7 @@ launch()
 #  if not xcallerAlloc.contains(el):
 #    echo el
 
-# 3453 lines include
+# 3453 lines defined
 # troubles: gTypeFundamental(gRegisteredTypeInfoGetGType(info)) == G_TYPE_BOXED:
 #[
 

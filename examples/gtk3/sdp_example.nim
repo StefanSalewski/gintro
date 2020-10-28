@@ -9,7 +9,6 @@
 #    ./sdp-example 0 $(host -4 -t A stun.stunprotocol.org | awk '{ print $4 }')
 #    ./sdp-example 1 $(host -4 -t A stun.stunprotocol.org | awk '{ print $4 }')
 
-
 # https://forum.nim-lang.org/t/3752
 when (compiles do: import gintro/gtk):
   import gintro/[gtk, glib, gobject, gio, nice]
@@ -85,7 +84,7 @@ proc cbComponentStateChanged(agent: nice.Agent; streamID: int; componentID: int;
 # this has to be a low level function!
 # AgentRecvFunc* = proc (agent: ptr Agent00; streamId: uint32; componentId: uint32; len: uint32;
 #   buf: cstring; userData: pointer) {.cdecl.}
-proc cbNiceRecv(agent: ptr nice.Agent00; streamID: uint32; componentID: uint32; len: uint32; buf: cstring; userData: pointer) {.cdecl.} =
+proc cbNiceRecv(agent: ptr nice.Agent00; streamID: cuint; componentID: cuint; len: cuint; buf: cstring; userData: pointer) {.cdecl.} =
   if len == 1 and buf[0] == '\x00':
     glib.quit(gloop)
   discard stdout.writeBuffer(buf, len)
@@ -105,8 +104,8 @@ proc exampleThread(data: pointer): pointer {.cdecl.} =
     ioStdin = win32NewFd(system.stdin.getFileHandle)
   else:
     ioStdin = unixNew(system.stdin.getFileHandle)
+    discard setFlags(ioStdin, glib.IOFlags.nonBlock) # not implemented for windows? But it is used in C code!
 
-  discard setFlags(ioStdin, glib.IOFlags.nonBlock)
   #  Create the nice agent
   agent = nice.newAgent(glib.getContext(gloop), nice.CompatibilityRfc5245)
   if agent == nil:
@@ -143,7 +142,8 @@ proc exampleThread(data: pointer): pointer {.cdecl.} =
     stdout.write("Generated SDP from agent :\n$1\n\n" % [sdp])
     stdout.write("Copy the following line to remote client:\n")
     sdp64 = base64Encode(sdp)
-    stdout.write("\n  $1\n", sdp64)
+    #stdout.write("\n  $1\n" % [sdp64])
+    stdout.write("\n  ", sdp64, "\n")
     #  Listen on stdin for the remote candidate list
     stdout.write("Enter remote data (single line, no wrapping):\n")
     stdout.write("> ")
@@ -159,7 +159,7 @@ proc exampleThread(data: pointer): pointer {.cdecl.} =
         if sdp.len > 0 and parseRemoteSdp(agent, sdp) > 0:
           break
         else:
-          write(stderr, "ERROR: failed to parse remote data\n")
+          write(stderr, "ERROR: failed to parse remote data\n") # here we may get an error -- we have to debug!
           write(stdout, "Enter remote data (single line, no wrapping):\n")
           stdout.write("> ")
           flushFile(stdout)
