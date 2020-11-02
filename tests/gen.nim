@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK3/GTK4 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.8.3 2020-OCT-28
+# v 0.8.4 2020-NOV-02
 # (c) S. Salewski 2018
 
 # usefull for finding death code:
@@ -614,6 +614,7 @@ type
     intA0
     glist
     namedAX
+    intAX
 
 type
   RecResFlag = enum
@@ -695,7 +696,10 @@ proc newGenRec(t: GITypeInfo; genProxy = false): RecRes =
           result.flags.incl(RecResFlag.zeroTerminated)
           result[1] = intA0
         if child in UnnamedArrayCandidates:
-          result[1] = intA0 # yes we need this
+          result[1] = intA0 # yes we need this # but is wrong, see g_base64_decode
+          if not gTypeInfoIsZeroTerminated(t):
+            #echo "bbbbbbbbbb"
+            result[1] = intAX
           result.flags.incl(RecResFlag.unamedA)
         if child in ["TargetEntry00", "PageRange", "KeymapKey"]:
           result.flags.incl(RecResFlag.namedA)
@@ -1634,6 +1638,23 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
             assert(gCallableInfoGetCallerOwns(minfo) in {GITransfer.EVERYTHING, GITransfer.NOTHING, GITransfer.CONTAINER})
             #if gCallableInfoGetCallerOwns(minfo) != GITransfer.NOTHING:
             #  methodBuffer.writeLine("  g_list_free(resul0)")
+          elif ngrRet.flags.contains(RecResFlag.unamedA) and ngrRet.res == intAX:
+            # https://discourse.gnome.org/t/g-key-file-get-integer-list-transfer-container/4729
+            # for fundamental types GITransfer.EVERYTHING and GITransfer.CONTAINER are equivalent
+            var co = gCallableInfoGetCallerOwns(minfo)
+            assert ngrRet.flags.contains(RecResFlag.array)
+            if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo) or co in {GITransfer.EVERYTHING, CONTAINER}:
+              methodBuffer.writeLine("  let resul0 = " & sym & pars.arglist)
+              checkForGerror()
+              if gCallableInfoMayReturnNull(minfo):
+                methodBuffer.writeLine("  if resul0.isNil:")
+                methodBuffer.writeLine("    return")
+              methodBuffer.writeLine("  result = $1ToSeq(resul0, $2.int)" % [fixedName2(ngrRet.name00), pars.blex])
+            else:
+              methodBuffer.writeLine("  result = $1ToSeq($3, $2.int)" % [fixedName2(ngrRet.name00), pars.blex, sym & pars.arglist])
+            assert(co in {GITransfer.EVERYTHING, CONTAINER, NOTHING})
+            if co in {GITransfer.EVERYTHING, CONTAINER}:
+              methodBuffer.writeLine("  cogfree(resul0)")
           elif ngrRet.flags.contains(RecResFlag.unamedA) and ngrRet.res == intA0:
             assert ngrRet.flags.contains(RecResFlag.array)
             if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo) or gCallableInfoGetCallerOwns(minfo) ==
@@ -2943,6 +2964,27 @@ proc uint8ArrayZT2seq*(p: pointer): seq[uint8] =
 """)
 
     output.writeLine("""
+proc uint8ArrayToSeq*(s: ptr uint8; n: int): seq[uint8] =
+  let a = cast[ptr UncheckedArray[uint8]](s)
+  for i in 0 ..< n:
+    result.add(a[i])
+""")
+
+    output.writeLine("""
+proc uint32ArrayToSeq*(s: ptr uint32; n: int): seq[uint32] =
+  let a = cast[ptr UncheckedArray[uint32]](s)
+  for i in 0 ..< n:
+    result.add(a[i])
+""")
+
+    output.writeLine("""
+proc int32ArrayToSeq*(s: ptr int32; n: int): seq[int32] =
+  let a = cast[ptr UncheckedArray[int32]](s)
+  for i in 0 ..< n:
+    result.add(a[i])
+""")
+
+    output.writeLine("""
 proc cstringArrayToSeq*(s: ptr cstring): seq[string] =
   system.cstringArrayToSeq(cast[cstringArray](s))
 """)
@@ -3455,7 +3497,7 @@ launch()
 #  if not xcallerAlloc.contains(el):
 #    echo el
 
-# 3453 lines defined
+# 3500 lines defined
 # troubles: gTypeFundamental(gRegisteredTypeInfoGetGType(info)) == G_TYPE_BOXED:
 #[
 
