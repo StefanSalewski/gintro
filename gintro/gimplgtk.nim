@@ -114,4 +114,84 @@ $1(column, renderer, $6)
 """ % [$procName, ats, $column, $renderer, $procNameCdecl, argStr, $procNameDestroy]
 
   result = parseStmt(r0s & r1s & r2s)
-# 117 lines
+
+#[
+type
+  DrawingAreaDrawFunc* = proc (drawingArea: ptr DrawingArea00; cr: ptr cairo.Context00; width: int32;
+    height: int32; userData: pointer) {.cdecl.}
+
+proc gtk_drawing_area_set_draw_func(self: ptr DrawingArea00; drawFunc: DrawingAreaDrawFunc;
+    userData: pointer; destroy: DestroyNotify) {.importc, libprag.}
+
+proc setDrawFunc*(self: DrawingArea; drawFunc: DrawingAreaDrawFunc;
+    userData: pointer; destroy: DestroyNotify) =
+  gtk_drawing_area_set_draw_func(cast[ptr DrawingArea00](self.impl), drawFunc, userData, destroy)
+]#
+#
+macro msetDrawFunc(da: DrawingArea; p: untyped; arg: typed; ignoreArg: bool): untyped =
+  var IdleID {.compileTime, global.}: int
+  inc(IdleID)
+  let ats = $getTypeInst(arg).toStrLit
+  let procName = "drawfunc_" & $IdleID
+  let procNameCdecl = "drawfunc_cdecl_" & $IdleID
+  var r1s = """
+
+proc $1(self: ptr DrawingArea00; cr: ptr cairo.Context00; width, height: int32; userData: pointer) {.cdecl.} =
+  let h: pointer = g_object_get_qdata(self, Quark)
+  var cr1 {.global.}: cairo.Context
+  if cr1.isNil:
+    new cr1
+    GC_ref(cr1) # never call destroy/finalizer on this global variable
+    cr1.ignoreFinalizer = true
+  cr1.impl = cr
+  $2(cast[DrawingArea](h), cr1, width, height"""
+ 
+  if not ignoreArg.boolVal:
+    if getTypeInst(arg).typeKind == ntyRef:
+      r1s.add(", cast[$3](userdata)")
+    else:
+      #r1s.add(", cast[ptr $3](userdata)[]")
+      r1s.add(", cast[$3](userdata)")
+  r1s.add(")\n")
+
+  r1s = r1s % [$procNameCdecl, $p, ats]
+
+  let r2s =
+    if ignoreArg.boolVal:
+
+      """
+proc $1(self: DrawingArea) =
+    #gtk_drawing_area_set_draw_func(self.impl, $3, nil, nil)
+    gtk_drawing_area_set_draw_func(cast[ptr DrawingArea00](self.impl), $3, nil, nil)
+$1($5)
+""" % [$procName, ats, $procNameCdecl, $(arg.toStrLit), $(da.toStrLit)]
+
+    else:
+
+      """
+proc $1(self: DrawingArea; a: $2) =
+  when (a is ref object):
+    GC_ref(a)
+    gtk_drawing_area_set_draw_func(self.impl, $3, cast[pointer](a), nil)
+  else:
+    var ar: ref $2
+    new(ar)
+    #deepCopy(ar[], a)
+    ar[] = a
+    GC_ref(ar)
+    gtk_drawing_area_set_draw_func(cast[ptr DrawingArea00](self.impl), $3, cast[pointer](ar[]), nil)
+$1($5, $4)
+""" % [$procName, ats, $procNameCdecl, $(arg.toStrLit), $(da.toStrLit)]
+
+  echo r1s
+  echo r2s
+  result = parseStmt(r1s & r2s)
+
+template setDrawFunc*(da: DrawingArea; p: untyped; arg: typed): untyped =
+  msetDrawFunc(da, p, arg, false)
+
+template setDrawFunc*(da: DrawingArea; p: untyped): untyped =
+  msetDrawFunc(da, p, "", true)
+
+# 196 lines
+

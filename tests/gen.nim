@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK3/GTK4 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.8.4 2020-NOV-02
+# v 0.8.4 2020-NOV-18
 # (c) S. Salewski 2018
 
 # usefull for finding death code:
@@ -277,8 +277,6 @@ proc fixedModName(s: string): string =
     result &= "4"
 
 proc gBaseInfoGetName(info: GIBaseInfo): string =
-  #if info == nil:
-  #  return " "
   result = $(gir.gBaseInfoGetName(info))
   let h = $(gir.gBaseInfoGetNamespace(info))
   if h == "Gio" and result == "Application":
@@ -442,6 +440,7 @@ gobject.EnumClass
 gtk.RecentData
 glib.SList
 glib.List
+nice.Candidate
 """
 
 const autoCallerAlloc = """
@@ -636,6 +635,7 @@ type
     namePlainNS: string
     name00: string
     flags: RecResFlags
+    optOut: bool
 
 type
   GPars = tuple
@@ -698,7 +698,6 @@ proc newGenRec(t: GITypeInfo; genProxy = false): RecRes =
         if child in UnnamedArrayCandidates:
           result[1] = intA0 # yes we need this # but is wrong, see g_base64_decode
           if not gTypeInfoIsZeroTerminated(t):
-            #echo "bbbbbbbbbb"
             result[1] = intAX
           result.flags.incl(RecResFlag.unamedA)
         if child in ["TargetEntry00", "PageRange", "KeymapKey"]:
@@ -717,10 +716,9 @@ proc newGenRec(t: GITypeInfo; genProxy = false): RecRes =
     else:
       result[0] = mangleName($gBaseInfoGetName(iface))
       cAlloc = callerAlloc.contains(ns & '.' & result[0])
-      if gBaseInfoGetType(iface) in {GIInfoType.Object, GIInfoType.STRUCT, GIInfoType.UNION, GIInfoType.INTERFACE} and
-          not callerAlloc.contains(ns & '.' & result[0]):
+      if gBaseInfoGetType(iface) in {GIInfoType.INTERFACE, Object, STRUCT, UNION} and not callerAlloc.contains(ns & '.' & result[0]):
         newrawmark = "00"
-      if gBaseInfoGetType(iface) in {GIInfoType.Object, GIInfoType.STRUCT, GIInfoType.UNION, GIInfoType.INTERFACE}:
+      if gBaseInfoGetType(iface) in {GIInfoType.INTERFACE, Object, STRUCT, UNION}:
         proxyResult = genProxy
         if not (genProxy or callerAlloc.contains(ns & '.' & result[0])):
           rawmark = "00"
@@ -748,11 +746,11 @@ proc newGenRec(t: GITypeInfo; genProxy = false): RecRes =
   result[0] = mangleType(result[0]) & rawmark
 
 proc modPrefix(t: GITypeInfo; sym: string; full = true): string =
-  if sym == "gtk_renderer_cell_accessible_new":
-    return fixedModName("gtk") & "."
-  if sym == "gtk_mount_operation_new":
-    return fixedModName("gtk") & "."
-  if sym == "gtk_notebook_page_accessible_new":
+  if sym in ["gtk_renderer_cell_accessible_new", "gtk_mount_operation_new", "gtk_notebook_page_accessible_new"]:
+  #  return fixedModName("gtk") & "."
+  #if sym == "gtk_mount_operation_new":
+  #  return fixedModName("gtk") & "."
+  #if sym == "gtk_notebook_page_accessible_new":
     return fixedModName("gtk") & "."
   if sym in ["gtk_source_view_new", "gtk_source_view_new_with_buffer", "gtk_source_map_new",
     "gtk_source_style_scheme_chooser_widget_new", "gtk_source_style_scheme_chooser_button_new",
@@ -774,7 +772,7 @@ proc isProxyCandidate(t: GITypeInfo): bool =
     let iface = gTypeInfoGetInterface(t)
     let ns = ($gBaseInfoGetNamespace(iface)).toLowerAscii
     if callerAlloc.contains(ns & '.' & $gBaseInfoGetName(iface)): return false
-    result = gBaseInfoGetType(iface) in {GIInfoType.OBJECT, GIInfoType.STRUCT, GIInfoType.UNION, GIInfoType.INTERFACE}
+    result = gBaseInfoGetType(iface) in {GIInfoType.INTERFACE, OBJECT, STRUCT, UNION}
 
 proc needProxyProc(info: GICallableInfo): bool =
   if gCallableInfoIsMethod(info):
@@ -923,7 +921,7 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
       str = ngr.namePlain
     else:
       str = ngr.name00
-    var istr = str
+    #var istr = str
     if genProxy and ngr.res == glist:
       result.tempRes = "  var tempResGL = seq2GList($1)\n" % [mangleName(gBaseInfoGetName(arg))]
       if gArgInfoGetOwnershipTransfer(arg) == GITransfer.NOTHING:
@@ -973,7 +971,10 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
         result.arglist.add("if " & name & ".isNil: nil else: cast[" & ngr.name00 & "](" & name & ".impl)")
       else:
         if gArgInfoGetDirection(arg) == GIDirection.OUT:
-          result.arglist.add("cast[var " & ngr.name00 & "](addr " & name & ".impl)")
+          if gArgInfoIsOptional(arg):
+            result.arglist.add("cast[var " & ngr.name00 & "](if addr(" & name & ") == nil: nil else: addr " & name & ".impl)")
+          else:
+            result.arglist.add("cast[var " & ngr.name00 & "](addr " & name & ".impl)")
         else:
           result.arglist.add("cast[" & ngr.name00 & "](" & name & ".impl)")
     else:
@@ -984,8 +985,7 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
         result.arglist.add("cast[" & ngr.name00 & "](unsafeaddr($1[0]))" % name)
       elif (ngr.flags * {RecResFlag.namedA, cstringA} != {}) and gArgInfoGetDirection(arg) == GIDirection.IN:
         assert ngr.flags.contains(RecResFlag.array)
-        result.arglist.add("seq2$1" % [str.replace("00").capitalizeAscii.fixedName] & '(' & name & ", " & StringArrayName &
-            "$1)" % [num])
+        result.arglist.add("seq2$1" % [str.replace("00").capitalizeAscii.fixedName] & '(' & name & ", " & StringArrayName & "$1)" % [num])
         num = "2"
       elif needTypeConv(str, ngr) and gArgInfoGetDirection(arg) in {GIDirection.OUT, GIDirection.INOUT}:
         result.arglist.add(name.strip(chars = {'`'}) & "_00")
@@ -1008,6 +1008,8 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
     if genProxy and needTypeConv(str, ngr):
       if gArgInfoGetDirection(arg) in {GIDirection.OUT, INOUT} and (not gArgInfoIsCallerAllocates(arg) or (str in ["int32",
           "uint32", "ptr cstring", "cstring"])):
+        if gArgInfoGetDirection(arg) in {GIDirection.OUT}:
+          ngr.optOut = true
         result.replist[$name] = (fixedName2($str), ngr)
       if gArgInfoGetDirection(arg) in {GIDirection.OUT, INOUT} or str != "cstring": # new in 0.4.11 -- allow passing cstring if not a var
         str = doTypeConv(str, ngr)
@@ -1020,29 +1022,37 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
     if genProxy and defaultParameters.contains(sym):
       for hhh in defaultParameters[sym].split('|'):
         var h1, h2, h3: string
-        (h1, h2, h3) = hhh.split #defaultParameters[sym].split
-      #echo sym, h1," ",  h2, " ", h3, " ", str, " ", name
+        (h1, h2, h3) = hhh.split
         if name == h1 and str == h2:
           str.add(" = " & h3)
-      #if sym == "gtk_grid_attach" and name == "height": # as this needs two default parameters
-      #  str.add(" = " & h3)
-    if genProxy and (str == "string" or str == "cstring") and mayBeNil:
+    if genProxy and (str == "string" or str == "cstring") and mayBeNil and sym != "gtk_check_button_new_with_label":
       str.add(" = \"\"")
     if genProxy and m == 0:
       if sym.contains("_set_") and str == "bool":
         str.add(" = true")
-    if genProxy and isProxyCandidate(t) and mayBeNil:
-      if gArgInfoGetDirection(arg) notin {GIDirection.OUT, GIDirection.INOUT}:
-        str.add(" = nil")
-    if (genProxy or sym == "pango_extents_to_pixels") and isFunctionInfo(
-        info) and (
-        gFunctionInfoGetFlags(info).int and
+    if genProxy and isProxyCandidate(t) and mayBeNil and gArgInfoGetDirection(arg) notin {GIDirection.OUT, INOUT}:
+      str.add(" = nil")
+    when false:
+      if genProxy and gArgInfoIsOptional(arg) and gArgInfoGetDirection(arg) == GIDirection.INOUT:
+        # very few like argc and argv -- we ignore them for now
+        echo ">>>", sym, " ", mangleName(gBaseInfoGetName(arg))
+    if genProxy and gArgInfoIsOptional(arg) and gArgInfoGetDirection(arg) in {GIDirection.OUT} and not sym.startsWith("gdk_event_get"):
+      # https://github.com/nim-lang/Nim/issues/15895
+      assert(str.startsWith("var "))
+      var h = str[4 .. ^1]
+      let l = h.find('|')
+      if l > 0:
+        h.setlen(l - 1)
+        h = h[1 .. ^1]
+      # str.add(" = cast[ptr $1](nil)[]" % [h])
+      str.add(" = cast[var $1](nil)" % [h]) # same, see https://forum.nim-lang.org/t/7117
+    if (genProxy or sym == "pango_extents_to_pixels") and isFunctionInfo(info) and (gFunctionInfoGetFlags(info).int and
             GIFunctionInfoFlags.WRAPS_VFUNC.ord) == 0:
       if userAlloc and mayBeNil: # or (sym == "gdk_window_set_geometry_hints" and str == "Geometry"): # gir bug!
         var h = str
         h.removePrefix("var ")
-        str.add(" = cast[ptr " & h & "](nil)[]")
-
+        # str.add(" = cast[ptr " & h & "](nil)[]")
+        str.add(" = cast[var " & h & "](nil)") # the same as above
     #if str == "var seq[string]": no var varargs support!
     if str == "seq[string]":
       if j == m:
@@ -1055,11 +1065,9 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
     if str == "var seq[uint8]": # allow to pass a string for a seq[uint8] argument too
       str = "var (seq[uint8] | string)"
       # str = "var (seq[uint8] | openArray[char])" # https://github.com/nim-lang/Nim/issues/15128
-
     if genArrayMark and ngr.flags.contains(RecResFlag.array) and str.startsWith("ptr "):
       str.removePrefix("ptr ")
       str.add("Array")
-
     resus.add((name, str))
     if j < m:
       result.arglist.add(", ")
@@ -1089,7 +1097,7 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
 
   var ngrRet = newGenRec(ret, true)
   var r: string
-  if genProxy: # and not gArgInfoIsCallerAllocates(arg):
+  if genProxy:
     r = ngrRet.namePlain
   else:
     r = ngrRet.name00
@@ -1113,7 +1121,7 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
       result.arrLex = "  let $1 = $2($3.len)\n" % [resus[resusLen][0], h, lastName]
       resus.delete(resusLen)
     else:
-      result.arrLex = "" #"#??\n"
+      result.arrLex = ""
   result.plist = makePList(resus, self, resusres).isplit(sym.len + "proc".len)
 
 # see also template findFreeProc()
@@ -1240,7 +1248,6 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
 
   var pars: GPars
   let p = methodBuffer.getPosition
-  #let sym = $gFunctionInfoGetSymbol(mInfo)
   let symIsDeprecated = gBaseInfoIsDeprecated(mInfo).int != 0
   var depStr = ""
   if symIsDeprecated:
@@ -1298,7 +1305,6 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
 
   try:
     pars = genPars(mInfo, false, info)
-
     processedFunctions.incl(sym)
     if not sym.startsWith("g_param_spec_uref"):
       if sym.startsWith("g_param_spec_", "g_type_interface_", "g_object_interface_"): return
@@ -1367,7 +1373,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
         if sym in ["g_quark_from_static_string", "g_error_free", "g_object_get_qdata", "g_object_ref_sink", "g_object_unref",
           "g_timeout_add_full", "g_object_is_floating",
           "g_type_from_name", "g_type_check_instance_is_a", "g_idle_add_full", "g_quark_try_string", "vte_regex_unref",
-          "gtk_builder_get_object"]:
+          "gtk_builder_get_object", "g_action_map_add_action", "gtk_drawing_area_set_draw_func"]:
           methodBuffer.write("\nproc " & sym & EM & pars.plist)
           methodBuffer.writeLine(" {.\n    importc, ", libprag, ".}")
           if sym.startsWith("vte_regex_unref"): # this function is special, as it returns the object
@@ -1557,6 +1563,15 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
             let arg = gCallableInfoGetArg(minfo, j)
             let t = gArgInfoGetType(arg)
             var ngrt = newGenRec(t)
+            if gArgInfoGetDirection(arg) == GIDirection.IN and gArgInfoGetOwnershipTransfer(arg) == GITransfer.EVERYTHING and
+              isProxyCandidate(t) and not callerAlloc.contains(ngrt.namePlainNS):
+              # like gtk_widget_add_controller()
+              let n = mangleName(gBaseInfoGetName(arg))
+              if gArgInfoMayBeNull(arg):
+                methodBuffer.writeLine("  if " & n & " != nil:")
+                methodBuffer.writeLine("    " & n & ".ignoreFinalizer = true")
+              else:
+                methodBuffer.writeLine("  " & n & ".ignoreFinalizer = true")
             if gArgInfoGetDirection(arg) == GIDirection.OUT and isProxyCandidate(t) and
               not callerAlloc.contains(ngrt.namePlainNS) and not gArgInfoIsCallerAllocates(arg):
               let tag = gTypeInfoGetTag(t)
@@ -1573,14 +1588,28 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
                   var freeMe: GIFunctionInfo
                   findFreeProc(info, gArgInfoGetOwnershipTransfer(arg) == GITransfer.NOTHING)
               let h2 = mangleName(gBaseInfoGetName(arg))
-              if boxedFreeMeName != "":
-                methodBuffer.writeLine("  fnew(" & h2 & ", " & boxedFreeMeName & ")")
-              elif freeMeName == "":
-                methodBuffer.writeLine("  new(" & h2 & ")")
+              if gArgInfoIsOptional(arg):
+                #methodBuffer.writeLine("  if cast[ptr $1]($2) != nil:" % [ngrt.namePlain, h2])
+                methodBuffer.writeLine("  if addr($2) != nil:" % [ngrt.namePlain, h2])
+                if boxedFreeMeName != "":
+                  methodBuffer.writeLine("    fnew(" & h2 & ", " & boxedFreeMeName & ")")
+                elif freeMeName == "":
+                  methodBuffer.writeLine("    new(" & h2 & ")")
+                else:
+                  methodBuffer.writeLine("    fnew(" & h2 & ", " & freeMeName & ")")
               else:
-                methodBuffer.writeLine("  fnew(" & h2 & ", " & freeMeName & ")")
+                if boxedFreeMeName != "":
+                  methodBuffer.writeLine("  fnew(" & h2 & ", " & boxedFreeMeName & ")")
+                elif freeMeName == "":
+                  methodBuffer.writeLine("  new(" & h2 & ")")
+                else:
+                  methodBuffer.writeLine("  fnew(" & h2 & ", " & freeMeName & ")")
               if gArgInfoGetOwnershipTransfer(arg) == GITransfer.NOTHING:
-                methodBuffer.writeLine("  " & h2 & ".ignoreFinalizer = true") # as we have always to attach one with ARC.
+                if gArgInfoIsOptional(arg):
+                  methodBuffer.writeLine("  if addr($2) != nil:" % [ngrt.namePlain, h2])
+                  methodBuffer.writeLine("    " & h2 & ".ignoreFinalizer = true")
+                else:
+                  methodBuffer.writeLine("  " & h2 & ".ignoreFinalizer = true") # as we have always to attach one with ARC.
           if gCallableInfoCanThrowGerror(minfo):
             methodBuffer.writeLine("  var gerror: ptr glib.Error")
             pars.arglist.insert(", addr gerror", pars.arglist.high)
@@ -1591,15 +1620,17 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
               #assert not (v[1].flags.contains(RecResFlag.zeroTerminated))
               methodBuffer.writeLine("  var $1x$2: array[$3, pointer]" % [StringArrayName, multi, $StringArrayEntries])
               methodBuffer.writeLine("  var $1$2: cstringArray = cast[cstringArray](addr $1x$2)" % [StringArrayName, multi])
-              methodBuffer.writeLine("  var $1_00 = seq2$2($3, $4$5)" % [k, v[0].replace("00").capitalizeAscii, k,
-                  StringArrayName, multi])
+              methodBuffer.writeLine("  var $1_00 = seq2$2($3, $4$5)" % [k, v[0].replace("00").capitalizeAscii, k, StringArrayName, multi])
               if multi == "":
                 multi = "1"
             elif v[1].flags.contains(RecResFlag.unamedA):
               assert v[1].flags.contains(RecResFlag.array)
               methodBuffer.writeLine("  var $1_00: $2" % [k, v[1].name00])
             else:
-              methodBuffer.writeLine("  var $1_00 = $2($3)" % [k.strip(chars = {'`'}), v[0], k])
+              if v[1].optOut:
+                methodBuffer.writeLine("  var $1_00: $2" % [k.strip(chars = {'`'}), v[0], k])
+              else:
+                methodBuffer.writeLine("  var $1_00 = $2($3)" % [k.strip(chars = {'`'}), v[0], k])
           if ngrRet.res == glist:
             var elTransferFull = gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING
             if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo) or gCallableInfoGetCallerOwns(minfo) !=
@@ -1616,28 +1647,14 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
                   methodBuffer.writeLine("  result = glistStructs2seq[$1](resul0)" % [ngrRet.childName])
               if gCallableInfoGetCallerOwns(minfo) != GITransfer.NOTHING:
                 methodBuffer.writeLine("  g_list_free(resul0)")
-              if sym == "g_app_info_get_all":
-                discard #echo "LLL ", r4
             else:
-              if sym == "g_app_info_get_all":
-                discard #echo "LLL ", r4
               if ngrRet.infoType == GIInfoType.OBJECT or ngrRet.infoType == GIInfoType.INTERFACE:
                 if ngrRet.infoType != GIInfoType.INTERFACE:
                   assert findFreeObject(gTypeInfoGetInterface(gTypeInfoGetParamType(ret2, 0))).len == 0
-                #ignoreFinalizer = gCallableInfoGetCallerOwns(minfo) !=  GITransfer.EVERYTHING
-                #assert(ignoreFinalizer)
-                methodBuffer.writeLine("  result = glistObjects2seq($1, $2, $3)" % [ngrRet.childName, sym & pars.arglist,
-                    $elTransferFull])
-                #echo "FFFFF ", findFreeObject(gTypeInfoGetInterface(gTypeInfoGetParamType(ret2, 0)))
+                methodBuffer.writeLine("  result = glistObjects2seq($1, $2, $3)" % [ngrRet.childName, sym & pars.arglist, $elTransferFull])
               else:
-                if ngrRet.infoType == GIInfoType.STRUCT:
-                  discard ##echo "ffffffff ", findFreeStruct(gTypeInfoGetInterface(gTypeInfoGetParamType(ret2, 0)))
-                else:
-                  discard #echo "zzz",  sym
                 methodBuffer.writeLine("  discard")
             assert(gCallableInfoGetCallerOwns(minfo) in {GITransfer.EVERYTHING, GITransfer.NOTHING, GITransfer.CONTAINER})
-            #if gCallableInfoGetCallerOwns(minfo) != GITransfer.NOTHING:
-            #  methodBuffer.writeLine("  g_list_free(resul0)")
           elif ngrRet.flags.contains(RecResFlag.unamedA) and ngrRet.res == intAX:
             # https://discourse.gnome.org/t/g-key-file-get-integer-list-transfer-container/4729
             # for fundamental types GITransfer.EVERYTHING and GITransfer.CONTAINER are equivalent
@@ -1758,7 +1775,11 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
               assert v[1].flags.contains(RecResFlag.array)
               methodBuffer.writeLine("  $1 = $2($3_00, $4)" % [k, doCt3nt(v[0], v[1]), k.strip(chars = {'`'}), pars.blex])
             else:
-              methodBuffer.writeLine("  $1 = $2($3_00)" % [k, doCt3nt(v[0], v[1]), k.strip(chars = {'`'})])
+              if v[1].optOut:
+                methodBuffer.writeLine("  if $1.addr != nil:" % [k, doCt3nt(v[0], v[1]), k.strip(chars = {'`'})])
+                methodBuffer.writeLine("    $1 = $2($3_00)" % [k, doCt3nt(v[0], v[1]), k.strip(chars = {'`'})])
+              else:
+                methodBuffer.writeLine("  $1 = $2($3_00)" % [k, doCt3nt(v[0], v[1]), k.strip(chars = {'`'})])
         # BLOCKMARK8
       else: # } end of large proxy block BLOCK7
         asym = fixedProcNames.getOrDefault(sym, asym)
@@ -2154,7 +2175,7 @@ proc writeModifierType(info: GIEnumInfo) =
       output.writeLine(i)
   output.writeLine("\n  ", we & EM, " {.size: sizeof(cint).} = set[$1Flag]" % [tname])
   if we == "ModifierType":
-    output.writeLine("\nconst ModifierMask* = {ModifierFlag.shift .. ModifierFlag.button5, ModifierFlag.super .. ModifierFlag.meta}") #, ModifierFlag.release}")
+    output.writeLine("\nconst ModifierMask* = {ModifierFlag.shift .. ModifierFlag.button5, ModifierFlag.super .. ModifierFlag.meta}")
   elif we == "EventMask":
     output.writeLine("\nconst AllEventsMask* = {EventFlag.exposure .. EventFlag.smoothScroll}")
   for j in 0.cint ..< gEnumInfoGetNMethods(info):
@@ -2754,6 +2775,9 @@ const GTK_EPI = """
 #proc loadFromData*(self: CssProvider; data: cstring): bool =
 #  loadFromData(self, uint8Array(data), -1)
 
+proc addAction*(self: ApplicationWindow; action: Action | PropertyAction | SimpleAction) =
+  g_action_map_add_action(cast[ptr ActionMap00](self.impl), cast[ptr Action00](action.impl))
+
 proc gtk_file_chooser_dialog_new*(title: cstring; parent: ptr Window00; action: FileChooserAction; 
     firstButtonText: cstring = nil): ptr FileChooserDialog00 {.varargs,
     importc: "gtk_file_chooser_dialog_new", libprag.}
@@ -3062,7 +3086,8 @@ proc cstringArrayToSeq*(s: ptr cstring): seq[string] =
       #  if gRegisteredTypeInfoGetGType(info) != G_TYPE_NONE and gTypeFundamental(gRegisteredTypeInfoGetGType(info)) == G_TYPE_BOXED:
       #    echo gBaseInfoGetName(info)#gRegisteredTypeInfoGetGType(info)
       let n = gBaseInfoGetName(info)
-      if n[0] != '_' and not n.endsWith("Private") and not (namespace == "Gdk" and n.startsWith("Event")) and not (namespace == "Pango" and n.startsWith("Attribute")):
+      if n[0] != '_' and not n.endsWith("Private") and not (namespace == "Gdk" and n.startsWith("Event")) and not (namespace ==
+          "Pango" and n.startsWith("Attribute")):
         if gBaseInfoGetType(info) == GIInfoType.STRUCT:
           if not ((gStructInfoIsGtypeStruct(info) and n != "ObjectClass")):
             var lightObj = true
@@ -3076,7 +3101,7 @@ proc cstringArrayToSeq*(s: ptr cstring): seq[string] =
                   lightObj = false
             if lightObj:
               let el = moduleNamespace & '.' & $n
-              if not manCallerAlloc.contains(el) and not noCallerAlloc.contains(el): 
+              if not manCallerAlloc.contains(el) and not noCallerAlloc.contains(el):
                 xcallerAlloc.incl(el)
 
         if gBaseInfoGetType(info) == GIInfoType.UNION:
@@ -3091,7 +3116,7 @@ proc cstringArrayToSeq*(s: ptr cstring): seq[string] =
                 lightObj = false
           if lightObj:
             let el = moduleNamespace & '.' & $n
-            if not manCallerAlloc.contains(el) and not noCallerAlloc.contains(el): 
+            if not manCallerAlloc.contains(el) and not noCallerAlloc.contains(el):
               xcallerAlloc.incl(el)
 
   for info in s:
@@ -3497,7 +3522,10 @@ launch()
 #  if not xcallerAlloc.contains(el):
 #    echo el
 
-# 3500 lines defined
+# 3525 lines
+# gtk_icon_view_get_tooltip_context bug Candidate
+# gtk_tree_view_get_cursor bug
+#
 # troubles: gTypeFundamental(gRegisteredTypeInfoGetGType(info)) == G_TYPE_BOXED:
 #[
 
