@@ -172,7 +172,7 @@ $1($5)
 proc $1(self: DrawingArea; a: $2) =
   when (a is ref object):
     GC_ref(a)
-    gtk_drawing_area_set_draw_func(self.impl, $3, cast[pointer](a), nil)
+    gtk_drawing_area_set_draw_func(cast[ptr DrawingArea00](self.impl), $3, cast[pointer](a), nil)
   else:
     var ar: ref $2
     new(ar)
@@ -183,8 +183,8 @@ proc $1(self: DrawingArea; a: $2) =
 $1($5, $4)
 """ % [$procName, ats, $procNameCdecl, $(arg.toStrLit), $(da.toStrLit)]
 
-  echo r1s
-  echo r2s
+  #echo r1s
+  #echo r2s
   result = parseStmt(r1s & r2s)
 
 template setDrawFunc*(da: DrawingArea; p: untyped; arg: typed): untyped =

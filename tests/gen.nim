@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK3/GTK4 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.8.4 2020-NOV-18
+# v 0.8.4 2020-DEC-02
 # (c) S. Salewski 2018
 
 # usefull for finding death code:
@@ -440,7 +440,7 @@ gobject.EnumClass
 gtk.RecentData
 glib.SList
 glib.List
-nice.Candidate
+nice.Address
 """
 
 const autoCallerAlloc = """
@@ -612,6 +612,7 @@ type
     cstrA
     intA0
     glist
+    gslist
     namedAX
     intAX
 
@@ -674,6 +675,23 @@ proc newGenRec(t: GITypeInfo; genProxy = false): RecRes =
     result.namePlainNS = result[0]
     result.name00 = result[0]
     return
+
+  if tag == GITypeTag.GSLIST:
+    let arrayType = gTypeInfoGetParamType(t, 0)
+    let atag = gTypeInfoGetTag(arrayType) #  INTERFACE or UTF8
+    if atag == GITypeTag.INTERFACE:
+      let aface = gTypeInfoGetInterface(arrayType)
+      result[3] = gBaseInfoGetType(aface)
+    var child = newGenRec(arrayType, genProxy = true).namePlain # [0]
+    child = mangleType(mangleName(child))
+    result[0] = "ptr glib.SList"
+    result[1] = gslist
+    result[2] = child
+    result.namePlain = result[0]
+    result.namePlainNS = result[0]
+    result.name00 = result[0]
+    return
+
   if tag == GITypeTag.ARRAY:
     result.flags.incl(RecResFlag.array)
     let toa = gTypeInfoGetArrayType(t) # type of array
@@ -921,7 +939,6 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
       str = ngr.namePlain
     else:
       str = ngr.name00
-    #var istr = str
     if genProxy and ngr.res == glist:
       result.tempRes = "  var tempResGL = seq2GList($1)\n" % [mangleName(gBaseInfoGetName(arg))]
       if gArgInfoGetOwnershipTransfer(arg) == GITransfer.NOTHING:
@@ -930,6 +947,16 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
         str = "var seq[$1]" % [ngr.childname]
       else:
         str = "seq[$1]" % [ngr.childname]
+
+    if genProxy and ngr.res == gslist:
+      result.tempRes = "  var tempResGL = seq2GSList($1)\n" % [mangleName(gBaseInfoGetName(arg))]
+      if gArgInfoGetOwnershipTransfer(arg) == GITransfer.NOTHING:
+        result.tempResFree = "  g_slist_free(tempResGL)\n"
+      if str.startsWith("var "):
+        str = "var seq[$1]" % [ngr.childname]
+      else:
+        str = "seq[$1]" % [ngr.childname]
+
     if (ngr.flags * {RecResFlag.unamedA, namedA} != {}) and genProxy and not gTypeInfoIsZeroTerminated(t):
       assert ngr.flags.contains(RecResFlag.array)
       assert not (ngr.flags.contains(RecResFlag.zeroTerminated))
@@ -980,12 +1007,16 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
     else:
       if ngr.res == glist:
         result.arglist.add("tempResGL")
+      elif ngr.res == gslist:
+        result.arglist.add("tempResGL")
+
       elif ngr.flags.contains(RecResFlag.unamedA) and (gArgInfoGetDirection(arg) == GIDirection.IN or gArgInfoIsCallerAllocates(arg)):
         assert ngr.flags.contains(RecResFlag.array)
         result.arglist.add("cast[" & ngr.name00 & "](unsafeaddr($1[0]))" % name)
       elif (ngr.flags * {RecResFlag.namedA, cstringA} != {}) and gArgInfoGetDirection(arg) == GIDirection.IN:
         assert ngr.flags.contains(RecResFlag.array)
-        result.arglist.add("seq2$1" % [str.replace("00").capitalizeAscii.fixedName] & '(' & name & ", " & StringArrayName & "$1)" % [num])
+        result.arglist.add("seq2$1" % [str.replace("00").capitalizeAscii.fixedName] & '(' & name & ", " & StringArrayName &
+            "$1)" % [num])
         num = "2"
       elif needTypeConv(str, ngr) and gArgInfoGetDirection(arg) in {GIDirection.OUT, GIDirection.INOUT}:
         result.arglist.add(name.strip(chars = {'`'}) & "_00")
@@ -1103,6 +1134,9 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
     r = ngrRet.name00
   if genProxy and ngrRet.res == glist:
     r = "seq[$1]" % [ngrRet.childname]
+  if genProxy and ngrRet.res == gslist:
+    r = "seq[$1]" % [ngrRet.childname]
+
   var hhh = ngrRet.namePlainNS
   if hhh.startsWith("gtk4", "gdk4"):
     hhh.delete(3, 3)
@@ -1154,7 +1188,6 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
     assert(gCallableInfoGetCallerOwns(minfo) in {GITransfer.NOTHING, EVERYTHING}) # both occur
     methodBuffer.write(pars.tempRes)
     methodBuffer.writeLine("  let gobj = " & sym & pars.arglist)
-    methodBuffer.write(pars.tempResFree)
     checkForGerror()
     if gCallableInfoMayReturnNull(minfo):
       methodBuffer.writeLine("  if gobj.isNil:")
@@ -1373,7 +1406,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
         if sym in ["g_quark_from_static_string", "g_error_free", "g_object_get_qdata", "g_object_ref_sink", "g_object_unref",
           "g_timeout_add_full", "g_object_is_floating",
           "g_type_from_name", "g_type_check_instance_is_a", "g_idle_add_full", "g_quark_try_string", "vte_regex_unref",
-          "gtk_builder_get_object", "g_action_map_add_action", "gtk_drawing_area_set_draw_func"]:
+          "gtk_builder_get_object", "g_action_map_add_action", "gtk_drawing_area_set_draw_func", "g_io_add_watch_full"]:
           methodBuffer.write("\nproc " & sym & EM & pars.plist)
           methodBuffer.writeLine(" {.\n    importc, ", libprag, ".}")
           if sym.startsWith("vte_regex_unref"): # this function is special, as it returns the object
@@ -1405,6 +1438,13 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
         if (gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) != 0 or isProxyCandidate(ret2):
           if info != nil:
             asym = asym.replace("new", "new" & manglename(gBaseInfoGetName(info)))
+          else: # i.e. "pango_attr_background_new"
+            if asym.endsWith("New"):
+              asym.setLen(asym.len - 3)
+              asym[0] = asym[0].toUpperAscii
+              asym = "new" & asym
+              #discard #asym =
+            #if sym == "pango_attr_background_new": echo "sss", info != nil, asym
         asym = fixedProcNames.getOrDefault(sym, asym)
         # BLOCKMARK8 : 3 cases: constructor, isProxyCandidate(ret2), plain else
         if (gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) != 0:
@@ -1430,7 +1470,8 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
             if itt == 2:
               depStr = " {.deprecated.}"
             methodBuffer.writeLine(hhh & depStr & " =")
-            methodBuffer.write(pars.tempRes) # caution, gobjectTemp() may write tempRes too.
+            if not isGObject:
+              methodBuffer.write(pars.tempRes) # caution, gobjectTemp() may write tempRes too.
             methodBuffer.write(pars.arrLex)
             methodBuffer.write(sss)
             if gCallableInfoCanThrowGerror(minfo):
@@ -1620,7 +1661,8 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
               #assert not (v[1].flags.contains(RecResFlag.zeroTerminated))
               methodBuffer.writeLine("  var $1x$2: array[$3, pointer]" % [StringArrayName, multi, $StringArrayEntries])
               methodBuffer.writeLine("  var $1$2: cstringArray = cast[cstringArray](addr $1x$2)" % [StringArrayName, multi])
-              methodBuffer.writeLine("  var $1_00 = seq2$2($3, $4$5)" % [k, v[0].replace("00").capitalizeAscii, k, StringArrayName, multi])
+              methodBuffer.writeLine("  var $1_00 = seq2$2($3, $4$5)" % [k, v[0].replace("00").capitalizeAscii, k,
+                  StringArrayName, multi])
               if multi == "":
                 multi = "1"
             elif v[1].flags.contains(RecResFlag.unamedA):
@@ -1644,17 +1686,47 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
                 methodBuffer.writeLine("  result = glistObjects2seq($1, resul0, $2)" % [ngrRet.childName, $elTransferFull])
               if ngrRet.infoType == GIInfoType.STRUCT:
                 if gBaseInfoGetName(gTypeInfoGetInterface(gTypeInfoGetParamType(ret2, 0))) notin ["Atom", "Variant"]: # care later
-                  methodBuffer.writeLine("  result = glistStructs2seq[$1](resul0)" % [ngrRet.childName])
+                  methodBuffer.writeLine("  result = glistStructs2seq[$1](resul0, $2)" % [ngrRet.childName, $(
+                      gCallableInfoGetCallerOwns(minfo) != GITransfer.EVERYTHING)])
               if gCallableInfoGetCallerOwns(minfo) != GITransfer.NOTHING:
-                methodBuffer.writeLine("  g_list_free(resul0)")
+                methodBuffer.writeLine("  g_list_free(resul0)") # only free the list itself, the elements are moved to the seq
             else:
               if ngrRet.infoType == GIInfoType.OBJECT or ngrRet.infoType == GIInfoType.INTERFACE:
                 if ngrRet.infoType != GIInfoType.INTERFACE:
                   assert findFreeObject(gTypeInfoGetInterface(gTypeInfoGetParamType(ret2, 0))).len == 0
-                methodBuffer.writeLine("  result = glistObjects2seq($1, $2, $3)" % [ngrRet.childName, sym & pars.arglist, $elTransferFull])
+                methodBuffer.writeLine("  result = glistObjects2seq($1, $2, $3)" % [ngrRet.childName, sym & pars.arglist,
+                    $elTransferFull])
               else:
                 methodBuffer.writeLine("  discard")
             assert(gCallableInfoGetCallerOwns(minfo) in {GITransfer.EVERYTHING, GITransfer.NOTHING, GITransfer.CONTAINER})
+
+          elif ngrRet.res == gslist:
+            var elTransferFull = gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING
+            if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo) or gCallableInfoGetCallerOwns(minfo) !=
+                GITransfer.NOTHING:
+              methodBuffer.writeLine("  let resul0 = " & sym & pars.arglist)
+              checkForGerror()
+              if gCallableInfoMayReturnNull(minfo):
+                methodBuffer.writeLine("  if resul0.isNil:")
+                methodBuffer.writeLine("    return")
+              if ngrRet.infoType == GIInfoType.OBJECT or ngrRet.infoType == GIInfoType.INTERFACE:
+                methodBuffer.writeLine("  result = gslistObjects2seq($1, resul0, $2)" % [ngrRet.childName, $elTransferFull])
+              if ngrRet.infoType == GIInfoType.STRUCT:
+                if gBaseInfoGetName(gTypeInfoGetInterface(gTypeInfoGetParamType(ret2, 0))) notin ["Atom", "Variant"]: # care later
+                  methodBuffer.writeLine("  result = gslistStructs2seq[$1](resul0, $2)" % [ngrRet.childName, $(
+                      gCallableInfoGetCallerOwns(minfo) != GITransfer.EVERYTHING)])
+              if gCallableInfoGetCallerOwns(minfo) != GITransfer.NOTHING:
+                methodBuffer.writeLine("  g_slist_free(resul0)") # only free the list itself, the elements are moved to the seq
+            else:
+              if ngrRet.infoType == GIInfoType.OBJECT or ngrRet.infoType == GIInfoType.INTERFACE:
+                if ngrRet.infoType != GIInfoType.INTERFACE:
+                  assert findFreeObject(gTypeInfoGetInterface(gTypeInfoGetParamType(ret2, 0))).len == 0
+                methodBuffer.writeLine("  result = gslistObjects2seq($1, $2, $3)" % [ngrRet.childName, sym & pars.arglist,
+                    $elTransferFull])
+              else:
+                methodBuffer.writeLine("  discard")
+            assert(gCallableInfoGetCallerOwns(minfo) in {GITransfer.EVERYTHING, GITransfer.NOTHING, GITransfer.CONTAINER})
+
           elif ngrRet.flags.contains(RecResFlag.unamedA) and ngrRet.res == intAX:
             # https://discourse.gnome.org/t/g-key-file-get-integer-list-transfer-container/4729
             # for fundamental types GITransfer.EVERYTHING and GITransfer.CONTAINER are equivalent
@@ -1924,6 +1996,7 @@ proc writeUnion(info: GIUnionInfo) =
     output.writeLine("  ", mangleName(gBaseInfoGetName(info)) & EM & " {.pure, byRef, union.} = object")
   else:
     output.writeLine("  ", mangleName(gBaseInfoGetName(info)) & "00" & EM & " {.pure, union.} = object")
+
   if WriteFields or callerAlloc.contains(($gBaseInfoGetNamespace(info)).toLowerAscii & '.' & mangleName(gBaseInfoGetName(info))):
     for j in 0.cint ..< info.gUnionInfoGetNFields():
       let field = info.gUnionInfoGetField(j)
@@ -2006,6 +2079,7 @@ proc keymapKeyArrayToSeq(s: ptr KeymapKey; n: int):  seq[KeymapKey] =
 """ % [$StringArrayEntries]
 
 proc writeStruct(info: GIStructInfo) =
+
   if gStructInfoIsGtypeStruct(info) and gBaseInfoGetName(info) != "ObjectClass":
     return # we should not need the class and interface structs
   if gBaseInfoGetName(info).endsWith("Private"): # since v0.5.3 we do not write private structs
@@ -2017,15 +2091,26 @@ proc writeStruct(info: GIStructInfo) =
     output.writeLine("  " & mangleName(gBaseInfoGetName(info)) & "00" & EM & " = Event00")
     output.writeLine("  " & mangleName(gBaseInfoGetName(info)) & EM & " = Event")
     return
-  if callerAlloc.contains(($gBaseInfoGetNamespace(info)).toLowerAscii & '.' & mangleName(gBaseInfoGetName(info))):
+
+  if gBaseInfoGetName(info) == "Address" and moduleNamespace == "nice":
+    #import nativesockets
+    # See https://gitlab.freedesktop.org/libnice/libnice/-/blob/master/agent/address.h
+    output.writeLine("  Address* {.pure, byRef, union.} = object")
+    output.writeLine("    `addr`*: SockAddr")
+    output.writeLine("    ip4*: Sockaddr_in")
+    output.writeLine("    ip6*: Sockaddr_in6")
+
+  elif callerAlloc.contains(($gBaseInfoGetNamespace(info)).toLowerAscii & '.' & mangleName(gBaseInfoGetName(info))):
     output.writeLine("  ", mangleName(gBaseInfoGetName(info)) & EM & " {.pure, byRef.} = object")
   else:
     output.writeLine("  ", mangleName(gBaseInfoGetName(info)) & "00" & EM & " {.pure.} = object")
   if WriteFields or callerAlloc.contains(($gBaseInfoGetNamespace(info)).toLowerAscii & '.' & mangleName(gBaseInfoGetName(
       info))) or
     mangleName(gBaseInfoGetName(info)) == "TargetEntry" or
-      ["gst.Message", "gst.MiniObject", "glib.List"].contains(($gBaseInfoGetNamespace(info)).toLowerAscii & '.' & mangleName(
-          gBaseInfoGetName(info))):
+      ["gst.Message", "gst.MiniObject", "glib.List", "pango.Attribute", "nice.Address", "nice.Candidate"].contains((
+          $gBaseInfoGetNamespace(info)).toLowerAscii & '.' & mangleName(gBaseInfoGetName(info))):
+    if gBaseInfoGetName(info) == "Address":
+      echo "kkk", info.gStructInfoGetNFields()
     for j in 0.cint ..< info.gStructInfoGetNFields():
       let field = info.gStructInfoGetField(j)
       let name = manglename(gBaseInfoGetName(field)) & EM
@@ -2053,6 +2138,11 @@ proc writeStruct(info: GIStructInfo) =
   if mangleName(gBaseInfoGetName(info)) == "List" and moduleNamespace == "glib":
     output.writeLine("\nproc g_list_free*(list: ptr glib.List) {.importc: \"g_list_free\", libprag.}")
     output.writeLine("\nproc g_list_prepend*(list: ptr glib.List; data: pointer): ptr glib.List  {.importc:  \"g_list_prepend\", libprag.}")
+
+  if mangleName(gBaseInfoGetName(info)) == "SList" and moduleNamespace == "glib":
+    output.writeLine("\nproc g_slist_free*(list: ptr glib.SList) {.importc: \"g_slist_free\", libprag.}")
+    output.writeLine("\nproc g_slist_prepend*(list: ptr glib.SList; data: pointer): ptr glib.SList  {.importc:  \"g_slist_prepend\", libprag.}")
+
   if mangleName(gBaseInfoGetName(info)) == "TargetEntry":
     # assert false executed for gtk3
     output.writeLine(TargetEntryProx)
@@ -2066,7 +2156,9 @@ proc writeStruct(info: GIStructInfo) =
       genDestroyFreeUnref()
 
 template writeSignal() =
+  #echo gBaseInfoGetName(signalInfo), gCallableInfoGetNArgs(signalInfo), gTypeInfoGetTag(zzzu)
   if gCallableInfoGetNArgs(signalInfo) > 0 or gTypeInfoGetTag(zzzu) != GITypeTag.VOID:
+    #echo "aaa", gBaseInfoGetName(signalInfo)
     var memo = ""
     memo.addInt(gCallableInfoGetNArgs(signalInfo))
     memo.add(RecSep)
@@ -2109,6 +2201,9 @@ template writeSignal() =
   signalbuffer.write("  g_signal_connect_data(self.impl, \"")
   signalbuffer.write($gBaseInfoGetName(signalInfo))
   signalbuffer.writeLine("\", cast[GCallback](p), xdata, nil, cf)")
+  if false: #gBaseInfoGetName(signalInfo) == "invalidate-size":
+    echo "aha"
+    signalbuffer.writeLine("aha")
 
 proc writeInterface(info: GIInterfaceInfo) =
   if not suppressType:
@@ -2467,6 +2562,10 @@ proc writeConst(info: GIConstantInfo) =
   var h = $gBaseInfoGetName(info)
   if h == "MODIFIER_MASK":
     return
+
+  if h == "ATTR_INDEX_FROM_TEXT_BEGINNING":
+    return # gint in gir, but should be guint
+
   if h.replace("_", "").toLowerAscii == "keych":
     h.add(str[^5])
   if gdkKeys.contains(h.toLowerAscii):
@@ -2692,7 +2791,35 @@ proc glistObjects2seq*[T](t: typedesc[T]; l: ptr glib.List; elTransferFull: bool
       g_object_set_qdata(r.impl, Quark, addr(r[]))
     el = el.next
 
-proc glistStructs2seq*[T](l: ptr glib.List): seq[T] =
+proc gslistObjects2seq*[T](t: typedesc[T]; l: ptr glib.SList; elTransferFull: bool): seq[T] =
+  var r: T
+  var obj: ptr Object00
+  var el = l
+  while el != nil:
+    obj = cast[ptr Object00](el.data)
+    if obj == nil:
+      continue
+    let qdata = g_object_get_qdata(obj, Quark)
+    if qdata != nil:
+      r = cast[T](qdata)
+      assert(r.impl == obj)
+      result.add(r)
+    else:
+      fnew(r, finalizeGObject)#" % [mprefix])
+      r.impl = obj
+      GC_ref(r)
+      if elTransferFull:
+        if g_object_is_floating(r.impl).int != 0:
+          discard g_object_ref_sink(r.impl)
+      else:
+        discard g_object_ref_sink(r.impl)
+      g_object_add_toggle_ref(r.impl, toggleNotify, addr(r[]))
+      g_object_unref(r.impl)
+      assert(g_object_get_qdata(r.impl, Quark) == nil)
+      g_object_set_qdata(r.impl, Quark, addr(r[]))
+    el = el.next
+
+proc glistStructs2seq*[T](l: ptr glib.List; igFin: bool): seq[T] =
   var r: T
   var el = l
   while el != nil:
@@ -2700,6 +2827,20 @@ proc glistStructs2seq*[T](l: ptr glib.List): seq[T] =
       continue
     newWithFinalizer(r)
     r.impl = cast[typeof(r.impl)](el.data)
+    r.ignoreFinalizer = igFin
+    result.add(r)
+    el = el.next
+
+proc gslistStructs2seq*[T](l: ptr glib.SList; igFin: bool): seq[T] =
+  var r: T
+  var el = l
+  while el != nil:
+    if el.data == nil:
+      continue
+    newWithFinalizer(r)
+    r.impl = cast[typeof(r.impl)](el.data)
+    r.ignoreFinalizer = igFin
+    result.add(r)
     el = el.next
 
 #proc seq2GList*[T](s: seq[T]): ptr glib.List =
@@ -2720,7 +2861,21 @@ proc seq2GList*[T](s: seq[T]): ptr glib.List =
       discard # make it compile for these cases, of course will not work
   return l
 
+proc seq2GSList*[T](s: seq[T]): ptr glib.SList =
+  var l: ptr glib.SList
+  var i = s.len
+  while i > 0:
+    dec(i)
+    when T is gobject.Object: # or T is pango.Item:
+      l = g_slist_prepend(l, s[i].impl)
+    elif T is cstring:
+      l = g_slist_prepend(l, s[i]) # cstring
+    else:
+      discard # make it compile for these cases, of course will not work
+  return l
+
 #include gimplgobj
+include gimplglib
 
 """
 
@@ -2743,13 +2898,40 @@ proc fromStringStructure*(string: cstring; `end`: var string): Structure =
 
 """
 
+const Pango_EPI = """
+
+when not declared(ATTR_INDEX_TO_TEXT_END):
+  const ATTR_INDEX_TO_TEXT_END* = uint32.high
+
+when not declared(ATTR_INDEX_FROM_TEXT_BEGINNING):
+  const ATTR_INDEX_FROM_TEXT_BEGINNING* = uint32.low
+
+proc setStartIndex*(a: Attribute; i: uint32) =
+  a.impl.startIndex = i
+
+proc setEndIndex*(a: Attribute; i: uint32) =
+  a.impl.endIndex = i
+
+proc setIndices*(a: Attribute; s, e: uint32) =
+  a.impl.startIndex = s
+  a.impl.endIndex = e
+
+proc `startIndex=`*(a: Attribute; i: uint32) =
+  a.impl.startIndex = i
+
+proc `endIndex=`*(a: Attribute; i: uint32) =
+  a.impl.endIndex = i
+
+#proc `indices=`*(a: Attribute; s, e: uint32) =
+proc `indices=`*(a: Attribute; se: tuple[start: uint32; `end`: uint32]) =
+  a.impl.startIndex = se[0]
+  a.impl.endIndex = se[1]
+
+"""
+
 const Nice_EPI = """
 
-proc nice_agent_attach_recv*(self: ptr Object00; streamID: cuint; componentID: cuint; ctx: ptr glib.MainContext00;
-  fn: AgentRecvFunc; data: pointer): gboolean {.importc, libprag.}
-
-proc attachRecv*(self: Agent; streamID: int; componentID: int; ctx: MainContext; fn: AgentRecvFunc; data: pointer): bool =
-  toBool(nice_agent_attach_recv(self.impl, streamID.cuint, componentID.cuint,  ctx.impl, fn, data))
+include gimplnice
 
 """
 
@@ -2761,6 +2943,8 @@ when not declared(g_thread_new):
   proc newThread*(name: string; fn: ThreadFunc; data:pointer): Thread =
     fnew(result, finalizerunref)
     result.impl = g_thread_new(name, fn, data)
+
+#include gimplglib will not work as glib does not import gobject
 
 """
 
@@ -3046,6 +3230,10 @@ proc cstringArrayToSeq*(s: ptr cstring): seq[string] =
   elif namespace == "Vte":
     output.writeLine("import glib\n")
   elif namespace == "Gst":
+    discard
+  elif namespace == "Nice":
+    output.writeLine("import macros, nativesockets\n")
+    output.writeLine("from strutils import `%`\n")
     discard
   if namespace == "GObject":
     output.writeLine("\nimport times")
@@ -3342,7 +3530,9 @@ proc get$1*(builder: Builder; name: string): $1 =
     fnew(result, $3.finalizeGObject)
     result.impl = gobj
     result.ignoreFinalizer = true
-    g_object_add_toggle_ref(result.impl, toggleNotify, addr(result[]))
+    GC_ref(result) # as following g_object_unref() call will also  execute a GC_unref(result) call
+    g_object_add_toggle_ref(result.impl, toggleNotify, addr(result[])) # do toggle_refs make sense at all for builder objects?
+    g_object_unref(result.impl) # new for v0.8.4 and GTK4, make close main windows working
     assert(g_object_get_qdata(result.impl, Quark) == nil)
     g_object_set_qdata(result.impl, Quark, addr(result[]))
   assert(toBool(g_type_check_instance_is_a(cast[ptr TypeInstance00](result.impl), gt)))
@@ -3358,6 +3548,9 @@ proc get$1*(builder: Builder; name: string): $1 =
 
   if namespace == "Gst":
     output.write(Gst_EPI)
+
+  if namespace == "Pango":
+    output.write(Pango_EPI)
 
   if namespace == "GLib":
     output.write(GLib_EPI)
@@ -3522,7 +3715,7 @@ launch()
 #  if not xcallerAlloc.contains(el):
 #    echo el
 
-# 3525 lines
+# 3717 lines
 # gtk_icon_view_get_tooltip_context bug Candidate
 # gtk_tree_view_get_cursor bug
 #
