@@ -98,8 +98,7 @@ proc cbNiceRecv(agent: nice.Agent; streamID: cuint; componentID: cuint; len: cui
 
 proc main =
   gio.networkingInit()
-
-  
+ 
   gloop = newMainLoop(nil, false)
 
   lagent = nice.newAgent(glib.getContext(gloop), nice.CompatibilityRfc5245)
