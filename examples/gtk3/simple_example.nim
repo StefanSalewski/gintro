@@ -68,11 +68,11 @@ proc printLocalData(agent: nice.Agent; streamId: int; componentId: int): int =
     cands = getLocalCandidates(agent, streamId, componentId)
     if cands.len == 0:
       break gotoEnd
-    stdout.write(localUfrag, localPassword)
+    stdout.write(localUfrag, ' ', localPassword)
     for el in cands:
       toString(el.impl.`addr`, ipaddr)
       ##  (foundation),(prio),(addr),(port),(type)
-      stdout.write(' ', cast[cstring](addr el.impl.foundation), ',', el.impl.priority, ',', ipaddr, ' ', getPort(el.impl.`addr`),
+      stdout.write(' ', cast[cstring](addr el.impl.foundation), ',', el.impl.priority, ',', ipaddr, ',', getPort(el.impl.`addr`),
           ',', candidateTypeName[el.impl.`type`.ord])
     echo ""
   # end label
@@ -101,6 +101,7 @@ proc parseCandidate(scand: string; streamId: int): nice.Candidate =
     while i < candidateTypeName.len:
       if tokens[4] == candidateTypeName[i]:
         ntype = CandidateType(i)
+        break # missing in initial release!
       inc(i)
     if i == candidateTypeName.len:
       break gotoEnd
@@ -138,9 +139,9 @@ proc parseRemoteData(agent: Agent; streamId: int; componentId: int; line: string
         passwd = x
       else:
         ##  Remaining args are serialized canidates (at least one is required)
-        var c: nice.Candidate = parseCandidate(lineArgv[i], streamId)
+        var c: nice.Candidate = parseCandidate(x, streamId)
         if c == nil:
-          gMsg("failed to parse candidate: " & lineArgv[i])
+          gMsg("failed to parse candidate: " & x)
           break gotoEnd
         remoteCandidates.add(c) # caution prepend in C code!
     if ufrag == "" or passwd == "" or remoteCandidates.len == 0:
@@ -181,12 +182,12 @@ proc cbCandidateGatheringDone(agent: nice.Agent; streamId: int) =
   gDebug("SIGNAL candidate gathering done\n")
   ##  Candidate gathering is done. Send our local candidates on stdout
   echo("Copy this line to remote client:")
-  echo("  ")
+  stdout.write("\n  ")
   discard printLocalData(agent, streamId, 1)
   echo("")
   ##  Listen on stdin for the remote candidate list
   echo("Enter remote data (single line, no wrapping):")
-  addWatch(ioStdin, glib.PRIORITY_DEFAULT, IOCondition.in , stdinRemoteInfoCb, agent)
+  discard addWatch(ioStdin, glib.PRIORITY_DEFAULT, {IOCFlag.`in`} , stdinRemoteInfoCb, agent)
   stdout.write("> ")
   flushFile(stdout)
 
@@ -215,12 +216,12 @@ proc cbComponentStateChanged(agent: nice.Agent; streamId: int; componentId: int;
     if getSelectedPair(agent, streamId, componentId, local, remote):
       var ipaddr = newString(INET6_ADDRSTRLEN).cstring
       toString(local.impl.`addr`, ipaddr)
-      echo("\nNegotiation complete: ([$1]:$2,", [$ipaddr, $getPort(local.impl.`addr`)])
+      echo("\nNegotiation complete: ([$1]:$2," % [$ipaddr, $getPort(local.impl.`addr`)])
       toString(remote.impl.`addr`, ipaddr)
       echo(" [$1]:$2)" % [$ipaddr, $getPort(remote.impl.`addr`)])
     ## Listen to stdin and send data written to it
     echo("\nSend lines to remote (Ctrl-D to quit):")
-    addWatch(ioStdin, glib.PRIORITY_DEFAULT, IOCondition.in , stdinSendDataCb, agent)
+    discard addWatch(ioStdin, glib.PRIORITY_DEFAULT, {IOCFlag.`in`} , stdinSendDataCb, agent)
     stdout.write("> ")
     flushFile(stdout)
   elif state == ComponentState.failed.ord:

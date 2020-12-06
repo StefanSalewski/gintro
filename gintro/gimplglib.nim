@@ -7,6 +7,12 @@ macro mAddWatch(ch: IOChannel; pri: cint; cond: IOCondition; p: untyped; arg: ty
   let ats = $getTypeInst(arg).toStrLit
   let procName = "giofunc_" & $IdleID
   let procNameCdecl = "giofunc_cdecl_" & $IdleID
+  #var fixedCond = "{IOCFlag.in}"
+  var fixedCond = $(cond.toStrLit)
+  #echo getTypeInst(cond)[0].toStrLit
+  #echo getTypeInst(cond)[1].toStrLit
+  fixedCond.insert($(getTypeInst(cond)[1].toStrLit) & ".", 1)
+
   var r1s = """
 
 proc $1(self: ptr IOChannel00; cond: IOCondition; userData: pointer): gboolean {.cdecl.} =
@@ -16,14 +22,14 @@ proc $1(self: ptr IOChannel00; cond: IOCondition; userData: pointer): gboolean {
     GC_ref(ch1) # never call destroy/finalizer on this global variable
     ch1.ignoreFinalizer = true
   ch1.impl = self
-  discard $2(ch1, cond"""
+  $2(ch1, cond"""
 
   if not ignoreArg.boolVal:
     if getTypeInst(arg).typeKind == ntyRef:
       r1s.add(", cast[$3](userdata)")
     else:
       r1s.add(", cast[$3](userdata)")
-  r1s.add(")\n")
+  r1s.add(").gboolean\n")
 
   r1s = r1s % [$procNameCdecl, $p, ats]
 
@@ -31,7 +37,7 @@ proc $1(self: ptr IOChannel00; cond: IOCondition; userData: pointer): gboolean {
     if ignoreArg.boolVal:
 
       """
-proc $1(self: IOChannel; pri: cint; cond: IOCondition) =
+proc $1(self: IOChannel; pri: cint; cond: IOCondition): cuint {.discardable.} =
     g_io_add_watch_full(cast[ptr IOChannel00](self.impl), pri, cond, $5, nil, nil)
 
 $1($5, $3, $4)
@@ -40,20 +46,22 @@ $1($5, $3, $4)
     else:
 
       """
-proc $1(self: IOChannel; pri: cint; cond: IOCondition; a: $2) =
+proc $1(self: IOChannel; pri: cint; cond: IOCondition; a: $2): cuint {.discardable.} =
   when (a is ref object):
     GC_ref(a)
-    discard g_io_add_watch_full(cast[ptr IOChannel00](self.impl), pri, cond, $5, cast[pointer](a), nil)
+    #discard g_io_add_watch_full(cast[ptr IOChannel00](self.impl), pri, cond, $5, cast[pointer](a), nil)
+    return g_io_add_watch_full(cast[ptr IOChannel00](self.impl), pri, cond, $5, cast[pointer](a), nil)
   else:
     var ar: ref $2
     new(ar)
     #deepCopy(ar[], a)
     ar[] = a
     GC_ref(ar)
-    discard g_io_add_watch_full(cast[ptr IOChannel00](self.impl), pri, cond, $5, cast[pointer](ar[]), nil)
-$1($7, $3, $8.$4, $6)
-""" % [$procName, ats, $(pri.toStrLit), $(cond.toStrLit), $procNameCdecl, $(arg.toStrLit), $(ch.toStrLit), $(getTypeInst(
-          cond).toStrLit)]
+    #discard g_io_add_watch_full(cast[ptr IOChannel00](self.impl), pri, cond, $5, cast[pointer](ar[]), nil)
+    return g_io_add_watch_full(cast[ptr IOChannel00](self.impl), pri, cond, $5, cast[pointer](ar[]), nil)
+$1($7, $3, $4, $6)
+#$1($7, $3, $8.$4, $6)
+""" % [$procName, ats, $(pri.toStrLit), fixedCond, $procNameCdecl, $(arg.toStrLit), $(ch.toStrLit), $(getTypeInst(cond).toStrLit)]
   #echo r1s
   #echo r2s
   result = parseStmt(r1s & r2s)

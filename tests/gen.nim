@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK3/GTK4 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.8.4 2020-DEC-02
+# v 0.8.4 2020-DEC-06
 # (c) S. Salewski 2018
 
 # usefull for finding death code:
@@ -275,6 +275,8 @@ proc fixedModName(s: string): string =
   result = s
   if not ISGTK3 and (s == "gdk" or s == "gtk" or s == "gdkX11"):
     result &= "4"
+  if not ISGTK3 and (s == "gtksource"):
+    result &= "5"
 
 proc gBaseInfoGetName(info: GIBaseInfo): string =
   result = $(gir.gBaseInfoGetName(info))
@@ -1336,6 +1338,8 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
   if sym == "gst_structure_from_string": return # constructor with out param, not supported yet.
   if sym == "gst_structure_take": return # first parameter is var but can be nil? See trouble at the bottom of this file.
 
+  if sym == "nice_agent_get_selected_pair": return #  was very wrong, fixed manually
+
   try:
     pars = genPars(mInfo, false, info)
     processedFunctions.incl(sym)
@@ -1826,7 +1830,12 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
               else:
                 methodBuffer.writeLine("  " & doCt3nt(ngrRet.name, ngrRet) & '(' & "resul0" & ')')
             else:
-              methodBuffer.writeLine("  " & doCt3nt(ngrRet.name, ngrRet) & '(' & sym & pars.arglist & ')')
+              if pars.tempResFree != "": # ugly, do we have a better test for this case
+              #if ngrRet.name != "void":
+                methodBuffer.writeLine("  result = " & doCt3nt(ngrRet.name, ngrRet) & '(' & sym & pars.arglist & ')')
+              else:
+                methodBuffer.writeLine("  " & doCt3nt(ngrRet.name, ngrRet) & '(' & sym & pars.arglist & ')')
+              checkForGerror() # i.e. for nice_agent_set_remote_candidates, free GSList
           else:
             if gCallableInfoCanThrowGerror(minfo) and ngrRet.name != "void":
               assert false
@@ -2109,8 +2118,8 @@ proc writeStruct(info: GIStructInfo) =
     mangleName(gBaseInfoGetName(info)) == "TargetEntry" or
       ["gst.Message", "gst.MiniObject", "glib.List", "pango.Attribute", "nice.Address", "nice.Candidate"].contains((
           $gBaseInfoGetNamespace(info)).toLowerAscii & '.' & mangleName(gBaseInfoGetName(info))):
-    if gBaseInfoGetName(info) == "Address":
-      echo "kkk", info.gStructInfoGetNFields()
+    #if gBaseInfoGetName(info) == "Address":
+    #  echo "kkk", info.gStructInfoGetNFields()
     for j in 0.cint ..< info.gStructInfoGetNFields():
       let field = info.gStructInfoGetField(j)
       let name = manglename(gBaseInfoGetName(field)) & EM
@@ -2171,7 +2180,7 @@ template writeSignal() =
     memo.add(plist)
     memo = memo.replace("\n    ", " ")
     memo = memo.replace("\"", "\\\"")
-    if moduleNamespace == "gtk" or moduleNamespace == "gdk" or moduleNamespace == "gdkX11":
+    if moduleNamespace == "gtk" or moduleNamespace == "gdk" or moduleNamespace == "gdkX11" or moduleNamespace == "gtksource":
       if ISGTK3:
         supmod3.writeLine("    \"" & ($gBaseInfoGetName(signalInfo)).replace("-", "_") & RecSep & $gBaseInfoGetName(info) &
             RecSep & memo & "\",")
@@ -2201,9 +2210,6 @@ template writeSignal() =
   signalbuffer.write("  g_signal_connect_data(self.impl, \"")
   signalbuffer.write($gBaseInfoGetName(signalInfo))
   signalbuffer.writeLine("\", cast[GCallback](p), xdata, nil, cf)")
-  if false: #gBaseInfoGetName(signalInfo) == "invalidate-size":
-    echo "aha"
-    signalbuffer.writeLine("aha")
 
 proc writeInterface(info: GIInterfaceInfo) =
   if not suppressType:
@@ -2228,7 +2234,7 @@ proc writeInterface(info: GIInterfaceInfo) =
 # write a few of the strange enum sets
 proc writeModifierType(info: GIEnumInfo) =
   let we = gBaseInfoGetName(info)
-  assert(we in ["ModifierType", "EventMask", "AccelFlags", "AttachOptions", "MessageType", "WindowHints"])
+  assert(we in ["ModifierType", "EventMask", "AccelFlags", "AttachOptions", "MessageType", "WindowHints", "IOCondition"])
   type T = tuple[v: int64; n: string]
   var s: seq[T]
   var alias: seq[string]
@@ -2247,6 +2253,8 @@ proc writeModifierType(info: GIEnumInfo) =
   var tname = mangleName(gBaseInfoGetName(info))
   if tname != "WindowHints":
     firstPart(tname)
+  if we == "IOCondition":
+    tname = "IOC" # as glib already has an IOFlags enum type
   output.writeLine("  ", tname & "Flag" & EM, " {.size: sizeof(cint), pure.} = enum")
   if s[0].v != 0 and s[0].v != 1: # flags may start with none = 0 or with flag1 = 1
     output.writeLine("    ignoreThisDummyValue = 0") # Nim needs start with 0 for these low level sets
@@ -2278,7 +2286,8 @@ proc writeModifierType(info: GIEnumInfo) =
     writeMethod(info, minfo)
 
 proc writeEnum(info: GIEnumInfo) =
-  if mangleName(gBaseInfoGetName(info)) in ["ModifierType", "EventMask", "AccelFlags", "AttachOptions", "WindowHints"] or
+  if mangleName(gBaseInfoGetName(info)) in ["ModifierType", "EventMask", "AccelFlags", "AttachOptions", "WindowHints",
+      "IOCondition"] or
     (moduleNameSpace == "gst" and mangleName(gBaseInfoGetName(info)) == "MessageType"):
     writeModifierType(info)
     return
@@ -2401,7 +2410,8 @@ proc writeObj(info: GIObjectInfo) =
   assert not callerAlloc.contains(ns & '.' & manglename(gBaseInfoGetName(info)))
 
   if callerAlloc.contains(($gBaseInfoGetNamespace(info)).toLowerAscii & '.' & mangleName(gBaseInfoGetName(info))):
-    echo ($gBaseInfoGetNamespace(info)).toLowerAscii & '.' & mangleName(gBaseInfoGetName(info))
+    assert false
+    # echo ($gBaseInfoGetNamespace(info)).toLowerAscii & '.' & mangleName(gBaseInfoGetName(info))
 
   assert not callerAlloc.contains(($gBaseInfoGetNamespace(info)).toLowerAscii & '.' & mangleName(gBaseInfoGetName(info)))
   when WriteFields:
@@ -2640,8 +2650,6 @@ proc seq2cstringArray*(s: openarray[string]; a: var cstringArray): ptr cstring =
 const GTK_SOURCE_EPI = """
 
 proc getView*(builder: Builder; name: string): View =
-  #let gt = g_type_from_name("Gtk$1") # this worked also!
-  #let gt = $2
   let gt = g_type_from_name("GSource")
   assert(gt != g_type_invalid_get_type())
   let gobj = gtk_builder_get_object(cast[ptr Builder00](builder.impl), name)
@@ -2650,7 +2658,7 @@ proc getView*(builder: Builder; name: string): View =
     result = cast[type(result)](g_object_get_qdata(gobj, Quark))
     assert(result.impl == gobj)
   else:
-    fnew(result, gtksource.finalizeGObject)
+    fnew(result, $1.finalizeGObject)
     result.impl = gobj
     result.ignoreFinalizer = true
     g_object_add_toggle_ref(result.impl, toggleNotify, addr(result[]))
@@ -2843,21 +2851,21 @@ proc gslistStructs2seq*[T](l: ptr glib.SList; igFin: bool): seq[T] =
     result.add(r)
     el = el.next
 
-#proc seq2GList*[T](s: seq[T]): ptr glib.List =
-#  return nil
-
-# Fully untested. We don't know is someone really will use this.
+# Not much tested, but in use for libnice simple_example.nim
 # Some other modules may need a similar local proc, ie for pango.Item
 proc seq2GList*[T](s: seq[T]): ptr glib.List =
   var l: ptr glib.List
   var i = s.len
   while i > 0:
     dec(i)
-    when T is gobject.Object: # or T is pango.Item:
+    when T is gobject.Object or compiles(T.impl): # https://github.com/StefanSalewski/gintro/issues/99#issuecomment-739435944
+    # when compiles(s[i].impl == nil):
+    # when T is gobject.Object: # or T is pango.Item:
       l = g_list_prepend(l, s[i].impl)
     elif T is cstring:
       l = g_list_prepend(l, s[i]) # cstring
     else:
+      # {.error: "seq2GList was called with unsupported type".} # that would break compiling the modules currently
       discard # make it compile for these cases, of course will not work
   return l
 
@@ -2866,11 +2874,14 @@ proc seq2GSList*[T](s: seq[T]): ptr glib.SList =
   var i = s.len
   while i > 0:
     dec(i)
-    when T is gobject.Object: # or T is pango.Item:
+    when T is gobject.Object or compiles(T.impl):
+    # when compiles(s[i].impl == nil): # NiceCandidate
+    # when T is gobject.Object: # or T is pango.Item:
       l = g_slist_prepend(l, s[i].impl)
     elif T is cstring:
       l = g_slist_prepend(l, s[i]) # cstring
     else:
+      # {.error: "seq2GSList was called with unsupported type".}
       discard # make it compile for these cases, of course will not work
   return l
 
@@ -2930,6 +2941,16 @@ proc `indices=`*(a: Attribute; se: tuple[start: uint32; `end`: uint32]) =
 """
 
 const Nice_EPI = """
+
+proc nice_agent_get_selected_pair(self: ptr Agent00; streamId: uint32; componentId: uint32;
+    local: var ptr Candidate00; remote: var ptr Candidate00): gboolean {.importc, libprag.}
+
+proc getSelectedPair*(self: Agent; streamId: int; componentId: int; local: var Candidate; remote: var Candidate): bool =
+  fnew(local, gBoxedFreeNiceCandidate)
+  local.ignoreFinalizer = true
+  fnew(remote, gBoxedFreeNiceCandidate)
+  remote.ignoreFinalizer = true
+  toBool(nice_agent_get_selected_pair(cast[ptr Agent00](self.impl), uint32(streamId), uint32(componentId), local.impl, remote.impl))
 
 include gimplnice
 
@@ -3593,11 +3614,13 @@ proc get$1*(builder: Builder; name: string): $1 =
       output.write(GDK3_EPI.replace("SomeEvent", "Event"))
     output.write(GDK_EPI.replace("SomeEvent", "Event"))
   if namespace == "GtkSource":
-    output.write(GTK_SOURCE_EPI)
+    output.write(GTK_SOURCE_EPI % fixedModName("gtksource"))
   output.flush
   var suff = ""
   if version == "4.0":
     suff = "4"
+  if namespace == "GtkSource" and version == nil:
+    suff = "5"
   var o = open("nim_gi" / (namespace.toLowerAscii) & suff & ".nim", fmWrite)
   o.write(output.data)
   o.close()
@@ -3643,7 +3666,7 @@ proc launch() =
       main("Gio")
       main("GdkPixbuf")
       main("GModule")
-      main("GtkSource")
+      main("GtkSource", "4")
       main("Atk")
       main("Pango")
       main("PangoCairo")
@@ -3672,7 +3695,7 @@ proc launch() =
     main("Gio")
     main("GdkPixbuf")
     main("GModule")
-    # main("GtkSource") # not yet available for GTK4
+    main("GtkSource") # not yet available for GTK4
     main("Atk")
     main("Pango")
     main("PangoCairo")
@@ -3715,7 +3738,7 @@ launch()
 #  if not xcallerAlloc.contains(el):
 #    echo el
 
-# 3717 lines
+# 3741 lines
 # gtk_icon_view_get_tooltip_context bug Candidate
 # gtk_tree_view_get_cursor bug
 #
