@@ -9,7 +9,7 @@ when (compiles do: import gintro/gtk):
 else:
   import gintro/[dummygtk, glib, gobject, gio, nice] # For system has glib but no gtk
 
-import strformat
+import strformat, nativesockets
 
 const
   ltestMessage = "some test message"
@@ -25,6 +25,9 @@ proc toIntVal(i: int): Value =
   let gtype = typeFromName("gint")
   discard init(result, gtype)
   setInt(result, i)
+
+proc addrString(niceAddr: Address): string =
+  getAddrString(unsafeAddr niceAddr.`addr`)
 
 proc cbCandidateGatheringDone(agent: nice.Agent; streamId: int) =
   proc copyCandidates(src, dst: nice.Agent; srcStreamId, dstStreamId: int) =
@@ -50,6 +53,9 @@ proc cbCandidateGatheringDone(agent: nice.Agent; streamId: int) =
 
   inc gatheringCount
 
+proc cbNewSelectedPairFull(self: Agent; streamId: int; componentId: int; lcandidate: Candidate; rcandidate: Candidate) =
+  echo &"SIGNAL: selected pair ({lcandidate.impl.`addr`.addrString}:{lcandidate.impl.`addr`.port} {rcandidate.impl.`addr`.addrString}:{rcandidate.impl.`addr`.port})"
+
 proc cbComponentStateChanged(agent: nice.Agent; streamId: int; componentId: int; state: int) =
   doAssert agent == lagent or agent == ragent
 
@@ -57,6 +63,13 @@ proc cbComponentStateChanged(agent: nice.Agent; streamId: int; componentId: int;
   echo &"SIGNAL: state changed {streamId}, {componentId}, {stat}"
 
   case stat
+  of ComponentState.connected:
+    var
+      local = Candidate(ignoreFinalizer: true)
+      remote = Candidate(ignoreFinalizer: true)
+    ##  Get current selected candidate pair and print IP address used
+    if getSelectedPair(agent, streamId, componentId, local, remote):
+      echo &"Negotiation complete: ({local.impl.`addr`.addrString}:{local.impl.`addr`.port} {remote.impl.`addr`.addrString}:{remote.impl.`addr`.port})"
   of ComponentState.ready:
     if agent == lagent:
       doAssert agent.send(streamId, componentId, ltestMessage.len, ltestMessage.cstring) == ltestMessage.len
@@ -99,6 +112,8 @@ proc main =
 
   lagent.connect("candidate-gathering-done", cbCandidateGatheringDone)
   ragent.connect("candidate-gathering-done", cbCandidateGatheringDone)
+  lagent.connect("new-selected-pair-full", cbNewSelectedPairFull)
+  ragent.connect("new-selected-pair-full", cbNewSelectedPairFull)
   lagent.connect("component-state-changed", cbComponentStateChanged)
   ragent.connect("component-state-changed", cbComponentStateChanged)
 
