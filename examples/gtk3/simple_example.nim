@@ -17,14 +17,11 @@ else:
 
 from strutils import `%`, split
 from os import paramCount, paramStr
-from strutils import parseInt
+from strutils import parseInt, removeSuffix
+import nativesockets
 
-from posix import INET6_ADDRSTRLEN
-
-when defined(windows):
-  import winlean
-else:
-  discard # import posix
+when not defined(windows):
+  import posix
 
 var
   gloop: glib.MainLoop
@@ -34,11 +31,11 @@ var
   stateName = ["disconnected", "gathering", "connecting", "connected", "ready", "failed"]
 
 proc gMsg(s: string) =
-  stdout.write(s)
+  stdout.write(s & '\n')
   flushFile(stdout)
 
 proc gDebug(s: string) =
-  stdout.write(s)
+  stdout.write(s & '\n')
   flushFile(stdout)
 
 proc gError(s: string) =
@@ -55,11 +52,13 @@ proc toIntVal(i: int): Value =
   discard init(result, gtype)
   setInt(result, i)
 
+proc addrString(niceAddr: Address): string =
+  getAddrString(unsafeAddr niceAddr.`addr`)
+
 proc printLocalData(agent: nice.Agent; streamId: int; componentId: int): int =
   var
     localUfrag: string
     localPassword: string
-    ipaddr = newString(INET6_ADDRSTRLEN).cstring # not really nice as that cstring is used as out parameter by toString()
     cands: seq[Candidate]
   result = QuitFailure
   block gotoEnd:
@@ -70,13 +69,14 @@ proc printLocalData(agent: nice.Agent; streamId: int; componentId: int): int =
       break gotoEnd
     stdout.write(localUfrag, ' ', localPassword)
     for el in cands:
-      toString(el.impl.`addr`, ipaddr)
+      let ipaddr = el.impl.`addr`.addrString
       ##  (foundation),(prio),(addr),(port),(type)
       stdout.write(' ', cast[cstring](addr el.impl.foundation), ',', el.impl.priority, ',', ipaddr, ',', getPort(el.impl.`addr`),
           ',', candidateTypeName[el.impl.`type`.ord])
     echo ""
-  # end label
-  result = QuitSuccess
+    # end label
+    result = QuitSuccess
+
   return result
 
 proc parseCandidate(scand: string; streamId: int): nice.Candidate =
@@ -85,8 +85,11 @@ proc parseCandidate(scand: string; streamId: int): nice.Candidate =
     ntype: nice.CandidateType = CandidateType.host # that initialization is never used!
     tokens = scand.split(',', 5)
   block gotoEnd:
+    if tokens.len < 5:
+      gMsg("Invalid candidate text: " & scand)
     for i in 0 .. 4:
       if tokens[i] == "":
+        gMsg("Empty candidate field: " & scand)
         break gotoEnd
     #[ should work too
     for i, el in candidateTypeName:
@@ -98,12 +101,15 @@ proc parseCandidate(scand: string; streamId: int): nice.Candidate =
         break gotoEnd
       ]#
     var i: int
+    var candTypeName = tokens[4]
+    removeSuffix(candTypeName)
     while i < candidateTypeName.len:
-      if tokens[4] == candidateTypeName[i]:
+      if candTypeName == candidateTypeName[i]:
         ntype = CandidateType(i)
         break # missing in initial release!
       inc(i)
     if i == candidateTypeName.len:
+      gMsg("Invalid candidate type name: " & candTypeName)
       break gotoEnd
     cand = newCandidate(ntype)
     #cand.impl.componentId = 1
@@ -154,8 +160,8 @@ proc parseRemoteData(agent: Agent; streamId: int; componentId: int; line: string
     if setRemoteCandidates(agent, streamId, componentId, remoteCandidates) < 1:
       gMsg("failed to set remote candidates")
       break gotoEnd
-  # end label
-  result = QuitSuccess
+    result = QuitSuccess
+
   return result
 
 proc stdinRemoteInfoCb(source: glib.IOChannel; cond: glib.IOCondition; agent: nice.Agent): bool =
@@ -214,10 +220,9 @@ proc cbComponentStateChanged(agent: nice.Agent; streamId: int; componentId: int;
       remote: nice.Candidate
     ##  Get current selected candidate pair and print IP address used
     if getSelectedPair(agent, streamId, componentId, local, remote):
-      var ipaddr = newString(INET6_ADDRSTRLEN).cstring
-      toString(local.impl.`addr`, ipaddr)
+      var ipaddr = local.impl.`addr`.addrString
       echo("\nNegotiation complete: ([$1]:$2," % [$ipaddr, $getPort(local.impl.`addr`)])
-      toString(remote.impl.`addr`, ipaddr)
+      ipaddr = remote.impl.`addr`.addrString
       echo(" [$1]:$2)" % [$ipaddr, $getPort(remote.impl.`addr`)])
     ## Listen to stdin and send data written to it
     echo("\nSend lines to remote (Ctrl-D to quit):")
