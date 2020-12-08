@@ -20,9 +20,6 @@ from os import paramCount, paramStr
 from strutils import parseInt, removeSuffix
 import nativesockets
 
-when not defined(windows):
-  import posix
-
 var
   gloop: glib.MainLoop
   ioStdin: glib.IOChannel
