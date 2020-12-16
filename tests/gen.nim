@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK3/GTK4 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.8.4 2020-DEC-06
+# v 0.8.4 2020-DEC-14
 # (c) S. Salewski 2018
 
 # usefull for finding death code:
@@ -207,6 +207,8 @@ var suppressRaise = false
 
 fixedProcNames["gtk_button_new_with_label"] = "newButton"
 fixedProcNames["gtk_check_button_new_with_label"] = "newCheckButton"
+fixedProcNames["gtk_toggle_button_new_with_label"] = "newToggleButton"
+fixedProcNames["gtk_link_button_new_with_label"] = "newLinkButton"
 
 fixedProcNames["pango_font_description_from_string"] = "newFontDescription"
 fixedProcNames["pango_language_from_string"] = "languageFromString"
@@ -1058,7 +1060,11 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
         (h1, h2, h3) = hhh.split
         if name == h1 and str == h2:
           str.add(" = " & h3)
-    if genProxy and (str == "string" or str == "cstring") and mayBeNil and sym != "gtk_check_button_new_with_label":
+          
+    if genProxy and (str == "string" or str == "cstring") and mayBeNil and not sym.contains("_button_new_with_label"):
+          
+          
+    #if genProxy and (str == "string" or str == "cstring") and mayBeNil and sym != "gtk_check_button_new_with_label":
       str.add(" = \"\"")
     if genProxy and m == 0:
       if sym.contains("_set_") and str == "bool":
@@ -2975,6 +2981,23 @@ proc mainQuit*(w: Window) = mainQuit()
 
 """
 
+const GTK4_EPI = """
+
+proc getRootWidget*(self: Widget): Widget =
+  let h = self.getRoot
+  assert(toBool(g_type_check_instance_is_a(cast[ptr TypeInstance00](h.impl), gtk_widget_get_type())))
+  #g_type_check_instance_is_a(cast[ptr TypeInstance00](result.impl), gt)))
+  cast[Widget](h)
+
+"""
+
+const GDK4_EPI = """
+
+proc getPosition*(self: Event): (float, float) =
+  assert toBool(gdk_event_get_position(cast[ptr Event00](self.impl), result[0].float, result[1].float))
+
+"""
+
 const GTK_EPI = """
 
 #proc loadFromData*(self: CssProvider; data: cstring): bool =
@@ -3526,6 +3549,7 @@ proc init* =
       output.write("include gimplgobj\n")
       output.write("include gimplgtk\n")
     else:
+      output.write(GTK4_EPI)
       output.write("include gisup4\n")
       output.write("include gimplgobj\n")
       output.write("include gimplgtk\n")
@@ -3613,6 +3637,9 @@ proc get$1*(builder: Builder; name: string): $1 =
     if ISGTK3:
       output.write(GDK3_EPI.replace("SomeEvent", "Event"))
     output.write(GDK_EPI.replace("SomeEvent", "Event"))
+    if not ISGTK3:
+      output.write(GDK4_EPI)
+    
   if namespace == "GtkSource":
     output.write(GTK_SOURCE_EPI % fixedModName("gtksource"))
   output.flush

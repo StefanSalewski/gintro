@@ -16,7 +16,7 @@ proc prepareWindowForOrientation(orientation: gtk.Orientation) =
   discard connect(window, "delete_event", onDeleteEvent)
   let mainbox = gtk.newBox(if orientation == gtk.Orientation.horizontal: Orientation.vertical else: Orientation.horizontal, 2)
   window.add(mainbox)
-  let wrapButton = newToggleButtonWithLabel("Wrap")
+  let wrapButton = newToggleButton("Wrap")
   mainbox.add(wrapButton)
   var max = 0
   while max <= 999999999:

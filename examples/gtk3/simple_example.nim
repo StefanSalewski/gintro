@@ -8,8 +8,15 @@
 ##    simple-example 0 $(host -4 -t A stun.stunprotocol.org | awk '{ print $4 }')
 ##    simple-example 1 $(host -4 -t A stun.stunprotocol.org | awk '{ print $4 }')
 ##
+## this code contains the fixes of Mr. Tomohiro for Windows OS, see https://github.com/StefanSalewski/gintro/issues/99
 
+## The construct "when (compiles do: import ..." is fragile -- we let it in for now
+## to support windows OS without a full gtk version available.
+## Of course we could use dummygtk always and avoid that construct.
+## We may improse the situation later somehow...
+# https://github.com/nim-lang/Nim/issues/16287
 # https://forum.nim-lang.org/t/3752
+#
 when (compiles do: import gintro/gtk):
   import gintro/[gtk, glib, gobject, gio, nice]
 else:
@@ -190,7 +197,7 @@ proc cbCandidateGatheringDone(agent: nice.Agent; streamId: int) =
   echo("")
   ##  Listen on stdin for the remote candidate list
   echo("Enter remote data (single line, no wrapping):")
-  discard addWatch(ioStdin, glib.PRIORITY_DEFAULT, {IOCFlag.`in`} , stdinRemoteInfoCb, agent)
+  discard addWatch(ioStdin, glib.PRIORITY_DEFAULT, {IOCFlag.`in`}, stdinRemoteInfoCb, agent)
   stdout.write("> ")
   flushFile(stdout)
 
@@ -223,7 +230,7 @@ proc cbComponentStateChanged(agent: nice.Agent; streamId: int; componentId: int;
       echo(" [$1]:$2)" % [$ipaddr, $getPort(remote.impl.`addr`)])
     ## Listen to stdin and send data written to it
     echo("\nSend lines to remote (Ctrl-D to quit):")
-    discard addWatch(ioStdin, glib.PRIORITY_DEFAULT, {IOCFlag.`in`} , stdinSendDataCb, agent)
+    discard addWatch(ioStdin, glib.PRIORITY_DEFAULT, {IOCFlag.`in`}, stdinSendDataCb, agent)
     stdout.write("> ")
     flushFile(stdout)
   elif state == ComponentState.failed.ord:

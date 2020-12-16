@@ -25,11 +25,12 @@ with code inserted from files directly.
 NOTE: This work is partly based on earlier works of J. Mansour and has been supported by A. Rumpf, E. Bassi and other _Nim_ and _GTK/Gnome_ developers.
 The `combinatorics` module was kindly provided by R. Behrends.
 
-NOTE: We are currently preparing gintro v0.8.4.
-You may install it with command [black yellow-background]#nimble install gintro@#head#.
-We now try to support optional var out parameters, see  https://github.com/StefanSalewski/gintro/issues/102
-and tried to fix https://github.com/StefanSalewski/gintro/issues/99. And GtkGestures should work now, thanks
-to some hints of Mr. Bassi, see https://discourse.gnome.org/t/gtk4-gtkgesture-and-ref-count/4809.
+NOTE: This is version 0.8.4 of the gintro Nim GTK bindings. We do support the
+libnice module now for Linux and Windows. And we added gtksourceview5 to
+support gtksourceview usage for GTK4. The module is called gtksourceview5
+because the underlying C library has mayor version 5 already. So you can
+write your own GTK4 Nim editor now. Additional optional var out parameters
+are supported now and GtkGestures should work also.
 
 NOTE: The version gintro v0.8.3 will have some internal cleanup, which removes the temporary
 Array types. In the past we used that names to indicate array parameters, it was working well, but still

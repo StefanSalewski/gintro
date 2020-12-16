@@ -118,7 +118,7 @@ proc main =
   box.append(content)
   let footer = newActionBar()
   footer.setCenterWidget(newCheckButton("Middle"))
-  let button = newToggleButtonWithLabel("Custom")
+  let button = newToggleButton("Custom")
   button.connect("clicked", changeHeader, window)
   footer.packStart(button)
   #var button1 = newButton("Subtitle")

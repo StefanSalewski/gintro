@@ -9,6 +9,8 @@
 #    ./sdp-example 0 $(host -4 -t A stun.stunprotocol.org | awk '{ print $4 }')
 #    ./sdp-example 1 $(host -4 -t A stun.stunprotocol.org | awk '{ print $4 }')
 
+## This is a legacy Nim libnice example. Deprecated, we may remove it, or improve the code...
+
 # https://forum.nim-lang.org/t/3752
 when (compiles do: import gintro/gtk):
   import gintro/[gtk, glib, gobject, gio, nice]

@@ -1,3 +1,6 @@
+## This test program was kindly provided by Mr. Tomohiro, see
+## https://github.com/StefanSalewski/gintro/issues/99
+
 # nim c libnice_simple_test.nim
 #
 #  Test code for libnice.
@@ -98,7 +101,7 @@ proc cbNiceRecv(agent: nice.Agent; streamID: cuint; componentID: cuint; len: cui
 
 proc main =
   gio.networkingInit()
- 
+
   gloop = newMainLoop(nil, false)
 
   lagent = nice.newAgent(glib.getContext(gloop), nice.CompatibilityRfc5245)

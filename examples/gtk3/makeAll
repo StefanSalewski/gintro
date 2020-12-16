@@ -16,10 +16,12 @@ nim c gsettings.nim
 nim c gstBasicTutorial1.nim
 nim c handy.nim
 nim c label.nim
+nim c libnice_simple_test.nim
 nim c listview.nim
 nim c menubar.nim
 nim c overlay_tree1.nim
 nim c simpledrawingarea.nim
+nim c simple_example.nim
 nim c spinbutton.nim
 nim c sourceview_test.nim
 nim c t0.nim
