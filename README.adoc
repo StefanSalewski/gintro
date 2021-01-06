@@ -1,6 +1,6 @@
-= High level GTK3 (and GTK4) bindings for the Nim programming language
-(c) Stefan Salewski                                     
-//Version 0.8.4
+= High level GTK4 and GTK3 bindings for the Nim programming language
+//(c) Stefan Salewski                                     
+//Version 0.8.5
 :experimental:
 :imagesdir: http://ssalewski.de/tmp
 :source-highlighter: pygments
@@ -25,8 +25,16 @@ with code inserted from files directly.
 NOTE: This work is partly based on earlier works of J. Mansour and has been supported by A. Rumpf, E. Bassi and other _Nim_ and _GTK/Gnome_ developers.
 The `combinatorics` module was kindly provided by R. Behrends.
 
-NOTE: This is version 0.8.4 of the gintro Nim GTK bindings. We do support the
-libnice module now for Linux and Windows. And we added gtksourceview5 to
+NOTE: This is version 0.8.5 of the gintro Nim GTK bindings.
+Due to a serious request we have added webkitgtk support.
+Unfortunately still only for GTK3, as the latest webkitgtk package 2.30.4
+does not compile with stable GTK4. But we should get
+webkitgtk for GTK4 in a few weeks. One question is still how to name the GTK4
+version then. The official name of the version for GTK3 is webkit2, so shall
+we call the version for GTK4 webkitgtk4 or webkit4? Or different?
+
+NOTE: Since version 0.8.4 we do support the
+libnice module for Linux and Windows. And we added gtksourceview5 to
 support gtksourceview usage for GTK4. The module is called gtksourceview5
 because the underlying C library has mayor version 5 already. So you can
 write your own GTK4 Nim editor now. Additional optional var out parameters

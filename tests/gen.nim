@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK3/GTK4 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.8.4 2020-DEC-14
+# v 0.8.5 2021-JAN-06
 # (c) S. Salewski 2018
 
 # usefull for finding death code:
@@ -251,6 +251,7 @@ defaultParameters["gtk_application_new"] = "flags gio.ApplicationFlags {}"
 defaultParameters["gtk_builder_new_from_string"] = "length int64 -1"
 defaultParameters["gtk_box_new"] = "spacing int 0"
 defaultParameters["gtk_grid_attach"] = "width int 1|height int 1"
+defaultParameters["gtk_adjustment_new"] = "pageSize cdouble 1.0"
 
 for i in keywords: mangledNames[i] = '`' & i & '`'
 
@@ -1913,6 +1914,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
     methodBuffer.cut(p)
 
 template genBoxedFree =
+  #echo gBaseInfoGetName(info)
   if not callerAlloc.contains(($gBaseInfoGetNamespace(info)).toLowerAscii & '.' & mangleName(gBaseInfoGetName(info))):
     if gRegisteredTypeInfoGetGType(info) != G_TYPE_NONE and gTypeFundamental(gRegisteredTypeInfoGetGType(info)) ==
         G_TYPE_BOXED and
@@ -1978,6 +1980,8 @@ template genDestroyFreeUnref =
           freeMe = gStructInfoFindMethod(info, "free")
           if freeMe.isNil:
             freeMe = gStructInfoFindMethod(info, "unref")
+          if freeMe.isNil:
+            freeMe = gStructInfoFindMethod(info, "destroy") # pango, new in v0.8.5
         if freeMe != nil and gCallableInfoGetNArgs(freeMe) == (if gCallableInfoIsMethod(freeMe): 0 else: 1):
           # methodBuffer.writeLine("\nwhen compileOption(\"gc\", \"arc\"):")
           methodBuffer.writeLine("\nwhen defined(gcDestructors):")
@@ -1985,6 +1989,13 @@ template genDestroyFreeUnref =
           methodBuffer.writeLine("    if not self.ignoreFinalizer and self.impl != nil:")
           methodBuffer.writeLine("      $1(self.impl)" % [$gFunctionInfoGetSymbol(freeMe)])
           methodBuffer.writeLine("      self.impl = nil")
+
+          # new in v0.8.5
+          methodBuffer.writeLine("\nproc newWithFinalizer*(x: var " & mangleName(gBaseInfoGetName(info)) & ") =")
+          methodBuffer.writeLine("  when defined(gcDestructors):")
+          methodBuffer.writeLine("    new(x)")
+          methodBuffer.writeLine("  else:")
+          methodBuffer.writeLine("    new(x, $1)" % [$gBaseInfoGetName(freeMe)])
 
 template writeGetTypeProc =
   var getTypeProc {.inject.}: string
@@ -2095,6 +2106,9 @@ proc keymapKeyArrayToSeq(s: ptr KeymapKey; n: int):  seq[KeymapKey] =
 
 proc writeStruct(info: GIStructInfo) =
 
+  if gBaseInfoGetName(info) in ["_ContextMenu", "_ContextMenuItem"]:
+    return # WebKit2WebExtension-4.0.gir bug
+
   if gStructInfoIsGtypeStruct(info) and gBaseInfoGetName(info) != "ObjectClass":
     return # we should not need the class and interface structs
   if gBaseInfoGetName(info).endsWith("Private"): # since v0.5.3 we do not write private structs
@@ -2149,6 +2163,12 @@ proc writeStruct(info: GIStructInfo) =
     mseq.add(gStructInfoGetMethod(info, j))
     if freePos < 0 and gBaseInfoGetName(gStructInfoGetMethod(info, j)) in ["free", "unref"]:
       freePos = j
+
+  if freePos < 0:
+    for j in 0.cint ..< gStructInfoGetNMethods(info):
+      if freePos < 0 and gBaseInfoGetName(gStructInfoGetMethod(info, j)) in ["destroy"]: # add destroy for v0.8.5
+        freePos = j
+
   if freePos > 0: swap(mseq[0], mseq[freePos])
   if mangleName(gBaseInfoGetName(info)) == "List" and moduleNamespace == "glib":
     output.writeLine("\nproc g_list_free*(list: ptr glib.List) {.importc: \"g_list_free\", libprag.}")
@@ -2582,6 +2602,9 @@ proc writeConst(info: GIConstantInfo) =
   if h == "ATTR_INDEX_FROM_TEXT_BEGINNING":
     return # gint in gir, but should be guint
 
+  if gBaseInfoGetNamespace(info) == "Soup":
+    h.add("_STR") # too many name conflicts with enums!
+
   if h.replace("_", "").toLowerAscii == "keych":
     h.add(str[^5])
   if gdkKeys.contains(h.toLowerAscii):
@@ -3000,6 +3023,11 @@ proc getPosition*(self: Event): (float, float) =
 
 const GTK_EPI = """
 
+# allow connecting GtkText and GtkEntry to "changed" signal of GtkEditable!
+proc editable*(x: Text): Editable = cast[Editable](x)
+
+proc editable*(x: Entry): Editable = cast[Editable](x)
+
 #proc loadFromData*(self: CssProvider; data: cstring): bool =
 #  loadFromData(self, uint8Array(data), -1)
 
@@ -3275,6 +3303,8 @@ proc cstringArrayToSeq*(s: ptr cstring): seq[string] =
     output.writeLine("import glib\n")
   elif namespace == "Gst":
     discard
+  elif namespace == "WebKit2":
+    output.writeLine("from atk import ImplementorIface\n") # Extern interfaces support
   elif namespace == "Nice":
     output.writeLine("import macros, nativesockets\n")
     output.writeLine("from strutils import `%`\n")
@@ -3683,6 +3713,7 @@ proc launch() =
   if ISGTK3:
     echo "Generating bindings for GTK3..."
     main("Gtk", "3.0") # the 3 new 4.0 releases in old version
+    #main("Pango")
     when true:
       main("Gdk", "3.0")
       main("GdkX11", "3.0")
@@ -3709,6 +3740,10 @@ proc launch() =
       main("Handy")
       main("Nice")
       main("cairo")
+      main("WebKit2")
+      main("JavaScriptCore")
+      main("Soup")
+      main("WebKit2WebExtension")
   else:
     echo "First we try generating bindings for GTK4, this may fail when GTK4 is not properly installed"
     echo "on your computer. But don't worry, you can still use GTK3"
@@ -3765,7 +3800,7 @@ launch()
 #  if not xcallerAlloc.contains(el):
 #    echo el
 
-# 3741 lines
+# 3741 lines Extern import writeConst gBaseInfoGetNamespace atk writeStruct attribute destroy
 # gtk_icon_view_get_tooltip_context bug Candidate
 # gtk_tree_view_get_cursor bug
 #
