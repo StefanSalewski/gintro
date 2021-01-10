@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK3/GTK4 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.8.5 2021-JAN-06
+# v 0.8.5 2021-JAN-10
 # (c) S. Salewski 2018
 
 # usefull for finding death code:
@@ -1344,6 +1344,12 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
 
   if sym == "gst_structure_from_string": return # constructor with out param, not supported yet.
   if sym == "gst_structure_take": return # first parameter is var but can be nil? See trouble at the bottom of this file.
+
+  if sym == "gst_bit_writer_free_and_get_data": return # see https://discourse.gnome.org/t/gst-bit-writer-free-and-get-data/5304/2
+  if sym == "gst_bit_writer_reset_and_get_data": return
+  if sym == "gst_byte_reader_dup_string_utf32": return
+  if sym == "gst_byte_writer_reset_and_get_data": return
+
 
   if sym == "nice_agent_get_selected_pair": return #  was very wrong, fixed manually
 
@@ -3737,6 +3743,8 @@ proc launch() =
       main("Vte")
       main("Notify")
       main("Gst")
+      main("GstBase")
+      main("GstApp")
       main("Handy")
       main("Nice")
       main("cairo")
@@ -3800,7 +3808,7 @@ launch()
 #  if not xcallerAlloc.contains(el):
 #    echo el
 
-# 3741 lines Extern import writeConst gBaseInfoGetNamespace atk writeStruct attribute destroy
+# 3741 lines Extern import writeConst gBaseInfoGetNamespace atk writeStruct attribute destroy writeMethode
 # gtk_icon_view_get_tooltip_context bug Candidate
 # gtk_tree_view_get_cursor bug
 #
