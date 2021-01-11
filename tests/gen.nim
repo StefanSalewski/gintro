@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK3/GTK4 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.8.5 2021-JAN-10
+# v 0.8.6 2021-JAN-11
 # (c) S. Salewski 2018
 
 # usefull for finding death code:
@@ -446,6 +446,7 @@ gtk.RecentData
 glib.SList
 glib.List
 nice.Address
+gst.MapInfo
 """
 
 const autoCallerAlloc = """
@@ -515,7 +516,6 @@ gobject.TypePluginClass
 atk.KeyEventStruct
 glib.TrashStack
 gobject.TypeFundamentalInfo
-gst.MapInfo
 gobject.InterfaceInfo
 gobject.CClosure
 gtk.WindowGeometryInfo
@@ -3808,7 +3808,7 @@ launch()
 #  if not xcallerAlloc.contains(el):
 #    echo el
 
-# 3741 lines Extern import writeConst gBaseInfoGetNamespace atk writeStruct attribute destroy writeMethode
+# 3741 lines Extern import writeConst gBaseInfoGetNamespace atk writeStruct attribute destroy writeMethode builder
 # gtk_icon_view_get_tooltip_context bug Candidate
 # gtk_tree_view_get_cursor bug
 #
