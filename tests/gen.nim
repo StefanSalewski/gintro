@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK3/GTK4 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.8.6 2021-JAN-11
+# v 0.8.6 2021-JAN-13
 # (c) S. Salewski 2018
 
 # usefull for finding death code:
@@ -1421,7 +1421,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
       # export only low level symbols that are needed internally -- maybe we should export only a private name for them
       if run == 0:
         if sym in ["g_quark_from_static_string", "g_error_free", "g_object_get_qdata", "g_object_ref_sink", "g_object_unref",
-          "g_timeout_add_full", "g_object_is_floating",
+          "g_timeout_add_full", "g_object_is_floating", "gst_bus_add_watch_full",
           "g_type_from_name", "g_type_check_instance_is_a", "g_idle_add_full", "g_quark_try_string", "vte_regex_unref",
           "gtk_builder_get_object", "g_action_map_add_action", "gtk_drawing_area_set_draw_func", "g_io_add_watch_full"]:
           methodBuffer.write("\nproc " & sym & EM & pars.plist)
@@ -2942,6 +2942,17 @@ proc fromStringStructure*(string: cstring; `end`: var string): Structure =
   result.impl = impl0
   `end` = $(end_00)
 
+# https://discourse.gnome.org/t/gst-buffer-copy-is-missing-in-gir-file/5327
+# GstMiniObject * gst_mini_object_copy (const GstMiniObject *mini_object);
+proc gst_buffer_copy(self: ptr Buffer00): ptr Buffer00 {.
+    importc: "gst_mini_object_copy", libprag.}
+
+proc copy*(self: Buffer): Buffer =
+  fnew(result, gBoxedFreeGstBuffer)
+  result.impl = gst_buffer_copy(cast[ptr Buffer00](self.impl))
+
+include gimplgst
+
 """
 
 const Pango_EPI = """
@@ -3590,6 +3601,7 @@ proc init* =
       output.write("include gimplgobj\n")
       output.write("include gimplgtk\n")
     buildableList.add("MenuModel")
+    buildableList.add("FileChooserNative")
     for i in buildableList:
       var prefix = "gtk"
       var modname = fixedModName(moduleNamespace)
@@ -3808,7 +3820,7 @@ launch()
 #  if not xcallerAlloc.contains(el):
 #    echo el
 
-# 3741 lines Extern import writeConst gBaseInfoGetNamespace atk writeStruct attribute destroy writeMethode builder
+# 3741 lines Extern import writeConst gBaseInfoGetNamespace atk writeStruct attribute destroy writeMethode builder include EM
 # gtk_icon_view_get_tooltip_context bug Candidate
 # gtk_tree_view_get_cursor bug
 #
