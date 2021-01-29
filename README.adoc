@@ -1,10 +1,12 @@
 = High level GTK4 and GTK3 bindings for the Nim programming language
 //(c) Stefan Salewski                                     
-//Version 0.8.5
+//Version 0.8.6
 :experimental:
 :imagesdir: http://ssalewski.de/tmp
-:source-highlighter: pygments
-:pygments-style: monokai
+//:source-highlighter: pygments
+//:pygments-style: monokai
+:source-highlighter: rouge
+:rouge-style: molokai
 :icons: font
 :toc: left
 
@@ -15,6 +17,8 @@
 //2018
 
 TIP: A more fancy copy of this document with dark source code background is available at http://ssalewski.de/gintroreadme.html[GIntro README]
+This document describes mainly the use of these bindings for GTK3. For GTK4 you may also consult the pre-print of the 
+*Nim GTK4 book* located at http://ssalewski.de/gtkprogramming.html.
 
 WARNING: Please do not use the code from the examples in this page, but use the actual code from
 https://github.com/StefanSalewski/gintro/tree/master/examples . The github readme.adoc does not
@@ -24,6 +28,15 @@ with code inserted from files directly.
 
 NOTE: This work is partly based on earlier works of J. Mansour and has been supported by A. Rumpf, E. Bassi and other _Nim_ and _GTK/Gnome_ developers.
 The `combinatorics` module was kindly provided by R. Behrends.
+
+NOTE: We are currently preparing version 0.8.6 of the gintro Nim GTK bindings.
+The package contains now all the standard gst modules, and due to a recent
+request also the gtklayershell.nim module. Due to issues with some gst modules
+we do now call init() for the gst module before we use it with gobject-introspection.
+We do the same for GTK3 and GTK4 as these provide also an init() proc. According to
+a recent discussion with the GTK core devs that init() call is necessary. The call is
+done by use of dlopen(), for which we need to provide the names of the
+dynamic libraries, which is some guesswork for Windows and Mac.
 
 NOTE: This is version 0.8.5 of the gintro Nim GTK bindings.
 Due to a serious request we have added webkitgtk support.
@@ -717,8 +730,11 @@ done separately by the user. The following code shows a GTK button, which is
 extended with a counter member field. That counter is decreased for
 each button click. The amount of decrease (5) is passed to the callback as a int parameter.
 
+[black yellow-background]#Recent tests proved that providing custom destructors is
+not really needed any more, see https://forum.nim-lang.org/t/7360#46632.#
+
 Since gintro version 0.7.1 we support destructors when compile option `--gc:arc` is used.
-To destroy subclassed widgets we have to create a `=destroy()` proc as shown in the code below.
+[line-through]#To destroy subclassed widgets we have to create a `=destroy()` proc as shown in the code below.#
 This may look a bit verbose, and it is only necessary to avoid memory leaks for widgets
 which are created and destroyed multiple times during program execution. Most widgets are
 created at startup and live until program terminates, so there is no noticeable leak even

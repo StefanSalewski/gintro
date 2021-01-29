@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK3/GTK4 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.8.6 2021-JAN-13
+# v 0.8.6 2021-JAN-28
 # (c) S. Salewski 2018
 
 # usefull for finding death code:
@@ -88,6 +88,75 @@ template try tuple type using var when while xor yield
   nims = """
 int int8 int16 int32 int64 uint uint8 uint16 uint32 uint64 float float32 float64 pointer false true string char bool
 """.split
+
+import dynlib
+
+type
+  GstInit = proc (argc: ptr cint; argv: ptr ptr cstring) {.cdecl.}
+
+proc tryInitGst(): LibHandle =
+  # echo "Try to init gst"
+  when defined(windows):
+    const GstLibName = "gstreamer-1.0-0.dll"
+  elif defined(macosx):
+    const GstLibName = "libgstreamer-1.0.dylib"
+  else:
+    const GstLibName = "libgstreamer-1.0.so(|.0)"
+  let gstLib = loadLibPattern(GstLibName) # dlopen
+  if gstLib != nil:
+    let gstInit = cast[GstInit](gstLib.symAddr("gst_init"))
+    if gstInit != nil:
+      gstInit(nil, nil)
+    else:
+      echo "Can't init gst library!"
+  else:
+    echo "Can't load gst library!"
+  return gstLib
+  # unloadLib(gstLib)
+
+type
+  Gtk3Init = proc (argc: ptr cint; argv: ptr ptr cstring) {.cdecl.}
+
+proc tryInitGtk3(): LibHandle =
+  # echo "Try to init gtk3"
+  when defined(windows):
+    const Gtk3LibName = "libgtk-3-0.dll"
+  elif defined(macosx):
+    const Gtk3LibName = "libgtk-3.dylib"
+  else:
+    const Gtk3LibName = "libgtk-3.so(|.0)"
+  let gtk3Lib = loadLibPattern(Gtk3LibName) # dlopen
+  if gtk3Lib != nil:
+    let gtk3Init = cast[Gtk3Init](gtk3Lib.symAddr("gtk_init"))
+    if gtk3Init != nil:
+      gtk3Init(nil, nil)
+    else:
+      echo "Can't init gtk3 library!"
+  else:
+    echo "Can't load gtk3 library!"
+  return gtk3Lib
+
+type
+  Gtk4Init = proc () {.cdecl.}
+
+proc tryInitGtk4(): LibHandle =
+  # echo "Try to init gtk4"
+  when defined(windows):
+    const Gtk4LibName = "libgtk-4-0.dll"
+  elif defined(macosx):
+    const Gtk4LibName = "libgtk-4.dylib"
+  else:
+    const Gtk4LibName = "libgtk-4.so(|.0)"
+  let gtk4Lib = loadLibPattern(Gtk4LibName) # dlopen
+  if gtk4Lib != nil:
+    let gtk4Init = cast[Gtk4Init](gtk4Lib.symAddr("gtk_init"))
+    if gtk4Init != nil:
+      gtk4Init()
+    else:
+      echo "Can't init gtk4 library!"
+  else:
+    echo "Can't load gtk4 library!"
+  return gtk4Lib
 
 proc unCap(s: var string) =
   s[0] = s[0].toLowerAscii
@@ -245,6 +314,12 @@ fixedProcNames["gdk_visual_get_best_depth"] = "getBestDepth"
 fixedProcNames["gdk_visual_get_system"] = "getSystemVisual"
 fixedProcNames["gdk_visual_get_best_type"] = "getBestType"
 fixedProcNames["gdk_pixbuf_get_formats"] = "getPixbufFormats"
+
+fixedProcNames["gst_gl_base_memory_init_once"] = "baseMemoryInitOnce"
+fixedProcNames["gst_gl_renderbuffer_init_once"] = "renderbufferInitOnce"
+fixedProcNames["gst_gl_buffer_init_once"] = "bufferInitOnce"
+fixedProcNames["gst_gl_memory_init_once"] = "memoryInitOnce"
+fixedProcNames["gst_gl_memory_pbo_init_once"] = "memoryPboInitOnce"
 
 defaultParameters["gtk_window_new"] = "`type` WindowType WindowType.toplevel"
 defaultParameters["gtk_application_new"] = "flags gio.ApplicationFlags {}"
@@ -447,6 +522,11 @@ glib.SList
 glib.List
 nice.Address
 gst.MapInfo
+gstvideo.VideoRectangle
+gstrtsp.RTSPRange
+gstrtsp.RTSPTimeRange
+gstrtsp.RTSPTime
+gstrtsp.RTSPTime2
 """
 
 const autoCallerAlloc = """
@@ -1002,8 +1082,8 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
       if mayBeNil and gArgInfoGetDirection(arg) != GIDirection.OUT:
         result.arglist.add("if " & name & ".isNil: nil else: cast[" & ngr.name00 & "](" & name & ".impl)")
       else:
-        if gArgInfoGetDirection(arg) == GIDirection.OUT:
-          if gArgInfoIsOptional(arg):
+        if gArgInfoGetDirection(arg) == GIDirection.OUT or gArgInfoGetDirection(arg) == GIDirection.INOUT:
+          if gArgInfoIsOptional(arg): # INOUT i.e. for gst_gl_ensure_element_data
             result.arglist.add("cast[var " & ngr.name00 & "](if addr(" & name & ") == nil: nil else: addr " & name & ".impl)")
           else:
             result.arglist.add("cast[var " & ngr.name00 & "](addr " & name & ".impl)")
@@ -1063,9 +1143,7 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
           str.add(" = " & h3)
           
     if genProxy and (str == "string" or str == "cstring") and mayBeNil and not sym.contains("_button_new_with_label"):
-          
-          
-    #if genProxy and (str == "string" or str == "cstring") and mayBeNil and sym != "gtk_check_button_new_with_label":
+           
       str.add(" = \"\"")
     if genProxy and m == 0:
       if sym.contains("_set_") and str == "bool":
@@ -1298,6 +1376,9 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
   if sym.contains("__"): return
   if processedFunctions.contains(sym): return
 
+  if gBaseInfoGetName(mInfo).len == 0: # <method name="" c:identifier="gst_video_chroma_resample" moved-to="video_chroma_resample">
+    return
+
   # The following functions work with arrays, we should check each carefully -- some may not compile...
   #if sym == "g_io_channel_read_to_end": return # fix later
   if sym == "g_boxed_free": return # this is manually added at early position already
@@ -1350,8 +1431,11 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
   if sym == "gst_byte_reader_dup_string_utf32": return
   if sym == "gst_byte_writer_reset_and_get_data": return
 
+  if sym == "gst_gl_filter_add_rgba_pad_templates": return
 
   if sym == "nice_agent_get_selected_pair": return #  was very wrong, fixed manually
+  if sym == "g_hash_table_destroy": return
+
 
   try:
     pars = genPars(mInfo, false, info)
@@ -1678,13 +1762,13 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
               #assert not (v[1].flags.contains(RecResFlag.zeroTerminated))
               methodBuffer.writeLine("  var $1x$2: array[$3, pointer]" % [StringArrayName, multi, $StringArrayEntries])
               methodBuffer.writeLine("  var $1$2: cstringArray = cast[cstringArray](addr $1x$2)" % [StringArrayName, multi])
-              methodBuffer.writeLine("  var $1_00 = seq2$2($3, $4$5)" % [k, v[0].replace("00").capitalizeAscii, k,
+              methodBuffer.writeLine("  var $1_00 = seq2$2($3, $4$5)" % [k.strip(chars = {'`'}), v[0].replace("00").capitalizeAscii, k,
                   StringArrayName, multi])
               if multi == "":
                 multi = "1"
             elif v[1].flags.contains(RecResFlag.unamedA):
               assert v[1].flags.contains(RecResFlag.array)
-              methodBuffer.writeLine("  var $1_00: $2" % [k, v[1].name00])
+              methodBuffer.writeLine("  var $1_00: $2" % [k.strip(chars = {'`'}), v[1].name00])
             else:
               if v[1].optOut:
                 methodBuffer.writeLine("  var $1_00: $2" % [k.strip(chars = {'`'}), v[0], k])
@@ -1702,9 +1786,11 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
               if ngrRet.infoType == GIInfoType.OBJECT or ngrRet.infoType == GIInfoType.INTERFACE:
                 methodBuffer.writeLine("  result = glistObjects2seq($1, resul0, $2)" % [ngrRet.childName, $elTransferFull])
               if ngrRet.infoType == GIInfoType.STRUCT:
-                if gBaseInfoGetName(gTypeInfoGetInterface(gTypeInfoGetParamType(ret2, 0))) notin ["Atom", "Variant"]: # care later
+
+                if gBaseInfoGetName(gTypeInfoGetInterface(gTypeInfoGetParamType(ret2, 0))) notin ["Atom", "Variant", "TimedValue"]: # care later
                   methodBuffer.writeLine("  result = glistStructs2seq[$1](resul0, $2)" % [ngrRet.childName, $(
                       gCallableInfoGetCallerOwns(minfo) != GITransfer.EVERYTHING)])
+                  # caution TimedValue is a "light" entity, so we need a different glistStructs2seq() for that!
               if gCallableInfoGetCallerOwns(minfo) != GITransfer.NOTHING:
                 methodBuffer.writeLine("  g_list_free(resul0)") # only free the list itself, the elements are moved to the seq
             else:
@@ -1863,8 +1949,8 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
             if v[1].flags.contains(RecResFlag.unamedA):
               assert v[1].flags.contains(RecResFlag.array)
               methodBuffer.writeLine("  $1.setLen($2)" % [k, pars.blex])
-              methodBuffer.writeLine("  copyMem(unsafeaddr $1[0], $1_00, $2.int * sizeof($1[0]))" % [k, pars.blex])
-              methodBuffer.writeLine("  cogfree($1_00)" % [k])
+              methodBuffer.writeLine("  copyMem(unsafeaddr $1[0], $1_00, $2.int * sizeof($1[0]))" % [k.strip(chars = {'`'}), pars.blex])
+              methodBuffer.writeLine("  cogfree($1_00)" % [k.strip(chars = {'`'})])
             elif RecResFlag.namedA in v[1].flags:
               assert v[1].flags.contains(RecResFlag.array)
               methodBuffer.writeLine("  $1 = $2($3_00, $4)" % [k, doCt3nt(v[0], v[1]), k.strip(chars = {'`'}), pars.blex])
@@ -1883,10 +1969,15 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
           methodBuffer.writeLine(" {.\n    importc: \"", sym, "\", ", libprag, ".}")
     if info != nil and (gBaseInfoGetType(info) == GIInfoType.UNION or gBaseInfoGetType(info) == GIInfoType.STRUCT) and
       gCallableInfoGetNArgs(minfo) == (if gCallableInfoIsMethod(minfo): 0 else: 1):
-      if not callerAlloc.contains(modulenamespace & '.' & $gBaseInfoGetName(info)) and (asym == "free" or asym == "unref"):
+      #if not callerAlloc.contains(modulenamespace & '.' & $gBaseInfoGetName(info)) and (asym == "free" or asym == "unref"):
+      if not callerAlloc.contains(modulenamespace & '.' & $gBaseInfoGetName(info)) and (asym == "free" or asym == "unref" or asym == "destroy"): # v0.8.6
         methodBuffer.writeLine("\nproc finalizer" & asym & EM & "(self: $1) =" % [$gBaseInfoGetName(info)])
         methodBuffer.writeLine("  if not self.ignoreFinalizer:")
-        methodBuffer.writeLine("    " & sym & "(self.impl)")
+        if gTypeInfoGetTag(ret2) != GITypeTag.VOID: # i.e. gst_sdp_media_free()
+          methodBuffer.writeLine("    discard " & sym & "(self.impl)")
+        else: #"(cast[ptr " & manglename(gBaseInfoGetName(binfo)) & "00]("
+          #methodBuffer.writeLine("    " & sym & "(self.impl)")
+          methodBuffer.writeLine("    " & sym & "(cast[ptr " & manglename(gBaseInfoGetName(info)) & "00](self.impl))")
     if sym == "gtk_window_set_default_size":
       methodBuffer.writeLine("\nproc `defaultSize=`*(self: Window; dim: tuple[width: int; height: int]) =")
       methodBuffer.writeLine("  gtk_window_set_default_size(cast[ptr Window00](self.impl), int32(dim[0]), int32(dim[1]))")
@@ -1920,7 +2011,6 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
     methodBuffer.cut(p)
 
 template genBoxedFree =
-  #echo gBaseInfoGetName(info)
   if not callerAlloc.contains(($gBaseInfoGetNamespace(info)).toLowerAscii & '.' & mangleName(gBaseInfoGetName(info))):
     if gRegisteredTypeInfoGetGType(info) != G_TYPE_NONE and gTypeFundamental(gRegisteredTypeInfoGetGType(info)) ==
         G_TYPE_BOXED and
@@ -1949,6 +2039,7 @@ template genBoxedFree =
       output.writeLine("      boxedFree(", getTypeProc, "(), ", "cast[ptr " & mangleName(gBaseInfoGetName(info)) & "00](self.impl))")
       output.writeLine("      self.impl = nil")
 
+      # CAUTION: newWithFinalizer() seems to be rarely used, can we remove it fully?
       output.writeLine("\nproc newWithFinalizer*(x: var " & mangleName(gBaseInfoGetName(info)) & ") =")
       output.writeLine("  when defined(gcDestructors):")
       output.writeLine("    new(x)")
@@ -1993,15 +2084,19 @@ template genDestroyFreeUnref =
           methodBuffer.writeLine("\nwhen defined(gcDestructors):")
           methodBuffer.writeLine("  proc `=destroy`*(self: var typeof(" & mangleName(gBaseInfoGetName(info)) & "()[])) =")
           methodBuffer.writeLine("    if not self.ignoreFinalizer and self.impl != nil:")
-          methodBuffer.writeLine("      $1(self.impl)" % [$gFunctionInfoGetSymbol(freeMe)])
+          if gTypeInfoGetTag(xret2) == GITypeTag.VOID:
+            methodBuffer.writeLine("      $1(self.impl)" % [$gFunctionInfoGetSymbol(freeMe)])
+          else:
+            methodBuffer.writeLine("      discard $1(self.impl)" % [$gFunctionInfoGetSymbol(freeMe)])
           methodBuffer.writeLine("      self.impl = nil")
 
-          # new in v0.8.5
+          # new in v0.8.5 # CAUTION: newWithFinalizer() seems to be rarely used, can we remove it fully?
           methodBuffer.writeLine("\nproc newWithFinalizer*(x: var " & mangleName(gBaseInfoGetName(info)) & ") =")
           methodBuffer.writeLine("  when defined(gcDestructors):")
           methodBuffer.writeLine("    new(x)")
           methodBuffer.writeLine("  else:")
-          methodBuffer.writeLine("    new(x, $1)" % [$gBaseInfoGetName(freeMe)])
+          # methodBuffer.writeLine("    new(x, $1)" % [$gBaseInfoGetName(freeMe)])
+          methodBuffer.writeLine("    new(x, finalizer$1)" % [$gBaseInfoGetName(freeMe)]) # for v0.8.6
 
 template writeGetTypeProc =
   var getTypeProc {.inject.}: string
@@ -2053,6 +2148,7 @@ proc writeUnion(info: GIUnionInfo) =
   for i, mInfo in mseq:
     writeMethod(info, minfo)
     if i == 0:
+      let xret2 = gCallableInfoGetReturnType(minfo)
       genDestroyFreeUnref()
 
 const TargetEntryProx = """
@@ -2194,6 +2290,7 @@ proc writeStruct(info: GIStructInfo) =
   for i, mInfo in mseq:
     writeMethod(info, minfo)
     if i == 0:
+      let xret2 = gCallableInfoGetReturnType(minfo)
       genDestroyFreeUnref()
 
 template writeSignal() =
@@ -2325,13 +2422,16 @@ proc writeEnum(info: GIEnumInfo) =
     return
   type T = tuple[v: int64; n: string]
   var s: seq[T]
-  var alias: seq[string]
+  # var alias: seq[string]
+  var alias: HashSet[string] # double entry in gstvideo, see https://discourse.gnome.org/t/gstvideo-1-0-gir-double-entries/5442
   var flags = ($gBaseInfoGetName(info)).endsWith("Flags")
   output.writeLine("type")
   let n = info.gEnumInfoGetNValues()
   for j in 0.cint ..< n:
     let value = info.gEnumInfoGetValue(j)
-    let name = mangleName(gBaseInfoGetName(value))
+    var name = mangleName(gBaseInfoGetName(value))
+    if name[0].isDigit:
+      name = "enum" & name # gstvideo, see https://discourse.gnome.org/t/gstvideo-1-0-gir-double-entries/5442
     let v = gValueInfoGetValue(value)
     s.add((v, name))
   s.sort do (x, y: T) -> int:
@@ -2360,7 +2460,7 @@ proc writeEnum(info: GIEnumInfo) =
     if j > 0 and i.v == k.v:
       if i.n != k.n:
         let h = if flags: "Flag" else: ""
-        alias.add("  " & tname & i.n.capitalizeAscii & EM & " = " & tname & h & '.' & k.n)
+        alias.incl("  " & tname & i.n.capitalizeAscii & EM & " = " & tname & h & '.' & k.n)
       continue
     if flags:
       val = countTrailingZeroBits(val) # firstSetBit(val)
@@ -2868,7 +2968,7 @@ proc glistStructs2seq*[T](l: ptr glib.List; igFin: bool): seq[T] =
   while el != nil:
     if el.data == nil:
       continue
-    newWithFinalizer(r)
+    newWithFinalizer(r) # CAUTION: newWithFinalizer() seems to be rarely used, can we remove it fully?
     r.impl = cast[typeof(r.impl)](el.data)
     r.ignoreFinalizer = igFin
     result.add(r)
@@ -2880,7 +2980,7 @@ proc gslistStructs2seq*[T](l: ptr glib.SList; igFin: bool): seq[T] =
   while el != nil:
     if el.data == nil:
       continue
-    newWithFinalizer(r)
+    newWithFinalizer(r) # CAUTION: newWithFinalizer() seems to be rarely used, can we remove it fully?
     r.impl = cast[typeof(r.impl)](el.data)
     r.ignoreFinalizer = igFin
     result.add(r)
@@ -3040,6 +3140,13 @@ proc getPosition*(self: Event): (float, float) =
 
 const GTK_EPI = """
 
+proc setMargin*(w: Widget; m: int) =
+  setMarginStart(w, m)
+  setMarginEnd(w, m)
+  setMarginTop(w, m)
+  setMarginBottom(w, m)
+
+
 # allow connecting GtkText and GtkEntry to "changed" signal of GtkEditable!
 proc editable*(x: Text): Editable = cast[Editable](x)
 
@@ -3093,6 +3200,11 @@ import macros, strutils
 
 """
 
+var
+  gstLib: LibHandle
+  gtk3Lib: LibHandle
+  gtk4Lib: LibHandle
+
 proc main(namespace: string; version: cstring = nil) =
   priList = newSeq[string]()
   var buildableList: seq[string]
@@ -3114,6 +3226,7 @@ proc main(namespace: string; version: cstring = nil) =
   let gi = gIrepositoryGetDefault()
   assert(gi != nil)
   moduleNamespace = namespace.toLowerAscii
+  #echo fixedModName(moduleNameSpace)
   #let version: cstring = nil # latest
   # export GI_TYPELIB_PATH=/opt/gtk/lib64/girepository-1.0
   # echo $XDG_DATA_DIRS
@@ -3121,6 +3234,18 @@ proc main(namespace: string; version: cstring = nil) =
   #g_irepository_prepend_search_path("/opt/gtk/lib64/girepository-1.0")
   # ISGTK3 = not (((namespace == "Gtk") or (namespace == "Gdk") or (namespace == "GdkX11")) and version == "4.0")
   # ISGTK3 = parmCount() == 0 # we have to launch the generator two times, as typelibs can not be unloaded!
+
+
+  if namespace == "Gst" and gstLib == nil:
+    gstLib = tryInitGst()
+
+  if namespace == "Gtk" and version == "3.0" and gtk3Lib == nil:
+    gtk3Lib = tryInitGtk3()
+
+  if namespace == "Gtk" and version == "4.0" and gtk4Lib == nil:
+    gtk4Lib = tryInitGtk4()
+
+
   let typelib = gi.gIrepositoryRequire(namespace, version, cast[GIRepositoryLoadFlags](0), error)
   #let typelib = gIrepositoryRequirePrivate(nil, namespace, "/usr/lib/girepository-1.0", version, cast[GIRepositoryLoadFlags](0), error)
   if typelib.isNil:
@@ -3222,7 +3347,7 @@ proc main(namespace: string; version: cstring = nil) =
 #proc fnew*[T](a: var ref T; finalizer: proc (x: ref T)) =
 template fnew*(a: untyped; finalizer: untyped) =
   when defined(gcDestructors):
-    new(a)
+    system.new(a)
   else:
     new(a, finalizer)
 """)
@@ -3353,6 +3478,13 @@ proc cstringArrayToSeq*(s: ptr cstring): seq[string] =
       allSyms.incl(mangleName(gBaseInfoGetName(i)))
   for i in 0 .. s.high:
     if namespace == "GLib" and gBaseInfoGetType(s[i]) == GIInfoType.STRUCT and gBaseInfoGetName(s[i]) == "Error":
+      let h = s[i]
+      s.delete(i, i)
+      s.insert([h])
+      break
+
+  for i in 0 .. s.high:
+    if namespace == "GstRtsp" and gBaseInfoGetType(s[i]) == GIInfoType.ENUM and gBaseInfoGetName(s[i]) == "RTSPResult":
       let h = s[i]
       s.delete(i, i)
       s.insert([h])
@@ -3731,39 +3863,55 @@ proc launch() =
   if ISGTK3:
     echo "Generating bindings for GTK3..."
     main("Gtk", "3.0") # the 3 new 4.0 releases in old version
-    #main("Pango")
-    when true:
-      main("Gdk", "3.0")
-      main("GdkX11", "3.0")
-      # main("Gsk") # not available for GTK3
-      main("Graphene")
-      main("GObject") # and the old common onces. GObject before Glib!
-      main("GLib")
-      main("Gio")
-      main("GdkPixbuf")
-      main("GModule")
-      main("GtkSource", "4")
-      main("Atk")
-      main("Pango")
-      main("PangoCairo")
-      main("PangoFT2")
-      main("fontconfig")
-      main("freetype2")
-      main("HarfBuzz")
-      main("Rsvg")
-      main("xlib")
-      main("Vte")
-      main("Notify")
-      main("Gst")
-      main("GstBase")
-      main("GstApp")
-      main("Handy")
-      main("Nice")
-      main("cairo")
-      main("WebKit2")
-      main("JavaScriptCore")
-      main("Soup")
-      main("WebKit2WebExtension")
+    main("Gdk", "3.0")
+    main("GdkX11", "3.0")
+    # main("Gsk") # not available for GTK3
+    main("Graphene")
+    main("GObject") # and the old common onces. GObject before Glib!
+    main("GLib")
+    main("Gio")
+    main("GdkPixbuf")
+    main("GModule")
+    main("GtkSource", "4")
+    main("Atk")
+    main("Pango")
+    main("PangoCairo")
+    main("PangoFT2")
+    main("fontconfig")
+    main("freetype2")
+    main("HarfBuzz")
+    main("Rsvg")
+    main("xlib")
+    main("Vte")
+    main("Notify")
+    main("Handy")
+    main("Nice")
+    main("cairo")
+    main("WebKit2")
+    main("JavaScriptCore")
+    main("Soup")
+    main("WebKit2WebExtension")
+    main("Gst")
+    main("GstBase")
+    main("GstAllocators")
+    main("GstApp")
+    main("GstAudio")
+    main("GstCheck")
+    main("GstController")
+    main("GstGL")
+    main("GstInsertBin")
+    main("GstMpegts")
+    main("GstNet")
+    main("GstPlayer")
+    main("GstRtp")
+    main("GstRtsp")
+    main("GstSdp")
+    main("GstTag")
+    main("GstVideo")
+    main("GstWebRTC")
+    main("GstApp")        
+    main("GstPbutils")
+    main("GtkLayerShell")
   else:
     echo "First we try generating bindings for GTK4, this may fail when GTK4 is not properly installed"
     echo "on your computer. But don't worry, you can still use GTK3"
@@ -3777,7 +3925,7 @@ proc launch() =
     main("Gio")
     main("GdkPixbuf")
     main("GModule")
-    main("GtkSource") # not yet available for GTK4
+    main("GtkSource")
     main("Atk")
     main("Pango")
     main("PangoCairo")
@@ -3789,10 +3937,29 @@ proc launch() =
     main("xlib")
     # main("Vte") # not yet available for GTK4
     main("Notify")
-    main("Gst")
     # main("Handy") # not yet available for GTK4
     main("Nice")
     main("cairo")
+    main("Gst")
+    main("GstBase")
+    main("GstAllocators")
+    main("GstApp")
+    main("GstAudio")
+    main("GstCheck")
+    main("GstController")
+    main("GstGL")
+    main("GstInsertBin")
+    main("GstMpegts")
+    main("GstNet")
+    main("GstPlayer")
+    main("GstRtp")
+    main("GstRtsp")
+    main("GstSdp")
+    main("GstTag")
+    main("GstVideo")
+    main("GstWebRTC")
+    main("GstApp")        
+    main("GstPbutils")
 
   if ISGTK3:
     supmod3.writeLine("  ]")
@@ -3808,6 +3975,12 @@ proc launch() =
     o.write(supmod4.data)
     o.close()
     supmod4.close
+  if gstLib != nil:
+    unloadLib(gstLib)
+  if gtk3Lib != nil:
+    unloadLib(gtk3Lib)
+  if gtk4Lib != nil:
+    unloadLib(gtk4Lib)
 
 launch()
 
@@ -3820,7 +3993,7 @@ launch()
 #  if not xcallerAlloc.contains(el):
 #    echo el
 
-# 3741 lines Extern import writeConst gBaseInfoGetNamespace atk writeStruct attribute destroy writeMethode builder include EM
+# 3996 lines
 # gtk_icon_view_get_tooltip_context bug Candidate
 # gtk_tree_view_get_cursor bug
 #
