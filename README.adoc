@@ -29,7 +29,7 @@ with code inserted from files directly.
 NOTE: This work is partly based on earlier works of J. Mansour and has been supported by A. Rumpf, E. Bassi and other _Nim_ and _GTK/Gnome_ developers.
 The `combinatorics` module was kindly provided by R. Behrends.
 
-NOTE: We are currently preparing version 0.8.6 of the gintro Nim GTK bindings.
+NOTE: This is version 0.8.6 of the gintro Nim GTK bindings.
 The package contains now all the standard gst modules, and due to a recent
 request also the gtklayershell.nim module. Due to issues with some gst modules
 we do now call init() for the gst module before we use it with gobject-introspection.
@@ -38,8 +38,8 @@ a recent discussion with the GTK core devs that init() call is necessary. The ca
 done by use of dlopen(), for which we need to provide the names of the
 dynamic libraries, which is some guesswork for Windows and Mac.
 
-NOTE: This is version 0.8.5 of the gintro Nim GTK bindings.
-Due to a serious request we have added webkitgtk support.
+NOTE: For version 0.8.5 of the gintro Nim GTK bindings
+we have added webkitgtk support.
 Unfortunately still only for GTK3, as the latest webkitgtk package 2.30.4
 does not compile with stable GTK4. But we should get
 webkitgtk for GTK4 in a few weeks. One question is still how to name the GTK4
