@@ -1,6 +1,6 @@
 = High level GTK4 and GTK3 bindings for the Nim programming language
 //(c) Stefan Salewski                                     
-//Version 0.8.6
+//Version 0.8.7
 :experimental:
 :imagesdir: http://ssalewski.de/tmp
 //:source-highlighter: pygments
@@ -29,8 +29,16 @@ with code inserted from files directly.
 NOTE: This work is partly based on earlier works of J. Mansour and has been supported by A. Rumpf, E. Bassi and other _Nim_ and _GTK/Gnome_ developers.
 The `combinatorics` module was kindly provided by R. Behrends.
 
-NOTE: This is version 0.8.6 of the gintro Nim GTK bindings.
-The package contains now all the standard gst modules, and due to a recent
+NOTE: This is version 0.8.7 of the gintro Nim GTK bindings.
+We did a larger internal cleanup for the gen.nim generator script but tried to
+generate output modules identical to v.0.8.6 still. For next release v0.8.8
+there will be some changes in the generated modules then.
+Also for this version 0.8.7 we do support webkit2 for GTK4, and we have
+fixed the  newGFileTmp() issue, see https://github.com/StefanSalewski/gintro/issues/112.
+
+
+NOTE: Version 0.8.6 of the gintro Nim GTK bindings
+contains now all the standard gst modules, and due to a recent
 request also the gtklayershell.nim module. Due to issues with some gst modules
 we do now call init() for the gst module before we use it with gobject-introspection.
 We do the same for GTK3 and GTK4 as these provide also an init() proc. According to
