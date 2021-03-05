@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK3/GTK4 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.8.7 2021-FEB-16
+# v 0.8.8 2021-MAR-05
 # (c) S. Salewski 2018
 
 # usefull for finding death code:
@@ -53,7 +53,7 @@ import algorithm
 import std/editdistance
 import maxby
 from parseutils import skipUntil
-# from sugar import dup
+#from sugar import dup
 from combinatorics import combinations
 
 template isCallbackInfo(info: untyped): untyped =
@@ -737,8 +737,12 @@ type
     blex: string
     tempRes: string
     tempResFree: string
+    tmpoutgobjectarg: string
+    outgobjectargname: string 
+    outgobjectargisoptional: bool
+    outgobjectargmaybenull: bool
 
-proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; genArrayMark = false): GPars
+proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; genArrayMark = false; tryOut2Ret: bool = false): GPars
 
 # recursive investigate that type -- resolve Arrays and Interfaces
 proc newGenRec(t: GITypeInfo; genProxy = false): RecRes =
@@ -973,7 +977,7 @@ proc fixedName2(s: string): string =
   else:
     return s
 
-proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; genArrayMark = false): GPars =
+proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; genArrayMark = false; tryOut2Ret: bool = false): GPars =
 
   proc makePList(s: seq[(string, string)]; self, r: string): string =
     result = self
@@ -1021,6 +1025,25 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
   var num = ""
   for j in 0 .. m:
     let arg = gCallableInfoGetArg(info, j)
+    var  argName = mangleName(gBaseInfoGetName(arg))
+
+    var isGObject = false
+    let tt = gArgInfoGetType(arg)
+    let tag = gTypeInfoGetTag(tt)
+    if tag == GITypeTag.INTERFACE:
+      let iface = gTypeInfoGetInterface(tt)
+      if gBaseInfoGetType(iface) == GIInfoType.Object and gObjectInfoGetFundamental(iface) == GFalse:
+        if gArgInfoGetDirection(arg) == GIDirection.OUT:
+          isGObject = true
+
+    var out2Ret = false
+    if tryOut2Ret:
+      let match = if gCallableInfoIsMethod(info): 1 else: 0
+      out2ret = (gCallableInfoGetNArgs(info) + match) == 2 and (j + match) == 1 and gTypeInfoGetTag(gCallableInfoGetReturnType(info)) == GITypeTag.VOID and gArgInfoGetDirection(arg) == GIDirection.OUT
+
+      if out2ret:# and genProxy:
+        argName = "result"
+
     let t = gArgInfoGetType(arg)
     let mayBeNil = gArgInfoMayBeNull(arg)
     var ngr = newGenRec(t, true)
@@ -1030,7 +1053,7 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
     else:
       str = ngr.name00
     if genProxy and ngr.res == glist:
-      result.tempRes = "  var tempResGL = seq2GList($1)\n" % [mangleName(gBaseInfoGetName(arg))]
+      result.tempRes = "  var tempResGL = seq2GList($1)\n" % [argname]
       if gArgInfoGetOwnershipTransfer(arg) == GITransfer.NOTHING:
         result.tempResFree = "  g_list_free(tempResGL)\n"
       if str.startsWith("var "):
@@ -1039,7 +1062,7 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
         str = "seq[$1]" % [ngr.childname]
 
     if genProxy and ngr.res == gslist:
-      result.tempRes = "  var tempResGL = seq2GSList($1)\n" % [mangleName(gBaseInfoGetName(arg))]
+      result.tempRes = "  var tempResGL = seq2GSList($1)\n" % [argName]
       if gArgInfoGetOwnershipTransfer(arg) == GITransfer.NOTHING:
         result.tempResFree = "  g_slist_free(tempResGL)\n"
       if str.startsWith("var "):
@@ -1053,7 +1076,7 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
       resusLen = gTypeInfoGetArrayLength(t)
       if resusLen >= 0:
         resusIn = gArgInfoGetDirection(gCallableInfoGetArg(info, resusLen.cint)) == GIDirection.IN
-      lastName = gBaseInfoGetName(arg)
+      lastName = argName
     if (sym.startsWith("gtk_widget_set_events", "gtk_widget_add_events")) and str == "int32":
       str = fixedModName("gdk") & ".EventMask"
     if isSignalInfo(info) and isProxyCandidate(t) and not genProxy:
@@ -1082,12 +1105,23 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
       discard #echo str, " xxxxxxxxxxxxxxxxx"
       #str = "cstringArray"
 
-    let name = mangleName(gBaseInfoGetName(arg))
+    var name = argName#mangleName(gBaseInfoGetName(arg))
+
     if isProxyCandidate(t) and not gArgInfoIsCallerAllocates(arg) and not userAlloc:
+
       if mayBeNil and gArgInfoGetDirection(arg) != GIDirection.OUT:
         result.arglist.add("if " & name & ".isNil: nil else: cast[" & ngr.name00 & "](" & name & ".impl)")
       else:
-        if gArgInfoGetDirection(arg) == GIDirection.OUT or gArgInfoGetDirection(arg) == GIDirection.INOUT:
+        if isGobject:
+          if gArgInfoIsOptional(arg):
+            result.arglist.add("cast[var " & ngr.name00 & "](if addr(" & name & ") == nil: nil else: tmpoutgobjectarg)")
+          else:
+            result.arglist.add("tmpoutgobjectarg")
+          result.tmpoutgobjectarg = "  var tmpoutgobjectarg: " & ngr.name00 & "\n"
+          result.outgobjectargname = argName
+          result.outgobjectargisoptional = gArgInfoIsOptional(arg)
+          result.outgobjectargmaybenull = gArgInfoMayBeNull(arg)
+        elif gArgInfoGetDirection(arg) == GIDirection.OUT or gArgInfoGetDirection(arg) == GIDirection.INOUT:
           if gArgInfoIsOptional(arg): # INOUT i.e. for gst_gl_ensure_element_data
             result.arglist.add("cast[var " & ngr.name00 & "](if addr(" & name & ") == nil: nil else: addr " & name & ".impl)")
           else:
@@ -1126,6 +1160,10 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
     if gArgInfoGetDirection(arg) in {GIDirection.OUT, INOUT} and not (ngr.flags.contains(RecResFlag.unamedA) and
         gArgInfoIsCallerAllocates(arg)):
       needVar = true
+
+    if sym in ["nice_agent_recv", "nice_agent_recv_nonblocking"] and name == "bufLen": # https://discourse.gnome.org/t/nice-agent-recv/5747/2
+      needVar = false
+
     if genProxy and needTypeConv(str, ngr):
       if gArgInfoGetDirection(arg) in {GIDirection.OUT, INOUT} and (not gArgInfoIsCallerAllocates(arg) or (str in ["int32",
           "uint32", "ptr cstring", "cstring"])):
@@ -1191,7 +1229,15 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
     if genArrayMark and ngr.flags.contains(RecResFlag.array) and str.startsWith("ptr "):
       str.removePrefix("ptr ")
       str.add("Array")
-    resus.add((name, str))
+    if not out2Ret:#(out2ret and genProxy):
+      resus.add((name, str))
+    else:
+      var h = str
+      let i = h.find('=')
+      if i > 0:
+        h.setLen(i) # well i - 1 , try find(" =")
+      h.removePrefix("var ")
+      resusres = ": " & h#str.dup(removePrefix("var "))
     if j < m:
       result.arglist.add(", ")
   if not genProxy and gCallableInfoCanThrowGerror(info):
@@ -1273,6 +1319,51 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
       methodBuffer.writeLine("    let msg = $gerror.message")
       methodBuffer.writeLine("    g_error_free(gerror[])")
       methodBuffer.writeLine("    raise newException(GException, msg)")
+
+  # new for v0.8.8
+  template dothegobjectargmagic(): untyped =
+    if pars.outgobjectargisoptional:
+      methodBuffer.writeLine("""
+  if addr($1) != nil:
+    $1 = nil
+""" % [pars.outgobjectargname])
+    elif pars.outgobjectargmaybenull:
+      methodBuffer.writeLine("  $1 = nil" % [pars.outgobjectargname])
+    if pars.outgobjectargisoptional or pars.outgobjectargmaybenull:
+      methodBuffer.writeLine("""
+  if tmpoutgobjectarg != nil:
+    let argqdata = g_object_get_qdata(tmpoutgobjectarg, Quark)
+    if argqdata != nil:
+      $1 = cast[type($1)](argqdata)
+      assert($1.impl == tmpoutgobjectarg)
+    else:
+      fnew($1, $2.finalizeGObject)
+      $1.impl = tmpoutgobjectarg
+      GC_ref($1)
+      if g_object_is_floating($1.impl).int != 0:
+        discard g_object_ref_sink($1.impl)
+      g_object_add_toggle_ref($1.impl, toggleNotify, addr($1[]))
+      g_object_unref($1.impl)
+      assert(g_object_get_qdata($1.impl, Quark) == nil)
+      g_object_set_qdata($1.impl, Quark, addr($1[]))
+""" % [pars.outgobjectargname, moduleNamespace])
+    else:
+      methodBuffer.writeLine("""
+  let argqdata = g_object_get_qdata(tmpoutgobjectarg, Quark)
+  if argqdata != nil:
+    $1 = cast[type($1)](argqdata)
+    assert($1.impl == tmpoutgobjectarg)
+  else:
+    fnew($1, $2.finalizeGObject)
+    $1.impl = tmpoutgobjectarg
+    GC_ref($1)
+    if g_object_is_floating($1.impl).int != 0:
+      discard g_object_ref_sink($1.impl)
+    g_object_add_toggle_ref($1.impl, toggleNotify, addr($1[]))
+    g_object_unref($1.impl)
+    assert(g_object_get_qdata($1.impl, Quark) == nil)
+    g_object_set_qdata($1.impl, Quark, addr($1[]))
+""" % [pars.outgobjectargname, moduleNamespace])
 
   # new for v0.7.8: we ref all gobjects now, even if transfer is none. So result.ignoreFinalizer = false always for gobjects!
   template gobjectTemp(): untyped =
@@ -1363,7 +1454,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
       freeMeName = "generic_" & $g_object_info_get_unref_function(parent)
       assert(freeMeName != "")
 
-  template block8(prochead: string; errorcheckadd: bool): untyped =
+  template block8(prochead: string; errorcheckadd: bool; tryOut2Ret: bool): untyped =
     if isProxyCandidateret2:
       assert (gCallableInfoGetCallerOwns(minfo) in {GITransfer.NOTHING, GITransfer.EVERYTHING}) # both occur
     if asym == "newFromStreamAsync" and sym.startsWith("gdk_pixbuf_animation_new"):
@@ -1384,6 +1475,16 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
       let arg = gCallableInfoGetArg(minfo, j)
       let t = gArgInfoGetType(arg)
       var ngrt = newGenRec(t)
+
+      var isGObject = false
+      let tt = gArgInfoGetType(arg)
+      let tag = gTypeInfoGetTag(tt)
+      if tag == GITypeTag.INTERFACE:
+        let iface = gTypeInfoGetInterface(tt)
+        if gBaseInfoGetType(iface) == GIInfoType.Object and gObjectInfoGetFundamental(iface) == GFalse:
+          if gArgInfoGetDirection(arg) == GIDirection.OUT:
+            isGObject = true
+
       if ((gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) == 0):
         if gArgInfoGetDirection(arg) == GIDirection.IN and gArgInfoGetOwnershipTransfer(arg) == GITransfer.EVERYTHING and
           isProxyCandidate(t) and not callerAlloc.contains(ngrt.namePlainNS):
@@ -1394,7 +1495,11 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
             methodBuffer.writeLine("    " & n & ".ignoreFinalizer = true")
           else:
             methodBuffer.writeLine("  " & n & ".ignoreFinalizer = true")
-      if gArgInfoGetDirection(arg) == GIDirection.OUT and isProxyCandidate(t) and
+
+      if isGobject:
+        discard
+
+      elif gArgInfoGetDirection(arg) == GIDirection.OUT and isProxyCandidate(t) and
         not callerAlloc.contains(ngrt.namePlainNS) and not gArgInfoIsCallerAllocates(arg):
         let tag = gTypeInfoGetTag(t)
         assert(tag == GITypeTag.INTERFACE)
@@ -1409,7 +1514,14 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
             let info = iface
             var freeMe{.inject.}: GIFunctionInfo
             findFreeProc(info, gArgInfoGetOwnershipTransfer(arg) == GITransfer.NOTHING)
-        let h2 = mangleName(gBaseInfoGetName(arg))
+        var h2 = mangleName(gBaseInfoGetName(arg))
+
+        if tryOut2Ret:
+          let match = if gCallableInfoIsMethod(minfo): 1 else: 0
+          let out2ret = (gCallableInfoGetNArgs(minfo) + match) == 2 and (j + match) == 1 and gTypeInfoGetTag(gCallableInfoGetReturnType(minfo)) == GITypeTag.VOID and gArgInfoGetDirection(arg) == GIDirection.OUT
+          if out2ret:# and genProxy:
+            h2 = "result"
+
         if gArgInfoIsOptional(arg):
           methodBuffer.writeLine("  if addr($2) != nil:" % [ngrt.namePlain, h2])
           if boxedFreeMeName != "":
@@ -1457,6 +1569,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
   # assert(info != nil) # why can it be nil?
   # if Lib.len == 0: # xlib, fontconfig, freetype2 # but Lib is local to main(), so let it crash
   #   return
+
   assert(isCallableInfo(mInfo))
   assert(isFunctionInfo(mInfo))
 
@@ -1537,422 +1650,450 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
   if sym == "g_hash_table_destroy": return
 
   try:
-    pars = genPars(mInfo, false, info)
-    processedFunctions.incl(sym)
-    if not sym.startsWith("g_param_spec_uref"):
-      if sym.startsWith("g_param_spec_", "g_type_interface_", "g_object_interface_"): return
-    if sym in ["gtk_widget_class_find_style_property", "gtk_container_class_find_child_property",
-      "gtk_cell_area_class_find_cell_property"]: return
-    var asym = manglename(gBaseInfoGetName(mInfo))
 
-    # this does not really help, we have to fix some names manually
-    if not gCallableInfoIsMethod(minfo) and gCallableInfoGetNArgs(minfo) == 0 and
-      (gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) == 0:
-      var h = sym
-      if h.find('_') > 0:
-        h = h.split('_', 1)[1]
-      if h.endsWith("_get"):
-        h.removeSuffix("_get")
-        h = "get_" & h
-      h = h.mysnakeToCamel
-      #asym = h
+    for tryOut2Ret in [false, true]:
 
-    if asym == "errorQuark" or asym == "quark": return
-    if (moduleNameSpace == "gst" and asym in ["appendAndTakeValue", "appendValue", "getSize", "getValue", "prependValue"]) or
-      asym in ["get", "getDefault", "from", "fromString", "getInfo", "listFree", "register", "find", "getList"]:
-      # or # maybe we should relax this later a bit for the case that first parameter type == gBaseInfoGetName(info)
-      asym.add($manglename(gBaseInfoGetName(info)))
-    if sym == "gtk_buildable_get_name": asym = "buildableGetName" # conflict with gtk_widget_get_name()
-    if sym == "gtk_buildable_set_name": asym = "buildableSetName"
-    if keywords.contains(asym) or nims.contains(asym):
-      asym.add('P')
-    var ret2 = gCallableInfoGetReturnType(minfo)
-    var ngrRet = newGenRec(ret2)
-    let mprefix = modPrefix(ret2, sym)
-    if moduleNameSpace == "graphene" and gCallableInfoGetNArgs(minfo) == 0 and not gCallableInfoIsMethod(minfo):
-      asym.add($manglename(gBaseInfoGetName(info)))
-    for run in 0 .. 1:
-      if run == 1: # try without get prefix and replace set prefix with `=`
-        if fixedProcNames.contains(sym): continue
-        if not (asym.startsWith("get", "set")) or asym == "getPlugin" or asym.len < 4:
-          continue
-        if asym.startsWith("get") and gTypeInfoGetTag(ret2) == GITypeTag.VOID:
-          continue
-        if asym.startsWith("get"):
-          let match = if gCallableInfoIsMethod(minfo): 0 else: 1
-          if gCallableInfoGetNArgs(minfo) != match:
+      if tryOut2Ret:
+        var ret2 = gCallableInfoGetReturnType(minfo)
+        let match = if gCallableInfoIsMethod(minfo): 1 else: 0
+        let arg = gCallableInfoGetArg(minfo, (1 - match).cint)
+        let out2ret = (gCallableInfoGetNArgs(minfo) + match) == 2 and  gTypeInfoGetTag(ret2) == GITypeTag.VOID and gArgInfoGetDirection(arg) == GIDirection.OUT
+        if not out2Ret:
+          break
+
+      pars = genPars(mInfo, false, info)#, tryOut2Ret = tryOut2Ret)
+      processedFunctions.incl(sym)
+      if not sym.startsWith("g_param_spec_uref"):
+        if sym.startsWith("g_param_spec_", "g_type_interface_", "g_object_interface_"): return
+      if sym in ["gtk_widget_class_find_style_property", "gtk_container_class_find_child_property",
+        "gtk_cell_area_class_find_cell_property"]: return
+      var asym = manglename(gBaseInfoGetName(mInfo))
+
+      # this does not really help, we have to fix some names manually
+      if not gCallableInfoIsMethod(minfo) and gCallableInfoGetNArgs(minfo) == 0 and
+        (gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) == 0:
+        var h = sym
+        if h.find('_') > 0:
+          h = h.split('_', 1)[1]
+        if h.endsWith("_get"):
+          h.removeSuffix("_get")
+          h = "get_" & h
+        h = h.mysnakeToCamel
+        #asym = h
+
+      if asym == "errorQuark" or asym == "quark": return
+      if (moduleNameSpace == "gst" and asym in ["appendAndTakeValue", "appendValue", "getSize", "getValue", "prependValue"]) or
+        asym in ["get", "getDefault", "from", "fromString", "getInfo", "listFree", "register", "find", "getList"]:
+        # or # maybe we should relax this later a bit for the case that first parameter type == gBaseInfoGetName(info)
+        asym.add($manglename(gBaseInfoGetName(info)))
+      if sym == "gtk_buildable_get_name": asym = "buildableGetName" # conflict with gtk_widget_get_name()
+      if sym == "gtk_buildable_set_name": asym = "buildableSetName"
+      if keywords.contains(asym) or nims.contains(asym):
+        asym.add('P')
+      var ret2 = gCallableInfoGetReturnType(minfo)
+      var ngrRet = newGenRec(ret2)
+      let mprefix = modPrefix(ret2, sym)
+      if moduleNameSpace == "graphene" and gCallableInfoGetNArgs(minfo) == 0 and not gCallableInfoIsMethod(minfo):
+        asym.add($manglename(gBaseInfoGetName(info)))
+      for run in 0 .. 1:
+        if run == 1: # try without get prefix and replace set prefix with `=`
+          if fixedProcNames.contains(sym): continue
+          if not (asym.startsWith("get", "set")) or asym == "getPlugin" or asym.len < 4:
             continue
-        if asym.startsWith("set"):
-          let match = if gCallableInfoIsMethod(minfo): 1 else: 2
-          if gCallableInfoGetNArgs(minfo) != match:
+          if asym.startsWith("get") and gTypeInfoGetTag(ret2) == GITypeTag.VOID:
             continue
-          if gTypeInfoGetTag(ret2) != GITypeTag.VOID:
-            continue
+          if asym.startsWith("get"):
+            let match = if gCallableInfoIsMethod(minfo): 0 else: 1
+            if gCallableInfoGetNArgs(minfo) != match:
+              continue
+          if asym.startsWith("set"):
+            let match = if gCallableInfoIsMethod(minfo): 1 else: 2
+            if gCallableInfoGetNArgs(minfo) != match:
+              continue
+            if gTypeInfoGetTag(ret2) != GITypeTag.VOID:
+              continue
 
-          #plist.replace("", "") we should remove default value from plist for assignments like width =
+            #plist.replace("", "") we should remove default value from plist for assignments like width =
 
-        if asym.startsWith("get"):
-          asym = asym[3 .. ^1].unCap
-        if asym.startsWith("set"):
-          asym = asym[3 .. ^1].unCap
-          asym = '`' & asym & '=' & '`'
-        if keywords.contains(asym) or nims.contains(asym): continue
-        if asym == "`tings=`": continue # result of get_settings
-      # the large proxy block BLOCK7 {
-      let b7 = needProxyProc(mInfo) or isString(ret2) or pars.replist.len > 0 or needTypeConv(ngrRet.name00, ngrRet) or
-          gTypeInfoGetTag(ret2) == GITypeTag.GLIST
-      # export only low level symbols that are needed internally -- maybe we should export only a private name for them
-      if run == 0:
-        if sym in ["g_quark_from_static_string", "g_error_free", "g_object_get_qdata", "g_object_ref_sink", "g_object_unref",
-          "g_timeout_add_full", "g_object_is_floating", "gst_bus_add_watch_full",
-          "g_type_from_name", "g_type_check_instance_is_a", "g_idle_add_full", "g_quark_try_string", "vte_regex_unref",
-          "gtk_builder_get_object", "g_action_map_add_action", "gtk_drawing_area_set_draw_func", "g_io_add_watch_full"]:
-          methodBuffer.write("\nproc " & sym & EM & pars.plist)
-          methodBuffer.writeLine(" {.\n    importc, ", libprag, ".}")
-          if sym.startsWith("vte_regex_unref"): # this function is special, as it returns the object
-            methodBuffer.writeLine("\nproc unref*(self: Regex) =")
-            methodBuffer.writeLine("  discard vte_regex_unref(cast[ptr Regex00](self.impl))")
+          if asym.startsWith("get"):
+            asym = asym[3 .. ^1].unCap
+          if asym.startsWith("set"):
+            asym = asym[3 .. ^1].unCap
+            asym = '`' & asym & '=' & '`'
+          if keywords.contains(asym) or nims.contains(asym): continue
+          if asym == "`tings=`": continue # result of get_settings
+        # the large proxy block BLOCK7 {
+        let b7 = needProxyProc(mInfo) or isString(ret2) or pars.replist.len > 0 or needTypeConv(ngrRet.name00, ngrRet) or
+            gTypeInfoGetTag(ret2) == GITypeTag.GLIST
+        # export only low level symbols that are needed internally -- maybe we should export only a private name for them
+        if run == 0 and not tryOut2Ret:
+          if sym in ["g_quark_from_static_string", "g_error_free", "g_object_get_qdata", "g_object_ref_sink", "g_object_unref",
+            "g_timeout_add_full", "g_object_is_floating", "gst_bus_add_watch_full",
+            "g_type_from_name", "g_type_check_instance_is_a", "g_idle_add_full", "g_quark_try_string", "vte_regex_unref",
+            "gtk_builder_get_object", "g_action_map_add_action", "gtk_drawing_area_set_draw_func", "g_io_add_watch_full"]:
+            methodBuffer.write("\nproc " & sym & EM & pars.plist)
+            methodBuffer.writeLine(" {.\n    importc, ", libprag, ".}")
+            if sym.startsWith("vte_regex_unref"): # this function is special, as it returns the object
+              methodBuffer.writeLine("\nproc unref*(self: Regex) =")
+              methodBuffer.writeLine("  discard vte_regex_unref(cast[ptr Regex00](self.impl))")
+              return
+          elif b7:
+            methodBuffer.write("\nproc " & sym & pars.plist)
+            methodBuffer.writeLine(" {.\n    importc, ", libprag, ".}")
+          if sym in ["g_object_ref_sink", "g_object_ref"]:
             return
-        elif b7:
-          methodBuffer.write("\nproc " & sym & pars.plist)
-          methodBuffer.writeLine(" {.\n    importc, ", libprag, ".}")
-        if sym in ["g_object_ref_sink", "g_object_ref"]:
-          return
-      if b7:
-        var isGObject = false
-        let tag = gTypeInfoGetTag(ret2)
-        if tag == GITypeTag.INTERFACE:
-          let iface = gTypeInfoGetInterface(ret2)
-          if gBaseInfoGetType(iface) == GIInfoType.Object and gObjectInfoGetFundamental(iface) == GFalse:
-            isGObject = true
-        pars = genPars(mInfo, true, info)
-        var sss = ""
-        let num = max([pars.arglist.count("seq2CstringArray"), pars.arglist.count("seq2TargetEntryArray"), pars.arglist.count(
-            "seq2PageRangeArray"), pars.arglist.count("seq2KeymapKeyArray")])
-        for i in 1 .. num:
-          let h = if i == 1: "" else: $i
-          sss &= "  var $1$3x: array[$2, pointer]\n" % [StringArrayName, $StringArrayEntries, h] &
-                       "  var $1$2: cstringArray = cast[cstringArray](addr $1$2x)\n" % [StringArrayName, h]
-        if asym.len > 2 and asym[^2] == '=':
-          pars.plist = pars.plist.replace(": bool = true", ": bool")
-        if (gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) != 0 or isProxyCandidate(ret2):
-          if info != nil:
-            asym = asym.replace("new", "new" & manglename(gBaseInfoGetName(info)))
-          else: # i.e. "pango_attr_background_new"
-            if asym.endsWith("New"):
-              asym.setLen(asym.len - 3)
-              asym[0] = asym[0].toUpperAscii
-              asym = "new" & asym
-              #discard #asym =
-            #if sym == "pango_attr_background_new": echo "sss", info != nil, asym
-        asym = fixedProcNames.getOrDefault(sym, asym)
-        # BLOCKMARK8 : 3 cases: constructor, isProxyCandidate(ret2), plain else
-        let isProxyCandidateret2 = isProxyCandidate(ret2)
 
-        #else: # BLOCKMARK8 assert gerror
-        if not (isProxyCandidateret2 or isGObject):
-          block8("", true)
-        if isProxyCandidateret2 or isGObject: # BLOCKMARK8
-          for itt in 0 .. 2: # generate the new(), the new(typedesc) and the init() proc
-            var hhh = "\nproc " & asym & EM & pars.plist
-            if itt == 1: # new(typedesc)
-              let semi = if hhh.contains("()"): "" else: "; "
-              let p = hhh.find("): ")
-              hhh.setLen(p + 1)
-              hhh = hhh.replace("*(", "*(tdesc: typedesc" & semi)
-              hhh.add(": tdesc")
-            if itt == 2: # init(), deprecated
-              let semi = if hhh.contains("()"): "" else: "; "
-              let p = hhh.find("): ")
-              hhh.setLen(p + 1)
-              # hhh = hhh.replace("new", "init")
-              hhh = hhh.replace("proc new", "proc init") # v0.8.2
-              hhh = hhh.replace("*(", "*[T](result: var T" & semi)
-            if itt == 2 and ((gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) != 0):
-              depStr = " {.deprecated.}"
-            if itt == 2 or ((gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) != 0):
-              hhh = hhh & depStr & " ="
-            else:
-              hhh = hhh & " ="
-            block8(hhh, itt == 0)
-            if not isGObject:
-              methodBuffer.write(pars.tempRes) # caution, gobjectTemp() may write tempRes too.
-            if itt == 1 or itt == 2:
-              methodBuffer.writeLine("  assert(result is $1)" % [manglename(gBaseInfoGetName(info))])
-            if isGObject:
-              gobjectTemp()
-            elif gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING or
-              gCallableInfoGetCallerOwns(minfo) == GITransfer.NOTHING: # for ARC we have always to use the same finalizer!
-              let tag = gTypeInfoGetTag(ret2)
-              assert tag == GITypeTag.INTERFACE
-              var iface = gTypeInfoGetInterface(ret2)
-              if gBaseInfoGetType(iface) == GIInfoType.INTERFACE:
-                gobjectTemp()
+        if b7:
+          var isGObject = false
+          let tag = gTypeInfoGetTag(ret2)
+          if tag == GITypeTag.INTERFACE:
+            let iface = gTypeInfoGetInterface(ret2)
+            if gBaseInfoGetType(iface) == GIInfoType.Object and gObjectInfoGetFundamental(iface) == GFalse:
+              isGObject = true
+          pars = genPars(mInfo, true, info, tryOut2Ret = tryOut2Ret)
+
+          var sss = ""
+
+          sss = pars.tmpoutgobjectarg
+
+          let num = max([pars.arglist.count("seq2CstringArray"), pars.arglist.count("seq2TargetEntryArray"), pars.arglist.count(
+              "seq2PageRangeArray"), pars.arglist.count("seq2KeymapKeyArray")])
+          for i in 1 .. num:
+            let h = if i == 1: "" else: $i
+            sss &= "  var $1$3x: array[$2, pointer]\n" % [StringArrayName, $StringArrayEntries, h] &
+                         "  var $1$2: cstringArray = cast[cstringArray](addr $1$2x)\n" % [StringArrayName, h]
+          if asym.len > 2 and asym[^2] == '=':
+            pars.plist = pars.plist.replace(": bool = true", ": bool")
+          if (gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) != 0 or isProxyCandidate(ret2):
+            if info != nil:
+              asym = asym.replace("new", "new" & manglename(gBaseInfoGetName(info)))
+            else: # i.e. "pango_attr_background_new"
+              if asym.endsWith("New"):
+                asym.setLen(asym.len - 3)
+                asym[0] = asym[0].toUpperAscii
+                asym = "new" & asym
+                #discard #asym =
+              #if sym == "pango_attr_background_new": echo "sss", info != nil, asym
+          asym = fixedProcNames.getOrDefault(sym, asym)
+          # BLOCKMARK8 : 3 cases: constructor, isProxyCandidate(ret2), plain else
+          let isProxyCandidateret2 = isProxyCandidate(ret2)
+
+          #else: # BLOCKMARK8 assert gerror
+          if not (isProxyCandidateret2 or isGObject):
+            block8("", true, tryOut2Ret)
+          if isProxyCandidateret2 or isGObject: # BLOCKMARK8
+            for itt in 0 .. 2: # generate the new(), the new(typedesc) and the init() proc
+              var hhh = "\nproc " & asym & EM & pars.plist
+              if itt == 1: # new(typedesc)
+                let semi = if hhh.contains("()"): "" else: "; "
+                let p = hhh.find("): ")
+                hhh.setLen(p + 1)
+                hhh = hhh.replace("*(", "*(tdesc: typedesc" & semi)
+                hhh.add(": tdesc")
+              if itt == 2: # init(), deprecated
+                let semi = if hhh.contains("()"): "" else: "; "
+                let p = hhh.find("): ")
+                hhh.setLen(p + 1)
+                # hhh = hhh.replace("new", "init")
+                hhh = hhh.replace("proc new", "proc init") # v0.8.2
+                hhh = hhh.replace("*(", "*[T](result: var T" & semi)
+              if itt == 2 and ((gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) != 0):
+                depStr = " {.deprecated.}"
+              if itt == 2 or ((gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) != 0):
+                hhh = hhh & depStr & " ="
               else:
-                assert(gBaseInfoGetType(iface) in {GIInfoType.STRUCT, GIInfoType.UNION, GIInfoType.OBJECT})
-                var freeMeName: string
-                var freeMe: GIFunctionInfo
-                var boxedFreeMeName: string
-                findFreeProc(iface, gCallableInfoGetCallerOwns(minfo) == GITransfer.NOTHING)
-                if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo):
-                  methodBuffer.writeLine("  let impl0 = " & sym & pars.arglist) # fast return in case of error
-                  checkForGerror()
-                  if gCallableInfoMayReturnNull(minfo):
-                    methodBuffer.writeLine("  if impl0.isNil:")
-                    methodBuffer.writeLine("    return nil")
-                if boxedFreeMeName != "":
-                  methodBuffer.writeLine("  fnew(result, $1)" % boxedFreeMeName)
-                elif freeMeName == "":
-                  # assert false # TODO we have to fix this case manually
-                  # echo "xCaution: No free/unref found for ", ' ', gBaseInfoGetName(iface), " (", sym, ')' # check this from time to time!
-                  methodBuffer.writeLine("  new(result)")
+                hhh = hhh & " ="
+              block8(hhh, itt == 0, tryOut2Ret)
+              if not isGObject:
+                methodBuffer.write(pars.tempRes) # caution, gobjectTemp() may write tempRes too.
+              if itt == 1 or itt == 2:
+                methodBuffer.writeLine("  assert(result is $1)" % [manglename(gBaseInfoGetName(info))])
+              if isGObject:
+                gobjectTemp()
+              elif gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING or
+                gCallableInfoGetCallerOwns(minfo) == GITransfer.NOTHING: # for ARC we have always to use the same finalizer!
+                let tag = gTypeInfoGetTag(ret2)
+                assert tag == GITypeTag.INTERFACE
+                var iface = gTypeInfoGetInterface(ret2)
+                if gBaseInfoGetType(iface) == GIInfoType.INTERFACE:
+                  gobjectTemp()
                 else:
-                  methodBuffer.writeLine("  fnew(result, $1)" % freeMeName)
-                if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo):
-                  methodBuffer.writeLine("  result.impl = impl0")
-                else:
-                  methodBuffer.writeLine("  result.impl = " & sym & pars.arglist)
-                if gCallableInfoGetCallerOwns(minfo) == GITransfer.NOTHING: # for the none gobjects
-                  if ((gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) == 0):
-                    methodBuffer.writeLine("  result.ignoreFinalizer = true") # as we have always to attach one with ARC.
-            else: assert false
-            if ((gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) != 0 and gBaseInfoGetName(info) == "Variant"):
-              methodBuffer.writeLine("  result.ignoreFinalizer = true")
-            if (gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) == 0:
-              break
-        elif ngrRet.res == glist:
-          var elTransferFull = gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING
-          if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo) or gCallableInfoGetCallerOwns(minfo) !=
-              GITransfer.NOTHING:
-            methodBuffer.writeLine("  let resul0 = " & sym & pars.arglist)
-            checkForGerror()
-            if gCallableInfoMayReturnNull(minfo):
-              methodBuffer.writeLine("  if resul0.isNil:")
-              methodBuffer.writeLine("    return")
-            if ngrRet.infoType == GIInfoType.OBJECT or ngrRet.infoType == GIInfoType.INTERFACE:
-              methodBuffer.writeLine("  result = glistObjects2seq($1, resul0, $2)" % [ngrRet.childName, $elTransferFull])
-            if ngrRet.infoType == GIInfoType.STRUCT:
-              if gBaseInfoGetName(gTypeInfoGetInterface(gTypeInfoGetParamType(ret2, 0))) notin ["Atom", "Variant", "TimedValue"]: # care later
-                methodBuffer.writeLine("  result = glistStructs2seq[$1](resul0, $2)" % [ngrRet.childName, $(
-                    gCallableInfoGetCallerOwns(minfo) != GITransfer.EVERYTHING)])
-                # caution TimedValue is a "light" entity, so we need a different glistStructs2seq() for that!
-            if gCallableInfoGetCallerOwns(minfo) != GITransfer.NOTHING:
-              methodBuffer.writeLine("  g_list_free(resul0)") # only free the list itself, the elements are moved to the seq
-          else:
-            if ngrRet.infoType == GIInfoType.OBJECT or ngrRet.infoType == GIInfoType.INTERFACE:
-              if ngrRet.infoType != GIInfoType.INTERFACE:
-                assert findFreeObject(gTypeInfoGetInterface(gTypeInfoGetParamType(ret2, 0))).len == 0
-              methodBuffer.writeLine("  result = glistObjects2seq($1, $2, $3)" % [ngrRet.childName, sym & pars.arglist,
-                  $elTransferFull])
+                  assert(gBaseInfoGetType(iface) in {GIInfoType.STRUCT, GIInfoType.UNION, GIInfoType.OBJECT})
+                  var freeMeName: string
+                  var freeMe: GIFunctionInfo
+                  var boxedFreeMeName: string
+                  findFreeProc(iface, gCallableInfoGetCallerOwns(minfo) == GITransfer.NOTHING)
+                  if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo):
+                    methodBuffer.writeLine("  let impl0 = " & sym & pars.arglist) # fast return in case of error
+                    checkForGerror()
+                    if gCallableInfoMayReturnNull(minfo):
+                      methodBuffer.writeLine("  if impl0.isNil:")
+                      methodBuffer.writeLine("    return nil")
+                  if boxedFreeMeName != "":
+                    methodBuffer.writeLine("  fnew(result, $1)" % boxedFreeMeName)
+                  elif freeMeName == "":
+                    # assert false # TODO we have to fix this case manually
+                    # echo "xCaution: No free/unref found for ", ' ', gBaseInfoGetName(iface), " (", sym, ')' # check this from time to time!
+                    methodBuffer.writeLine("  new(result)")
+                  else:
+                    methodBuffer.writeLine("  fnew(result, $1)" % freeMeName)
+                  if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo):
+                    methodBuffer.writeLine("  result.impl = impl0")
+                  else:
+                    methodBuffer.writeLine("  result.impl = " & sym & pars.arglist)
+                  if gCallableInfoGetCallerOwns(minfo) == GITransfer.NOTHING: # for the none gobjects
+                    if ((gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) == 0):
+                      methodBuffer.writeLine("  result.ignoreFinalizer = true") # as we have always to attach one with ARC.
+              else: assert false
+              if ((gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) != 0 and gBaseInfoGetName(info) == "Variant"):
+                methodBuffer.writeLine("  result.ignoreFinalizer = true")
+              if (gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) == 0:
+                break
+          elif ngrRet.res == glist:
+            var elTransferFull = gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING
+            if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo) or gCallableInfoGetCallerOwns(minfo) !=
+                GITransfer.NOTHING:
+              methodBuffer.writeLine("  let resul0 = " & sym & pars.arglist)
+              checkForGerror()
+              if gCallableInfoMayReturnNull(minfo):
+                methodBuffer.writeLine("  if resul0.isNil:")
+                methodBuffer.writeLine("    return")
+              if ngrRet.infoType == GIInfoType.OBJECT or ngrRet.infoType == GIInfoType.INTERFACE:
+                methodBuffer.writeLine("  result = glistObjects2seq($1, resul0, $2)" % [ngrRet.childName, $elTransferFull])
+              if ngrRet.infoType == GIInfoType.STRUCT:
+                if gBaseInfoGetName(gTypeInfoGetInterface(gTypeInfoGetParamType(ret2, 0))) notin ["Atom", "Variant", "TimedValue"]: # care later
+                  methodBuffer.writeLine("  result = glistStructs2seq[$1](resul0, $2)" % [ngrRet.childName, $(
+                      gCallableInfoGetCallerOwns(minfo) != GITransfer.EVERYTHING)])
+                  # caution TimedValue is a "light" entity, so we need a different glistStructs2seq() for that!
+              if gCallableInfoGetCallerOwns(minfo) != GITransfer.NOTHING:
+                methodBuffer.writeLine("  g_list_free(resul0)") # only free the list itself, the elements are moved to the seq
             else:
-              methodBuffer.writeLine("  discard")
-          assert(gCallableInfoGetCallerOwns(minfo) in {GITransfer.EVERYTHING, GITransfer.NOTHING, GITransfer.CONTAINER})
-        elif ngrRet.res == gslist:
-          var elTransferFull = gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING
-          if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo) or gCallableInfoGetCallerOwns(minfo) !=
-              GITransfer.NOTHING:
-            methodBuffer.writeLine("  let resul0 = " & sym & pars.arglist)
-            checkForGerror()
-            if gCallableInfoMayReturnNull(minfo):
-              methodBuffer.writeLine("  if resul0.isNil:")
-              methodBuffer.writeLine("    return")
-            if ngrRet.infoType == GIInfoType.OBJECT or ngrRet.infoType == GIInfoType.INTERFACE:
-              methodBuffer.writeLine("  result = gslistObjects2seq($1, resul0, $2)" % [ngrRet.childName, $elTransferFull])
-            if ngrRet.infoType == GIInfoType.STRUCT:
-              if gBaseInfoGetName(gTypeInfoGetInterface(gTypeInfoGetParamType(ret2, 0))) notin ["Atom", "Variant"]: # care later
-                methodBuffer.writeLine("  result = gslistStructs2seq[$1](resul0, $2)" % [ngrRet.childName, $(
-                    gCallableInfoGetCallerOwns(minfo) != GITransfer.EVERYTHING)])
-            if gCallableInfoGetCallerOwns(minfo) != GITransfer.NOTHING:
-              methodBuffer.writeLine("  g_slist_free(resul0)") # only free the list itself, the elements are moved to the seq
-          else:
-            if ngrRet.infoType == GIInfoType.OBJECT or ngrRet.infoType == GIInfoType.INTERFACE:
-              if ngrRet.infoType != GIInfoType.INTERFACE:
-                assert findFreeObject(gTypeInfoGetInterface(gTypeInfoGetParamType(ret2, 0))).len == 0
-              methodBuffer.writeLine("  result = gslistObjects2seq($1, $2, $3)" % [ngrRet.childName, sym & pars.arglist,
-                  $elTransferFull])
+              if ngrRet.infoType == GIInfoType.OBJECT or ngrRet.infoType == GIInfoType.INTERFACE:
+                if ngrRet.infoType != GIInfoType.INTERFACE:
+                  assert findFreeObject(gTypeInfoGetInterface(gTypeInfoGetParamType(ret2, 0))).len == 0
+                methodBuffer.writeLine("  result = glistObjects2seq($1, $2, $3)" % [ngrRet.childName, sym & pars.arglist,
+                    $elTransferFull])
+              else:
+                methodBuffer.writeLine("  discard")
+            assert(gCallableInfoGetCallerOwns(minfo) in {GITransfer.EVERYTHING, GITransfer.NOTHING, GITransfer.CONTAINER})
+          elif ngrRet.res == gslist:
+            var elTransferFull = gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING
+            if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo) or gCallableInfoGetCallerOwns(minfo) !=
+                GITransfer.NOTHING:
+              methodBuffer.writeLine("  let resul0 = " & sym & pars.arglist)
+              checkForGerror()
+              if gCallableInfoMayReturnNull(minfo):
+                methodBuffer.writeLine("  if resul0.isNil:")
+                methodBuffer.writeLine("    return")
+              if ngrRet.infoType == GIInfoType.OBJECT or ngrRet.infoType == GIInfoType.INTERFACE:
+                methodBuffer.writeLine("  result = gslistObjects2seq($1, resul0, $2)" % [ngrRet.childName, $elTransferFull])
+              if ngrRet.infoType == GIInfoType.STRUCT:
+                if gBaseInfoGetName(gTypeInfoGetInterface(gTypeInfoGetParamType(ret2, 0))) notin ["Atom", "Variant"]: # care later
+                  methodBuffer.writeLine("  result = gslistStructs2seq[$1](resul0, $2)" % [ngrRet.childName, $(
+                      gCallableInfoGetCallerOwns(minfo) != GITransfer.EVERYTHING)])
+              if gCallableInfoGetCallerOwns(minfo) != GITransfer.NOTHING:
+                methodBuffer.writeLine("  g_slist_free(resul0)") # only free the list itself, the elements are moved to the seq
             else:
-              methodBuffer.writeLine("  discard")
-          assert(gCallableInfoGetCallerOwns(minfo) in {GITransfer.EVERYTHING, GITransfer.NOTHING, GITransfer.CONTAINER})
-        elif ngrRet.flags.contains(RecResFlag.unamedA) and ngrRet.res == intAX:
-          # https://discourse.gnome.org/t/g-key-file-get-integer-list-transfer-container/4729
-          # for fundamental types GITransfer.EVERYTHING and GITransfer.CONTAINER are equivalent
-          var co = gCallableInfoGetCallerOwns(minfo)
-          assert ngrRet.flags.contains(RecResFlag.array)
-          if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo) or co in {GITransfer.EVERYTHING, CONTAINER}:
-            methodBuffer.writeLine("  let resul0 = " & sym & pars.arglist)
-            checkForGerror()
-            if gCallableInfoMayReturnNull(minfo):
-              methodBuffer.writeLine("  if resul0.isNil:")
-              methodBuffer.writeLine("    return")
-            methodBuffer.writeLine("  result = $1ToSeq(resul0, $2.int)" % [fixedName2(ngrRet.name00), pars.blex])
-          else:
-            methodBuffer.writeLine("  result = $1ToSeq($3, $2.int)" % [fixedName2(ngrRet.name00), pars.blex, sym & pars.arglist])
-          assert(co in {GITransfer.EVERYTHING, CONTAINER, NOTHING})
-          if co in {GITransfer.EVERYTHING, CONTAINER}:
-            methodBuffer.writeLine("  cogfree(resul0)")
-        elif ngrRet.flags.contains(RecResFlag.unamedA) and ngrRet.res == intA0:
-          assert ngrRet.flags.contains(RecResFlag.array)
-          if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo) or gCallableInfoGetCallerOwns(minfo) ==
-              GITransfer.EVERYTHING:
-            methodBuffer.writeLine("  let resul0 = " & sym & pars.arglist)
-            checkForGerror()
-            if gCallableInfoMayReturnNull(minfo):
-              methodBuffer.writeLine("  if resul0.isNil:")
-              methodBuffer.writeLine("    return")
-            methodBuffer.writeLine("  result = $1ZT2seq(resul0)" % [unCaped(fixedName2(ngrRet.name))])
-          else:
-            methodBuffer.writeLine("  result = $1ZT2seq($2)" % [unCaped(fixedName2(ngrRet.name)), sym & pars.arglist])
-          assert(gCallableInfoGetCallerOwns(minfo) in {GITransfer.EVERYTHING, GITransfer.NOTHING, GITransfer.CONTAINER})
-          if gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING:
-            methodBuffer.writeLine("  cogfree(resul0)")
-        elif isString(ret2):
-          if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo) or gCallableInfoGetCallerOwns(minfo) ==
-              GITransfer.EVERYTHING:
-            methodBuffer.writeLine("  let resul0 = " & sym & pars.arglist)
-            checkForGerror()
-            if gCallableInfoMayReturnNull(minfo):
-              methodBuffer.writeLine("  if resul0.isNil:")
-              methodBuffer.writeLine("    return")
-            methodBuffer.writeLine("  result = $resul0")
-          else:
-            methodBuffer.writeLine("  result = $" & sym & pars.arglist)
-          assert(gCallableInfoGetCallerOwns(minfo) in {GITransfer.EVERYTHING, GITransfer.NOTHING})
-          if gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING:
-            methodBuffer.writeLine("  cogfree(resul0)")
-        elif RecResFlag.namedA in ngrRet.flags:
-          assert ngrRet.flags.contains(RecResFlag.array)
-          let h = ngrRet.name00
-          if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo) or gCallableInfoGetCallerOwns(minfo) ==
-              GITransfer.EVERYTHING:
-            methodBuffer.writeLine("  let resul0 = " & sym & pars.arglist)
-            checkForGerror()
-            if gCallableInfoMayReturnNull(minfo):
-              methodBuffer.writeLine("  if resul0.isNil:")
-              methodBuffer.writeLine("    return")
-            methodBuffer.writeLine("  result = $1ToSeq(resul0, $2_00.int)" % [fixedName2(h.replace("00")).unCap, pars.blex])
-          else:
-            methodBuffer.writeLine("  result = $1ToSeq($3, $2_00.int)" % [fixedName2(h.replace("00")).unCap, pars.blex, sym & pars.arglist])
-          assert(gCallableInfoGetCallerOwns(minfo) in {GITransfer.EVERYTHING, GITransfer.NOTHING})
-          if gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING:
-            methodBuffer.writeLine("  cogfree(resul0)")
-        elif (pars.replist.len > 0 or gCallableInfoCanThrowGerror(minfo)) and ngrRet.name != "void":
-          # caution dragons like g_key_file_get_locale_string_list()
-          if gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING:
-            discard # echo "Untamed dragon: ", sym
-          if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo) or gCallableInfoGetCallerOwns(minfo) ==
-              GITransfer.EVERYTHING:
-            methodBuffer.writeLine("  let resul0 = " & sym & pars.arglist)
-            checkForGerror()
-            if gCallableInfoMayReturnNull(minfo):
-              methodBuffer.writeLine("  if resul0.isNil:")
-              methodBuffer.writeLine("    return")
-            methodBuffer.write("  result = ")
-            if needTypeConv(ngrRet.name, ngrRet):
-              methodBuffer.writeLine(doCt3nt(ngrRet.name, ngrRet) & '(' & "resul0" & ')')
+              if ngrRet.infoType == GIInfoType.OBJECT or ngrRet.infoType == GIInfoType.INTERFACE:
+                if ngrRet.infoType != GIInfoType.INTERFACE:
+                  assert findFreeObject(gTypeInfoGetInterface(gTypeInfoGetParamType(ret2, 0))).len == 0
+                methodBuffer.writeLine("  result = gslistObjects2seq($1, $2, $3)" % [ngrRet.childName, sym & pars.arglist,
+                    $elTransferFull])
+              else:
+                methodBuffer.writeLine("  discard")
+            assert(gCallableInfoGetCallerOwns(minfo) in {GITransfer.EVERYTHING, GITransfer.NOTHING, GITransfer.CONTAINER})
+          elif ngrRet.flags.contains(RecResFlag.unamedA) and ngrRet.res == intAX:
+            # https://discourse.gnome.org/t/g-key-file-get-integer-list-transfer-container/4729
+            # for fundamental types GITransfer.EVERYTHING and GITransfer.CONTAINER are equivalent
+            var co = gCallableInfoGetCallerOwns(minfo)
+            assert ngrRet.flags.contains(RecResFlag.array)
+            if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo) or co in {GITransfer.EVERYTHING, CONTAINER}:
+              methodBuffer.writeLine("  let resul0 = " & sym & pars.arglist)
+              checkForGerror()
+              if gCallableInfoMayReturnNull(minfo):
+                methodBuffer.writeLine("  if resul0.isNil:")
+                methodBuffer.writeLine("    return")
+              methodBuffer.writeLine("  result = $1ToSeq(resul0, $2.int)" % [fixedName2(ngrRet.name00), pars.blex])
             else:
-              methodBuffer.writeLine("resul0")
-          else:
-            methodBuffer.write("  result = ")
-            if needTypeConv(ngrRet.name, ngrRet):
-              methodBuffer.writeLine(doCt3nt(ngrRet.name, ngrRet) & '(' & sym & pars.arglist & ')')
-            else:
-              methodBuffer.writeLine(sym & pars.arglist)
-        elif needTypeConv(ngrRet.name, ngrRet):
-          if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo) or gCallableInfoGetCallerOwns(minfo) ==
-              GITransfer.EVERYTHING:
-            methodBuffer.writeLine("  let resul0 = " & sym & pars.arglist)
-            checkForGerror()
-            if gCallableInfoMayReturnNull(minfo):
-              methodBuffer.writeLine("  if resul0.isNil:")
-              methodBuffer.writeLine("    return")
-            if ngrRet.name == "ptr cstring" and ngrRet.flags.contains(RecResFlag.array) and gCallableInfoGetCallerOwns(minfo) ==
+              methodBuffer.writeLine("  result = $1ToSeq($3, $2.int)" % [fixedName2(ngrRet.name00), pars.blex, sym & pars.arglist])
+            assert(co in {GITransfer.EVERYTHING, CONTAINER, NOTHING})
+            if co in {GITransfer.EVERYTHING, CONTAINER}:
+              methodBuffer.writeLine("  cogfree(resul0)")
+          elif ngrRet.flags.contains(RecResFlag.unamedA) and ngrRet.res == intA0:
+            assert ngrRet.flags.contains(RecResFlag.array)
+            if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo) or gCallableInfoGetCallerOwns(minfo) ==
                 GITransfer.EVERYTHING:
-              methodBuffer.writeLine("  result = cstringArrayToSeq(resul0)")
-              methodBuffer.writeLine("  g_strfreev(resul0)")
+              methodBuffer.writeLine("  let resul0 = " & sym & pars.arglist)
+              checkForGerror()
+              if gCallableInfoMayReturnNull(minfo):
+                methodBuffer.writeLine("  if resul0.isNil:")
+                methodBuffer.writeLine("    return")
+              methodBuffer.writeLine("  result = $1ZT2seq(resul0)" % [unCaped(fixedName2(ngrRet.name))])
             else:
-              methodBuffer.writeLine("  " & doCt3nt(ngrRet.name, ngrRet) & '(' & "resul0" & ')')
-          else:
-            if pars.tempResFree != "": # ugly, do we have a better test for this case
-            #if ngrRet.name != "void":
-              methodBuffer.writeLine("  result = " & doCt3nt(ngrRet.name, ngrRet) & '(' & sym & pars.arglist & ')')
+              methodBuffer.writeLine("  result = $1ZT2seq($2)" % [unCaped(fixedName2(ngrRet.name)), sym & pars.arglist])
+            assert(gCallableInfoGetCallerOwns(minfo) in {GITransfer.EVERYTHING, GITransfer.NOTHING, GITransfer.CONTAINER})
+            if gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING:
+              methodBuffer.writeLine("  cogfree(resul0)")
+          elif isString(ret2):
+            if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo) or gCallableInfoGetCallerOwns(minfo) ==
+                GITransfer.EVERYTHING:
+              methodBuffer.writeLine("  let resul0 = " & sym & pars.arglist)
+              checkForGerror()
+              if gCallableInfoMayReturnNull(minfo):
+                methodBuffer.writeLine("  if resul0.isNil:")
+                methodBuffer.writeLine("    return")
+              methodBuffer.writeLine("  result = $resul0")
             else:
-              methodBuffer.writeLine("  " & doCt3nt(ngrRet.name, ngrRet) & '(' & sym & pars.arglist & ')')
-            checkForGerror() # i.e. for nice_agent_set_remote_candidates, free GSList
-        else:
-          if gCallableInfoCanThrowGerror(minfo) and ngrRet.name != "void":
-            assert false
-            methodBuffer.writeLine("  let resul0 = " & sym & pars.arglist)
-          else:
-            methodBuffer.writeLine("  " & sym & pars.arglist)
-          checkForGerror()
-          if gCallableInfoCanThrowGerror(minfo) and ngrRet.name != "void":
-            assert false
-            methodBuffer.writeLine("  resul0 #####")
-        for k, v in pars.replist:
-          if v[1].flags.contains(RecResFlag.unamedA):
-            assert v[1].flags.contains(RecResFlag.array)
-            methodBuffer.writeLine("  $1.setLen($2)" % [k, pars.blex])
-            methodBuffer.writeLine("  copyMem(unsafeaddr $1[0], $1_00, $2.int * sizeof($1[0]))" % [k.strip(chars = {'`'}), pars.blex])
-            methodBuffer.writeLine("  cogfree($1_00)" % [k.strip(chars = {'`'})])
-          elif RecResFlag.namedA in v[1].flags:
-            assert v[1].flags.contains(RecResFlag.array)
-            methodBuffer.writeLine("  $1 = $2($3_00, $4)" % [k, doCt3nt(v[0], v[1]), k.strip(chars = {'`'}), pars.blex])
-          else:
-            if v[1].optOut:
-              methodBuffer.writeLine("  if $1.addr != nil:" % [k, doCt3nt(v[0], v[1]), k.strip(chars = {'`'})])
-              methodBuffer.writeLine("    $1 = $2($3_00)" % [k, doCt3nt(v[0], v[1]), k.strip(chars = {'`'})])
+              methodBuffer.writeLine("  result = $" & sym & pars.arglist)
+            assert(gCallableInfoGetCallerOwns(minfo) in {GITransfer.EVERYTHING, GITransfer.NOTHING})
+            if gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING:
+              methodBuffer.writeLine("  cogfree(resul0)")
+          elif RecResFlag.namedA in ngrRet.flags:
+            assert ngrRet.flags.contains(RecResFlag.array)
+            let h = ngrRet.name00
+            if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo) or gCallableInfoGetCallerOwns(minfo) ==
+                GITransfer.EVERYTHING:
+              methodBuffer.writeLine("  let resul0 = " & sym & pars.arglist)
+              checkForGerror()
+              if gCallableInfoMayReturnNull(minfo):
+                methodBuffer.writeLine("  if resul0.isNil:")
+                methodBuffer.writeLine("    return")
+              methodBuffer.writeLine("  result = $1ToSeq(resul0, $2_00.int)" % [fixedName2(h.replace("00")).unCap, pars.blex])
             else:
-              methodBuffer.writeLine("  $1 = $2($3_00)" % [k, doCt3nt(v[0], v[1]), k.strip(chars = {'`'})])
-      # BLOCKMARK8
-      else: # } end of large proxy block BLOCK7
-        asym = fixedProcNames.getOrDefault(sym, asym)
-        pars = genPars(mInfo, false, info)
-        if asym != "errorQuark" and asym != "getPlugin" and asym != "quark":
-          methodBuffer.write("\nproc " & asym & EM & pars.plist)
-          methodBuffer.writeLine(" {.\n    importc: \"", sym, "\", ", libprag, ".}")
-    if info != nil and (gBaseInfoGetType(info) == GIInfoType.UNION or gBaseInfoGetType(info) == GIInfoType.STRUCT) and
-      gCallableInfoGetNArgs(minfo) == (if gCallableInfoIsMethod(minfo): 0 else: 1):
-      #if not callerAlloc.contains(modulenamespace & '.' & $gBaseInfoGetName(info)) and (asym == "free" or asym == "unref"):
-      if not callerAlloc.contains(modulenamespace & '.' & $gBaseInfoGetName(info)) and (asym == "free" or asym == "unref" or
-          asym == "destroy"): # v0.8.6
-        methodBuffer.writeLine("\nproc finalizer" & asym & EM & "(self: $1) =" % [$gBaseInfoGetName(info)])
-        methodBuffer.writeLine("  if not self.ignoreFinalizer:")
-        if gTypeInfoGetTag(ret2) != GITypeTag.VOID: # i.e. gst_sdp_media_free()
-          methodBuffer.writeLine("    discard " & sym & "(self.impl)")
-        else: #"(cast[ptr " & manglename(gBaseInfoGetName(binfo)) & "00]("
-          #methodBuffer.writeLine("    " & sym & "(self.impl)")
-          methodBuffer.writeLine("    " & sym & "(cast[ptr " & manglename(gBaseInfoGetName(info)) & "00](self.impl))")
-    if sym == "gtk_window_set_default_size":
-      methodBuffer.writeLine("\nproc `defaultSize=`*(self: Window; dim: tuple[width: int; height: int]) =")
-      methodBuffer.writeLine("  gtk_window_set_default_size(cast[ptr Window00](self.impl), int32(dim[0]), int32(dim[1]))")
-    if sym == "g_object_unref":
-      # methodBuffer.writeLine("\nproc genericGObjectUnref*[T](self: ref T) =") # we do not really need generics here
-      methodBuffer.writeLine("\nproc genericGObjectUnref*(self: Object) =")
-      methodBuffer.writeLine("  if not self.ignoreFinalizer:")
-      methodBuffer.writeLine("    g_object_unref(cast[ptr Object00](self.impl))")
-    if info != nil and gBaseInfoGetType(info) == GIInfoType.Object and gObjectInfoGetFundamental(info) == GTrue and sym.endsWith("unref"):
-      assert false
-      when false: # we can not use baseName, we have to use generics.
-        var parent = info
-        while true:
-          let h = g_object_info_get_parent(parent)
-          if h == nil:
-            break
-          parent = h
-        let baseName = $gBaseInfoGetName(parent)
-      methodBuffer.writeLine("\nproc generic_$1*[T](self: ref T) =" % [sym])
-      # methodBuffer.writeLine("\nproc generic_$1*(self: $2) =" % [sym, baseName]) # we can not avoid generics here
-      methodBuffer.writeLine("  if not self.ignoreFinalizer:")
-      # methodBuffer.writeLine("    $1(cast[ptr Object00](self.impl))" % [sym]) # we do not need that cast!
-      methodBuffer.writeLine("    $1(self.impl)" % [sym])
+              methodBuffer.writeLine("  result = $1ToSeq($3, $2_00.int)" % [fixedName2(h.replace("00")).unCap, pars.blex, sym & pars.arglist])
+            assert(gCallableInfoGetCallerOwns(minfo) in {GITransfer.EVERYTHING, GITransfer.NOTHING})
+            if gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING:
+              methodBuffer.writeLine("  cogfree(resul0)")
+          #elif (pars.replist.len > 0 or gCallableInfoCanThrowGerror(minfo)) and ngrRet.name != "void" or pars.tmpoutgobjectarg.len != 0:
+          elif (pars.replist.len > 0 or gCallableInfoCanThrowGerror(minfo) or pars.tmpoutgobjectarg.len != 0) and ngrRet.name != "void":
+            # caution dragons like g_key_file_get_locale_string_list()
+            if gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING:
+              discard # echo "Untamed dragon: ", sym
+            if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo) or gCallableInfoGetCallerOwns(minfo) ==
+                GITransfer.EVERYTHING:
+              methodBuffer.writeLine("  let resul0 = " & sym & pars.arglist)
+              checkForGerror()
+              if gCallableInfoMayReturnNull(minfo):
+                methodBuffer.writeLine("  if resul0.isNil:")
+                methodBuffer.writeLine("    return")
+              methodBuffer.write("  result = ")
+              if needTypeConv(ngrRet.name, ngrRet):
+                methodBuffer.writeLine(doCt3nt(ngrRet.name, ngrRet) & '(' & "resul0" & ')')
+              else:
+                methodBuffer.writeLine("resul0")
+            else:
+              methodBuffer.write("  result = ")
+              if needTypeConv(ngrRet.name, ngrRet):
+                methodBuffer.writeLine(doCt3nt(ngrRet.name, ngrRet) & '(' & sym & pars.arglist & ')')
+              else:
+                methodBuffer.writeLine(sym & pars.arglist)
+          elif needTypeConv(ngrRet.name, ngrRet):
+            if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo) or gCallableInfoGetCallerOwns(minfo) ==
+                GITransfer.EVERYTHING:
+              methodBuffer.writeLine("  let resul0 = " & sym & pars.arglist)
+              checkForGerror()
+              if gCallableInfoMayReturnNull(minfo):
+                methodBuffer.writeLine("  if resul0.isNil:")
+                methodBuffer.writeLine("    return")
+              if ngrRet.name == "ptr cstring" and ngrRet.flags.contains(RecResFlag.array) and gCallableInfoGetCallerOwns(minfo) ==
+                  GITransfer.EVERYTHING:
+                methodBuffer.writeLine("  result = cstringArrayToSeq(resul0)")
+                methodBuffer.writeLine("  g_strfreev(resul0)")
+              else:
+                methodBuffer.writeLine("  " & doCt3nt(ngrRet.name, ngrRet) & '(' & "resul0" & ')')
+            else:
+              if pars.tempResFree != "": # ugly, do we have a better test for this case
+              #if ngrRet.name != "void":
+                methodBuffer.writeLine("  result = " & doCt3nt(ngrRet.name, ngrRet) & '(' & sym & pars.arglist & ')')
+              else:
+                methodBuffer.writeLine("  " & doCt3nt(ngrRet.name, ngrRet) & '(' & sym & pars.arglist & ')')
+              checkForGerror() # i.e. for nice_agent_set_remote_candidates, free GSList
+          else:
+            if gCallableInfoCanThrowGerror(minfo) and ngrRet.name != "void":
+              assert false
+              methodBuffer.writeLine("  let resul0 = " & sym & pars.arglist)
+            else:
+              methodBuffer.writeLine("  " & sym & pars.arglist)
+            checkForGerror()
+            if gCallableInfoCanThrowGerror(minfo) and ngrRet.name != "void":
+              assert false
+              methodBuffer.writeLine("  resul0 #####")
+          for k, v in pars.replist:
+            if v[1].flags.contains(RecResFlag.unamedA):
+              assert v[1].flags.contains(RecResFlag.array)
+              methodBuffer.writeLine("  $1.setLen($2)" % [k, pars.blex])
+              methodBuffer.writeLine("  copyMem(unsafeaddr $1[0], $1_00, $2.int * sizeof($1[0]))" % [k.strip(chars = {'`'}), pars.blex])
+              methodBuffer.writeLine("  cogfree($1_00)" % [k.strip(chars = {'`'})])
+            elif RecResFlag.namedA in v[1].flags:
+              assert v[1].flags.contains(RecResFlag.array)
+              methodBuffer.writeLine("  $1 = $2($3_00, $4)" % [k, doCt3nt(v[0], v[1]), k.strip(chars = {'`'}), pars.blex])
+            else:
+              if v[1].optOut:
+                methodBuffer.writeLine("  if $1.addr != nil:" % [k, doCt3nt(v[0], v[1]), k.strip(chars = {'`'})])
+                methodBuffer.writeLine("    $1 = $2($3_00)" % [k, doCt3nt(v[0], v[1]), k.strip(chars = {'`'})])
+              else:
+                methodBuffer.writeLine("  $1 = $2($3_00)" % [k, doCt3nt(v[0], v[1]), k.strip(chars = {'`'})])
+        # BLOCKMARK8
+        else: # } end of large proxy block BLOCK7
+          asym = fixedProcNames.getOrDefault(sym, asym)
+          pars = genPars(mInfo, false, info, tryOut2Ret = tryOut2Ret)
+          if asym != "errorQuark" and asym != "getPlugin" and asym != "quark":
+            methodBuffer.write("\nproc " & asym & EM & pars.plist)
+            methodBuffer.writeLine(" {.\n    importc: \"", sym, "\", ", libprag, ".}")
 
-    if useTempProcessedFunctions:
-      tempProcessedFunctions.add(sym)
+      if pars.tmpoutgobjectarg.len != 0:
+        methodBuffer.writeLine("#  dothemagic(" & pars.outgobjectargname)
+        dothegobjectargmagic()
+
+      if info != nil and (gBaseInfoGetType(info) == GIInfoType.UNION or gBaseInfoGetType(info) == GIInfoType.STRUCT) and
+        gCallableInfoGetNArgs(minfo) == (if gCallableInfoIsMethod(minfo): 0 else: 1):
+        #if not callerAlloc.contains(modulenamespace & '.' & $gBaseInfoGetName(info)) and (asym == "free" or asym == "unref"):
+        if not callerAlloc.contains(modulenamespace & '.' & $gBaseInfoGetName(info)) and (asym == "free" or asym == "unref" or
+            asym == "destroy"): # v0.8.6
+          methodBuffer.writeLine("\nproc finalizer" & asym & EM & "(self: $1) =" % [$gBaseInfoGetName(info)])
+          methodBuffer.writeLine("  if not self.ignoreFinalizer:")
+          if gTypeInfoGetTag(ret2) != GITypeTag.VOID: # i.e. gst_sdp_media_free()
+            methodBuffer.writeLine("    discard " & sym & "(self.impl)")
+          else: #"(cast[ptr " & manglename(gBaseInfoGetName(binfo)) & "00]("
+            #methodBuffer.writeLine("    " & sym & "(self.impl)")
+            methodBuffer.writeLine("    " & sym & "(cast[ptr " & manglename(gBaseInfoGetName(info)) & "00](self.impl))")
+      if sym == "gtk_window_set_default_size":
+        methodBuffer.writeLine("\nproc `defaultSize=`*(self: Window; dim: tuple[width: int; height: int]) =")
+        methodBuffer.writeLine("  gtk_window_set_default_size(cast[ptr Window00](self.impl), int32(dim[0]), int32(dim[1]))")
+      if sym == "g_object_unref":
+        # methodBuffer.writeLine("\nproc genericGObjectUnref*[T](self: ref T) =") # we do not really need generics here
+        methodBuffer.writeLine("\nproc genericGObjectUnref*(self: Object) =")
+        methodBuffer.writeLine("  if not self.ignoreFinalizer:")
+        methodBuffer.writeLine("    g_object_unref(cast[ptr Object00](self.impl))")
+      if info != nil and gBaseInfoGetType(info) == GIInfoType.Object and gObjectInfoGetFundamental(info) == GTrue and sym.endsWith("unref"):
+        assert false
+        when false: # we can not use baseName, we have to use generics.
+          var parent = info
+          while true:
+            let h = g_object_info_get_parent(parent)
+            if h == nil:
+              break
+            parent = h
+          let baseName = $gBaseInfoGetName(parent)
+        methodBuffer.writeLine("\nproc generic_$1*[T](self: ref T) =" % [sym])
+        # methodBuffer.writeLine("\nproc generic_$1*(self: $2) =" % [sym, baseName]) # we can not avoid generics here
+        methodBuffer.writeLine("  if not self.ignoreFinalizer:")
+        # methodBuffer.writeLine("    $1(cast[ptr Object00](self.impl))" % [sym]) # we do not need that cast!
+        methodBuffer.writeLine("    $1(self.impl)" % [sym])
+
+      if useTempProcessedFunctions:
+        tempProcessedFunctions.add(sym)
+
   except UndefEx:
 
     processedFunctions.excl(sym)
     delayedMethods.add((info, minfo))
     methodBuffer.cut(p)
+
+#proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
+#
+#  writeMethodImpl(info, minfo)
+#  #writeMethodImpl(info, minfo, false)
 
 template genBoxedFree =
   if not callerAlloc.contains(($gBaseInfoGetNamespace(info)).toLowerAscii & '.' & mangleName(gBaseInfoGetName(info))):
@@ -3948,7 +4089,7 @@ launch()
 #  if not xcallerAlloc.contains(el):
 #    echo el
 
-# 3951 lines
+# 4092 lines
 # gtk_icon_view_get_tooltip_context bug Candidate
 # gtk_tree_view_get_cursor bug
 #
