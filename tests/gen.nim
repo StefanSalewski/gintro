@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK3/GTK4 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.8.8 2021-MAR-05
+# v 0.8.9 2021-MAR-16
 # (c) S. Salewski 2018
 
 # usefull for finding death code:
@@ -1346,7 +1346,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
       g_object_unref($1.impl)
       assert(g_object_get_qdata($1.impl, Quark) == nil)
       g_object_set_qdata($1.impl, Quark, addr($1[]))
-""" % [pars.outgobjectargname, moduleNamespace])
+""" % [pars.outgobjectargname, fixedModName(moduleNamespace)])
     else:
       methodBuffer.writeLine("""
   let argqdata = g_object_get_qdata(tmpoutgobjectarg, Quark)
@@ -1363,7 +1363,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
     g_object_unref($1.impl)
     assert(g_object_get_qdata($1.impl, Quark) == nil)
     g_object_set_qdata($1.impl, Quark, addr($1[]))
-""" % [pars.outgobjectargname, moduleNamespace])
+""" % [pars.outgobjectargname, fixedModName(moduleNamespace)])
 
   # new for v0.7.8: we ref all gobjects now, even if transfer is none. So result.ignoreFinalizer = false always for gobjects!
   template gobjectTemp(): untyped =

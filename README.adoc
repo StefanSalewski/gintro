@@ -1,6 +1,6 @@
 = High level GTK4 and GTK3 bindings for the Nim programming language
 //(c) Stefan Salewski                                     
-//Version 0.8.8
+//Version 0.8.9
 :experimental:
 :imagesdir: http://ssalewski.de/tmp
 //:source-highlighter: pygments
@@ -30,6 +30,8 @@ NOTE: This work is partly based on earlier works of J. Mansour and has been supp
 The `combinatorics` module was kindly provided by R. Behrends.
 
 NOTE: This is version 0.8.8 of the gintro Nim GTK bindings.
+Due to unsufficient testing a tiny bug made it into this release causing it to compile for
+GTK4 only with --gc:arc.   *nimble install gintro@#head* or the next release should fix that.
 For procs like getStartIter() without a result but with a var out
 parameter an overloaded version is created where the var out
 parameter is returned as result. So we can write "let startIter = buffer.getStartIter()" now.
