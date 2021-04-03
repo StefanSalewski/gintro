@@ -179,8 +179,10 @@ proc $1$2 {.cdecl.} =
     if not ignoreArg.boolVal:
       if getTypeInst(arg).typeKind == ntyRef:
         resu.add(", cast[$5](user_data)")
-      else:
+      elif getTypeInst(arg).getSize > sizeof(pointer):
         resu.add(", cast[ptr $5](user_data)[]")
+      else:
+        resu.add(", cast[$5](user_data)")
     resu.add(")")
     if resl == "gboolean":
       resu.add(".ord.gboolean")
@@ -269,13 +271,16 @@ $1($7, $8, $9)
     else:
       """
 proc $1(self: $2;  p: proc $3; a: $4): culong {.discardable.} =
-  var ar: ref $4
-  new(ar)
-  #deepCopy(ar[], a)
-  ar[] = a
-  GC_ref(ar)
-  # sc$5(self, $6, cast[pointer](ar[]))
-  sc$5(self, $6, cast[pointer](ar), $10)
+  when sizeof(a) > sizeof(pointer):
+    var ar: ref $4
+    new(ar)
+    #deepCopy(ar[], a)
+    ar[] = a
+    GC_ref(ar)
+    # sc$5(self, $6, cast[pointer](ar[]))
+    sc$5(self, $6, cast[pointer](ar), $10)
+  else:
+    sc$5(self, $6, cast[pointer](a), $10)
 $1($7, $8, $9)
 """ % [$procName, wts,  ahl, ats, signalName,  $procNameCdecl, $(widget.toStrLit), $p, $(arg.toStrLit), sfstr]
   #echo r2s
