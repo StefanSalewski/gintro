@@ -179,7 +179,7 @@ proc $1$2 {.cdecl.} =
     if not ignoreArg.boolVal:
       if getTypeInst(arg).typeKind == ntyRef:
         resu.add(", cast[$5](user_data)")
-      elif getTypeInst(arg).getSize > sizeof(pointer):
+      elif getTypeInst(arg).getSize > sizeof(pointer) or getTypeInst(arg).typeKind in {ntySequence, ntyString}:
         resu.add(", cast[ptr $5](user_data)[]")
       else:
         resu.add(", cast[$5](user_data)")
@@ -271,7 +271,7 @@ $1($7, $8, $9)
     else:
       """
 proc $1(self: $2;  p: proc $3; a: $4): culong {.discardable.} =
-  when sizeof(a) > sizeof(pointer):
+  when sizeof(a) > sizeof(pointer) or a is (seq or string):
     var ar: ref $4
     new(ar)
     #deepCopy(ar[], a)
