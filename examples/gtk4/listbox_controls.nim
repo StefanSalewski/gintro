@@ -1,9 +1,6 @@
 import gintro/[gtk4, gobject, gio]
 import std/with
 
-proc hello(b: Button) =
-  echo "hello world"
-
 proc setFirstRowParams(label: Label) = 
   with label:
     xalign = 0
@@ -26,7 +23,7 @@ proc createListBoxFrame1(): Frame =
 
     listBoxRow3 = newBox(Orientation.horizontal, 0)
     labelImage = newLabel("Image")
-    image = newImageFromIconName("leonflix-symbolic")
+    image = newImageFromIconName("penguin-alt-symbolic")
 
   frame1.child = listBox1
 
@@ -73,9 +70,7 @@ proc createListBoxFrame1(): Frame =
     marginStart = 10
     marginEnd = 10
     opacity = 1
-    # setFromIconName ("heart-filled-symbolic")
-  # image.fromIconName="heart-filled-symbolic"
-  # image.setFromIconName
+
   result = frame1
 
 
@@ -86,7 +81,7 @@ proc createListBoxFrame2(): Frame =
 
     listBoxRow1 = newBox(Orientation.horizontal, 0)
     labelScale = newLabel("Scale")
-    scale = newScale(Orientation.horizontal)
+    scale = newScale(Orientation.horizontal, newAdjustment(50, 0, 100, 1, 10))
 
     listBoxRow2 = newBox(Orientation.horizontal, 0)
     labelSpin = newLabel("Spin")
@@ -109,6 +104,7 @@ proc createListBoxFrame2(): Frame =
     append listBoxRow1
     append listBoxRow2
     append listBoxRow3
+    append listBoxRow4
 
   with listBoxRow1:
     append labelScale
@@ -120,10 +116,7 @@ proc createListBoxFrame2(): Frame =
   with scale:
     halign = Align.end
     valign = Align.center
-    drawValue = false
-    vexpand = true
-    hexpand = true
-    # width = 150
+    setSizeRequest(150, 0)
     
 
   with listBoxRow2:
@@ -168,7 +161,6 @@ proc activate(app: gtk4.Application) =
     viewPort = newViewport()
     mainBox = newBox(Orientation.vertical, 10)
 
-
     labelGroup1 = newLabel("Group 1")
     labelGroup2 = newLabel("Group 2")
 
@@ -190,8 +182,6 @@ proc activate(app: gtk4.Application) =
     append createListBoxFrame1()
     append labelGroup2
     append createListBoxFrame2()
-
-
   
   with labelGroup1:
     xalign = 0
@@ -202,15 +192,12 @@ proc activate(app: gtk4.Application) =
     xalign = 0
     marginBottom = 10
     setCssClasses("title-2")
-  
- 
 
   with window :
     title = "ListBox GTK 4 example"
     defaultSize = (400, 600)
     setChild scrolledWindow
     show
-
 
 proc main =
   let app = newApplication("org.gtk.example")
