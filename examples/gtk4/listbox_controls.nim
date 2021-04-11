@@ -23,7 +23,7 @@ proc createListBoxFrame1(): Frame =
 
     listBoxRow3 = newBox(Orientation.horizontal, 0)
     labelImage = newLabel("Image")
-    image = newImageFromIconName("penguin-alt-symbolic")
+    image = newImageFromIconName("start-here-symbolic")
 
   frame1.child = listBox1
 
