@@ -60,8 +60,8 @@ var done = false
 
 proc quit_cb(b: Button) = # we can not pass a var parameter
  #gtk4.mainQuit()
- done = true
- wakeup(defaultMainContext()) # g_main_context_wakeup (NULL);
+  done = true
+  wakeup(defaultMainContext()) # g_main_context_wakeup (NULL);
 
 proc changeHeader(button: ToggleButton; window: MyWindow) =
   if button != nil and button.getActive:

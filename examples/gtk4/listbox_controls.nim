@@ -1,15 +1,15 @@
 import gintro/[gtk4, gobject, gio]
 import std/with
 
-proc setFirstRowParams(label: Label) = 
+proc setFirstRowParams(label: Label) =
   with label:
     xalign = 0
     halign = Align.start
-    valign = Align.center 
+    valign = Align.center
     hexpand = true
 
 proc createListBoxFrame1(): Frame =
-  let 
+  let
     frame1 = newFrame()
     listBox1 = newListBox()
 
@@ -40,7 +40,7 @@ proc createListBoxFrame1(): Frame =
     append switch
 
   setFirstRowParams labelSwitch
-  
+
   with switch:
     halign = Align.end
     valign = Align.center
@@ -50,7 +50,7 @@ proc createListBoxFrame1(): Frame =
     append check
 
   setFirstRowParams labelCheck
-  
+
   with check:
     halign = Align.end
     valign = Align.center
@@ -63,7 +63,7 @@ proc createListBoxFrame1(): Frame =
     append image
 
   setFirstRowParams labelImage
-  
+
   with image:
     halign = Align.end
     valign = Align.center
@@ -75,7 +75,7 @@ proc createListBoxFrame1(): Frame =
 
 
 proc createListBoxFrame2(): Frame =
-  let 
+  let
     frame1 = newFrame()
     listBox1 = newListBox()
 
@@ -111,20 +111,20 @@ proc createListBoxFrame2(): Frame =
     append scale
 
   setFirstRowParams labelScale
-  
-  
+
+
   with scale:
     halign = Align.end
     valign = Align.center
     setSizeRequest(150, 0)
-    
+
 
   with listBoxRow2:
     append labelSpin
     append spin
 
   setFirstRowParams labelSpin
-  
+
   with spin:
     halign = Align.end
     valign = Align.center
@@ -134,7 +134,7 @@ proc createListBoxFrame2(): Frame =
     append dropDown
 
   setFirstRowParams labelDropDown
-  
+
   with dropDown:
     halign = Align.end
     valign = Align.center
@@ -149,12 +149,12 @@ proc createListBoxFrame2(): Frame =
     halign = Align.end
     valign = Align.center
     placeholderText = "Placeholder Text"
-  
+
   result = frame1
 
 
 proc activate(app: gtk4.Application) =
-  let 
+  let
     window = newApplicationWindow(app)
 
     scrolledWindow = newScrolledWindow()
@@ -164,8 +164,8 @@ proc activate(app: gtk4.Application) =
     labelGroup1 = newLabel("Group 1")
     labelGroup2 = newLabel("Group 2")
 
-  with scrolledWindow: 
-    hexpand = true 
+  with scrolledWindow:
+    hexpand = true
     vexpand = false
     minContentHeight = 200
     child = viewPort
@@ -182,7 +182,7 @@ proc activate(app: gtk4.Application) =
     append createListBoxFrame1()
     append labelGroup2
     append createListBoxFrame2()
-  
+
   with labelGroup1:
     xalign = 0
     marginBottom = 10
@@ -193,7 +193,7 @@ proc activate(app: gtk4.Application) =
     marginBottom = 10
     setCssClasses("title-2")
 
-  with window :
+  with window:
     title = "ListBox GTK 4 example"
     defaultSize = (400, 600)
     setChild scrolledWindow

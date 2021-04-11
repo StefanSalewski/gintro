@@ -6,10 +6,10 @@ proc hello(b: Button) =
   echo "hello world"
 
 proc activate(app: gtk4.Application) =
-  let 
+  let
     window = newApplicationWindow(app)
     button = newButton()
-  
+
   with button:
     label = "hello world"
     marginTop = 10
@@ -18,7 +18,7 @@ proc activate(app: gtk4.Application) =
     marginEnd = 10
     connect("clicked", hello)
 
-  with window :
+  with window:
     title = "hello world"
     resizable = false
     setChild button
