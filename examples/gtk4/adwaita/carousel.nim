@@ -4,7 +4,7 @@ import std/with
 const N_PAGES = 5
 
 # & - string concatenation, $ - to_stirng()
-proc createPage(num: int): Widget = newLabel("Page" & $num)
+proc createPage(num: int): Widget = newLabel("Some widget here №" & $num & "   ")
 
 proc setupCarousel(): Carousel =
   result = newCarousel()
