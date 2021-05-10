@@ -2,7 +2,7 @@ Adwaita is a library that extends GTK with a set of widgets. Some of them are ai
 [Documentation](https://gnome.pages.gitlab.gnome.org/libadwaita/doc/)
   
 ## Carousel
-![screenshot](/gif/carousel.mp4)  
+![screenshot](gif/carousel.gif)  
 Carousel - A paginated scrolling widget
 
 gboolean	allow-long-swipes	  
