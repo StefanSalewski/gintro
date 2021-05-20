@@ -1,7 +1,9 @@
 import gintro/[gtk4, gobject, gio]
 import std/with, tables, hashes
 
-# 
+# This example shows how you can store any data structure associated with a widget 
+# so that you can access it in events. 
+# This may be the best analog of gobject. setData.
 
 var buttonTable: Table[gtk4.Button, string]
 const fruits = ["banana", "cherri", "peach", "mandarin", "apple"]
