@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK4/GTK3 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.8.9 2021-APR-11
+# v 0.9.0 2021-JUN-01
 # (c) S. Salewski 2018, 2019, 2020, 2021
 
 # usefull for finding death code:
@@ -1511,7 +1511,8 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
           if gArgInfoGetDirection(arg) == GIDirection.OUT:
             isGObject = true
 
-      if ((gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) == 0):
+      if true: # https://discourse.gnome.org/t/gtk-no-selection-new/6576
+      #if ((gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) == 0):
         if gArgInfoGetDirection(arg) == GIDirection.IN and gArgInfoGetOwnershipTransfer(arg) == GITransfer.EVERYTHING and
           isProxyCandidate(t) and not callerAlloc.contains(ngrt.namePlainNS):
           # like gtk_widget_add_controller()
@@ -3241,6 +3242,10 @@ proc getRootWidget*(self: Widget): Widget =
   #g_type_check_instance_is_a(cast[ptr TypeInstance00](result.impl), gt)))
   cast[Widget](h)
 
+proc stringObject*(self: gobject.Object): StringObject =
+  assert(toBool(g_type_check_instance_is_a(cast[ptr TypeInstance00](self.impl), gtk_string_object_get_type())))
+  cast[StringObject](self)
+
 """
 
 const GDK4_EPI = """
@@ -4122,7 +4127,7 @@ launch()
 #  if not xcallerAlloc.contains(el):
 #    echo el
 
-# 4125 lines
+# 4130 lines
 # gtk_icon_view_get_tooltip_context bug Candidate
 # gtk_tree_view_get_cursor bug
 #
