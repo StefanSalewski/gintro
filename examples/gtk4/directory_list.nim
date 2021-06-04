@@ -8,12 +8,11 @@ proc setup_cb(factory: gtk4.SignalListItemFactory, listitem: gtk4.ListItem) =
   listitem.setChild(newLabel(""))
   
 proc bind_cb(factory: gtk4.SignalListItemFactory, listitem: gtk4.ListItem) =
-  var 
+  let 
     lb = listitem.getChild().Label
     strobj = cast[FileInfo](listitem.getItem())
-    txt = strobj.getFileName()
-  echo txt
-  lb.text = txt
+
+  lb.text = strobj.getFileName()
 
 proc unbind_cb(factory: gtk4.SignalListItemFactory, listitem: gtk4.ListItem) =
   # There's nothing to do here. 
@@ -32,7 +31,7 @@ proc activate(app: gtk4.Application) =
     scr = newScrolledWindow()
     file = gio.newGFileForPath(".")
     sl = gtk4.newDirectoryList("standard::name", file)
-    ls = cast[ListModel](sl)
+    ls = listModel(sl)
     ns = gtk4.newNoSelection(ls)
     factory = gtk4.newSignalListItemFactory()
     lv = newListView(ns, factory)
