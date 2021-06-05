@@ -30,13 +30,14 @@ proc activate(app: gtk4.Application) =
     window = newApplicationWindow(app)
     scr = newScrolledWindow()
     file = gio.newGFileForPath(".")
-    sl = gtk4.newDirectoryList("standard::name", file)
-    ls = listModel(sl)
+    dl = gtk4.newDirectoryList("standard::name", file)
+    ls = listModel(dl)
     ns = gtk4.newNoSelection(ls)
     factory = gtk4.newSignalListItemFactory()
     lv = newListView(ns, factory)
   
   scr.setChild lv
+  dl.setMonitored true
 
   with factory:
     connect("setup", setup_cb)
