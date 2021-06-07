@@ -5,12 +5,10 @@ proc setup_cb(factory: gtk4.SignalListItemFactory, listitem: gtk4.ListItem) =
   listitem.setChild(newLabel(""))
   
 proc bind_cb(factory: gtk4.SignalListItemFactory, listitem: gtk4.ListItem) =
-  var 
-    lb = listitem.getChild().Label
-    strobj = cast[StringObject](listitem.getItem())
-    txt = gtk4.getString(strobj)
-  echo txt
-  lb.text = txt
+  let 
+    lb: Label = Label(listitem.getChild)
+    strobj: StringObject = stringObject(listitem.getItem())
+  lb.setText strobj.getString()
 
 proc unbind_cb(factory: gtk4.SignalListItemFactory, listitem: gtk4.ListItem) =
   # There's nothing to do here. 
@@ -29,7 +27,7 @@ proc activate(app: gtk4.Application) =
     scr = newScrolledWindow()
 
     sl = gtk4.newStringList("Nim", "Vala", "Rust", "Zig")
-    ls = cast[ListModel](sl)
+    ls = listModel(sl)
     ns = gtk4.newNoSelection(ls)
     factory = gtk4.newSignalListItemFactory()
     lv = newListView(ns, factory)

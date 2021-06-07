@@ -29,10 +29,18 @@ with code inserted from files directly.
 NOTE: This work is partly based on earlier works of J. Mansour and has been supported by A. Rumpf, E. Bassi and other _Nim_ and _GTK/Gnome_ developers.
 The `combinatorics` module was kindly provided by R. Behrends.
 
-NOTE: This is version 0.8.8 of the gintro Nim GTK bindings.
-Due to unsufficient testing a tiny bug made it into this release causing it to compile for
-GTK4 only with --gc:arc.   *nimble install gintro@#head* or the next release should fix that.
-For procs like getStartIter() without a result but with a var out
+
+NOTE: This is version 0.8.9 of the gintro Nim GTK bindings.
+Due to a user request we added support for the adwaita library.
+This lib is the libhandy variant for GTK4 and is intended to
+support GTK on mobile devices. Unfortunately we can not yet provide
+an example program for this library. The C example from git sources
+is not really tiny, so porting to Nim would take some hours at least, as we have
+absolutely no knowledge about that lib yet. Maybe we can provide an example next
+year or maybe that user will finally provide something? 
+
+NOTE: Starting with version 0.8.8 of the gintro Nim GTK bindings
+for procs like getStartIter() without a result but with a var out
 parameter an overloaded version is created where the var out
 parameter is returned as result. So we can write "let startIter = buffer.getStartIter()" now.
 And we tried to fix the issues with out gobject parameters as in g_file_new_tmp().
