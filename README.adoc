@@ -1,6 +1,6 @@
 = High level GTK4 and GTK3 bindings for the Nim programming language
 //(c) Stefan Salewski                                     
-//Version 0.8.9
+//Version 0.9.0
 :experimental:
 :imagesdir: http://ssalewski.de/tmp
 //:source-highlighter: pygments
@@ -30,8 +30,11 @@ NOTE: This work is partly based on earlier works of J. Mansour and has been supp
 The `combinatorics` module was kindly provided by R. Behrends.
 
 
-NOTE: This is version 0.8.9 of the gintro Nim GTK bindings.
-Due to a user request we added support for the adwaita library.
+NOTE: This is version 0.9.0 of the gintro library. It is mostly a plain fix for issue https://github.com/StefanSalewski/gintro/issues/133.
+For GObject proc parameters with direction in and transfer full we have to avoid that the Nim memory management destroys the GObject when the Nim proxy object is destroyed. Current fix was adding a plain ".ignoreFinalizer = true" for that case, which works in most cases. But maybe a better fix would be to ref() the gtk object instead. Maybe that makes no difference for gobjects, but it can make a difference for entities like GtkExpression which are used further, see issue
+https://github.com/StefanSalewski/gintro/issues/137. But we will leave that for next version 0.9.1.
+
+NOTE: Due to a user request we added support for the adwaita library for version 0.8.9.
 This lib is the libhandy variant for GTK4 and is intended to
 support GTK on mobile devices. Unfortunately we can not yet provide
 an example program for this library. The C example from git sources
