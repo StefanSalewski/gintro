@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK4/GTK3 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.9.0 2021-JUN-01
+# v 0.9.2 2021-JUN-13
 # (c) S. Salewski 2018, 2019, 2020, 2021
 
 # usefull for finding death code:
@@ -3750,7 +3750,7 @@ proc cstringArrayToSeq*(s: ptr cstring): seq[string] =
         supmod4.cut(supmodpos4)
     delayedSyms = unp
     block myb:
-      for a in 1 .. 2: # process clustered symbols into one single type section
+      for a in 1 .. 3: # process clustered symbols into one single type section
         if delayedSyms.len > a:
           suppressType = true
           methodBuffer = newStringStream()
