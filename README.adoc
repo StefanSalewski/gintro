@@ -29,12 +29,12 @@ with code inserted from files directly.
 NOTE: This work is partly based on earlier works of J. Mansour and has been supported by A. Rumpf, E. Bassi and other _Nim_ and _GTK/Gnome_ developers.
 The `combinatorics` module was kindly provided by R. Behrends.
 
-NOTE: We are currently preparing version 0.9.2 of the gintro Nim bindings which fixes the latest gstreamer issue -- you may install it
-with nimble install gintro@#head.
+NOTE: The version 0.9.2 of the gintro Nim GTK bindings is only a fix for the issue with latest gstreamer
+from gitlab, see https://github.com/StefanSalewski/gintro/issues/138.
 
-NOTE: This version 0.9.1 is mostly a plain fix for issue https://github.com/StefanSalewski/gintro/issues/133.
+NOTE: Version 0.9.1 is mostly a plain fix for issue https://github.com/StefanSalewski/gintro/issues/133.
 For GObject proc parameters with direction in and transfer full we have to avoid that the Nim memory management destroys the GObject when the Nim proxy object is destroyed. Current fix was adding a plain ".ignoreFinalizer = true" for that case, which works in most cases. But maybe a better fix would be to ref() the gtk object instead. Maybe that makes no difference for gobjects, but it can make a difference for entities like GtkExpression which are used further, see issue
-https://github.com/StefanSalewski/gintro/issues/137. But we will leave that for next version 0.9.2.
+https://github.com/StefanSalewski/gintro/issues/137. But we will leave that for next version 0.9.3.
 
 NOTE: Due to a user request we added support for the adwaita library for version 0.8.9.
 This lib is the libhandy variant for GTK4 and is intended to
