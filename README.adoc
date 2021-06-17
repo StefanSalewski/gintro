@@ -1,6 +1,6 @@
 = High level GTK4 and GTK3 bindings for the Nim programming language
 //(c) Stefan Salewski                                     
-//Version 0.9.2
+//Version 0.9.3
 :experimental:
 :imagesdir: http://ssalewski.de/tmp
 //:source-highlighter: pygments
@@ -28,6 +28,13 @@ with code inserted from files directly.
 
 NOTE: This work is partly based on earlier works of J. Mansour and has been supported by A. Rumpf, E. Bassi and other _Nim_ and _GTK/Gnome_ developers.
 The `combinatorics` module was kindly provided by R. Behrends.
+
+NOTE: The upcomming version 0.9.3 of the gintro Nim GTK bindings contains some serious changes
+following the discussion in https://discourse.gnome.org/t/get-ref-function-for-none-gobject-classes-like-gtkexpression/6696.
+With that changes issue https://github.com/StefanSalewski/gintro/issues/135 should be fixed, and the listview_clocks example works
+with a C and a Nim part. For most apps that changes should be invisible, but it is possible that we have introduced
+new bugs or maybe memory leaks. At least the existing examples seems still to compile, but we have not yet tested them all.
+You can test this version with nimble install gintro@#head.
 
 NOTE: The version 0.9.2 of the gintro Nim GTK bindings is only a fix for the issue with latest gstreamer
 from gitlab, see https://github.com/StefanSalewski/gintro/issues/138.
