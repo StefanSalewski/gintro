@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK4/GTK3 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.9.3 2021-JUN-17
+# v 0.9.3 2021-JUN-18
 # (c) S. Salewski 2018, 2019, 2020, 2021
 
 # usefull for finding death code:
@@ -1858,7 +1858,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
         if run == 0 and not tryOut2Ret:
           if sym in ["g_quark_from_static_string", "g_error_free", "g_object_get_qdata", "g_object_ref_sink", "g_object_unref", "g_param_spec_ref_sink",
             "g_timeout_add_full", "g_object_is_floating", "gst_bus_add_watch_full", "g_object_ref", "g_date_time_format", "gdk_event_ref", 
-            "g_type_from_name", "g_type_check_instance_is_a", "g_idle_add_full", "g_quark_try_string", "vte_regex_unref",
+            "g_type_from_name", "g_type_check_instance_is_a", "g_idle_add_full", "g_quark_try_string", "vte_regex_unref", "gtk_expression_ref",
             "gtk_builder_get_object", "g_action_map_add_action", "gtk_drawing_area_set_draw_func", "g_io_add_watch_full"]:
             methodBuffer.write("\nproc " & sym & EM & pars.plist)
             methodBuffer.writeLine(" {.\n    importc, ", libprag, ".}")
@@ -1965,17 +1965,23 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
                     methodBuffer.writeLine("  new(result)")
                   else:
                     methodBuffer.writeLine("  fnew(result, $1)" % freeMeName)
+                  var weAppliedThatUglyFix = false
                   if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo):
-                    if pars.implRef.startsWith("  result.impl = cast[typeof(result.impl)](") and pars.implRef.endsWith("result.impl))"):
+                    if pars.implRef.startsWith("  result.impl = cast[typeof(result.impl)](") and pars.implRef.endsWith("result.impl))") and
+                    gCallableInfoGetCallerOwns(minfo) == GITransfer.NOTHING and
+                    ((gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) == 0): # if we really write pars.implRef
                       # tiny, ugly fix to save some lines of code
-                      pars.implRef = pars.implRef.replace("result.impl))", "impl0))")
+                      var parsimplRef = pars.implRef.replace("result.impl))", "impl0))")
+                      weAppliedThatUglyFix = true
+                      methodBuffer.writeLine(parsimplRef)
                     else:
                       methodBuffer.writeLine("  result.impl = impl0")
                   else:
                     methodBuffer.writeLine("  result.impl = " & sym & pars.arglist)
                   if gCallableInfoGetCallerOwns(minfo) == GITransfer.NOTHING: # for the none gobjects
                     if ((gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) == 0):
-                      methodBuffer.writeLine(pars.implRef)
+                      if not weAppliedThatUglyFix:
+                        methodBuffer.writeLine(pars.implRef)
                       ### methodBuffer.writeLine("  result.ignoreFinalizer = true") # as we have always to attach one with ARC.
               else: assert false
               if ((gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) != 0 and gBaseInfoGetName(info) == "Variant"):
@@ -4254,7 +4260,7 @@ launch()
 #  if not xcallerAlloc.contains(el):
 #    echo el
 
-# 4257 lines
+# 4263 lines
 # gtk_icon_view_get_tooltip_context bug Candidate
 # gtk_tree_view_get_cursor bug
 #
