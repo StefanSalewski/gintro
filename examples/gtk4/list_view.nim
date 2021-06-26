@@ -6,7 +6,7 @@ proc setup_cb(factory: gtk4.SignalListItemFactory, listitem: gtk4.ListItem) =
   
 proc bind_cb(factory: gtk4.SignalListItemFactory, listitem: gtk4.ListItem) =
   let 
-    lb: Label = Label(listitem.getChild)
+    lb: Label = listitem.getChild.Label
     strobj: StringObject = stringObject(listitem.getItem())
   lb.setText strobj.getString()
 
@@ -28,11 +28,12 @@ proc activate(app: gtk4.Application) =
 
     sl = gtk4.newStringList("Nim", "Vala", "Rust", "Zig")
     ls = listModel(sl)
-    ns = gtk4.newNoSelection(ls)
+    ns = gtk4.newMultiSelection(ls)
     factory = gtk4.newSignalListItemFactory()
     lv = newListView(ns, factory)
   
   scr.setChild lv
+  lv.enableRubberband = true
 
   with factory:
     connect("setup", setup_cb)
