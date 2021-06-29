@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK4/GTK3 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.9.3 2021-JUN-18
+# v 0.9.3 2021-JUN-29
 # (c) S. Salewski 2018, 2019, 2020, 2021
 
 # usefull for finding death code:
@@ -353,6 +353,8 @@ defaultParameters["gtk_builder_new_from_string"] = "length int64 -1"
 defaultParameters["gtk_box_new"] = "spacing int 0"
 defaultParameters["gtk_grid_attach"] = "width int 1|height int 1"
 defaultParameters["gtk_adjustment_new"] = "pageSize cdouble 1.0"
+defaultParameters["pango_layout_set_text"] = "length int -1"
+# proc pango_layout_set_text(self: ptr Layout00; text: cstring; length: int32)
 
 for i in keywords: mangledNames[i] = '`' & i & '`'
 
@@ -3135,6 +3137,13 @@ const GObject_EPI = """
 #  let p = cast[ptr cuint](cast[int](o.impl) + sizeof(pointer))
 #  return p[].int
 
+
+proc scNotify*(self: Object;  p: proc (self: ptr Object00; paramSpec: ptr ParamSpec00; xdata: pointer) {.cdecl.}, xdata: pointer, cf: gobject.ConnectFlags; sigName: cstring): culong =
+  # g_signal_connect_data(self.impl, "notify::cursor-position", cast[GCallback](p), xdata, nil, cf)
+  g_signal_connect_data(self.impl, sigName, cast[GCallback](p), xdata, nil, cf)
+
+
+
 # similar to gobjectTemp()
 proc glistObjects2seq*[T](t: typedesc[T]; l: ptr glib.List; elTransferFull: bool): seq[T] =
   var r: T
@@ -4260,7 +4269,7 @@ launch()
 #  if not xcallerAlloc.contains(el):
 #    echo el
 
-# 4263 lines
+# 4263 lines defaultParameters
 # gtk_icon_view_get_tooltip_context bug Candidate
 # gtk_tree_view_get_cursor bug
 #
