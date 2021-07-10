@@ -17,6 +17,11 @@ proc ct5nt(s: string): string =
 
 proc findSignal(name, obj: NimNode): string =
   let str = ($name).replace("-", "_") & RecSep
+  #echo str
+  if str.startsWith("notify::"):
+    return "notify!Object!1!(self: Object; paramSpec: ParamSpec)!(self: ptr Object00; paramSpec: ptr ParamSpec00)"
+    # "size_allocate!Widget!1!(self: Widget; allocation: gdk.Rectangle)!(self: ptr Widget00; allocation: gdk.Rectangle)"
+
   var ipros: seq[string]
   for i in SCA:
     if i.startsWith(str):
@@ -47,6 +52,7 @@ proc findSignal(name, obj: NimNode): string =
 # https://mail.gnome.org/archives/gtk-list/2017-July/msg00018.html
 # This interface parameter is in most cases the second parameter of handler proc, but can be the third also.
 macro mconnect(widget: gobject.Object; signal: string; p: typed; arg: typed; ignoreArg: bool; sf: static[gobject.ConnectFlags]): untyped =
+  # echo $signal
   #echo p.symbol.getImpl().toStrLit
   #echo p.symbol.getImpl().params.toStrLit
   #echo p.symbol.getImpl().params[2][1].toStrLit
@@ -79,7 +85,14 @@ macro mconnect(widget: gobject.Object; signal: string; p: typed; arg: typed; ign
   #assert ats == $(at.toStrLit)
   #assert ats == at.toStrLit.strVal
 
-  let signalName = ($signal).replace("-", "_") # maybe we should just use plain proc names
+  var signalName = ($signal).replace("-", "_") # maybe we should just use plain proc names
+  var sigName: string # for the notify:: signals
+
+  if signalName.startsWith("notify::"):
+    #sfstr.add(", " & signalName)
+    sigName = ", \"" & signalName.replace("_", "-") & "\"" # https://mail.gnome.org/archives/gtk-app-devel-list/2008-March/msg00197.html
+    signalName = "notify" # https://discourse.gnome.org/t/notify-signal-and-underscore-vs-hyphen/6835
+
   let procNameCdecl = "connect_for_signal_cdecl_" & signalName & $ProcID
   let procName = "connect_for_signal_" & signalName & $ProcID
   var sn, wid, num, all, ahl: string
@@ -258,14 +271,14 @@ proc $1$2 {.cdecl.} =
 proc $1(self: $2;  p: proc $3): culong {.discardable.} =
   sc$4(self, $5, nil, $8)
 $1($6, $7)
-""" % [$procName, wts, ahl, signalName,  $procNameCdecl, $(widget.toStrLit), $p, sfstr]
+""" % [$procName, wts, ahl, signalName,  $procNameCdecl, $(widget.toStrLit), $p, sfstr, sigName]
     elif getTypeInst(arg).typeKind == ntyRef:
       """
 proc $1(self: $2;  p: proc $3; a: $4): culong {.discardable.} =
   GC_ref(a)
-  sc$5(self, $6, cast[pointer](a), $10)
+  sc$5(self, $6, cast[pointer](a), $10 $11)
 $1($7, $8, $9)
-""" % [$procName, wts,  ahl, ats, signalName,  $procNameCdecl, $(widget.toStrLit), $p, $(arg.toStrLit), sfstr]
+""" % [$procName, wts,  ahl, ats, signalName,  $procNameCdecl, $(widget.toStrLit), $p, $(arg.toStrLit), sfstr, sigName]
     else:
       """
 proc $1(self: $2;  p: proc $3; a: $4): culong {.discardable.} =
@@ -275,9 +288,9 @@ proc $1(self: $2;  p: proc $3; a: $4): culong {.discardable.} =
   ar[] = a
   GC_ref(ar)
   # sc$5(self, $6, cast[pointer](ar[]))
-  sc$5(self, $6, cast[pointer](ar), $10)
+  sc$5(self, $6, cast[pointer](ar), $10 $11)
 $1($7, $8, $9)
-""" % [$procName, wts,  ahl, ats, signalName,  $procNameCdecl, $(widget.toStrLit), $p, $(arg.toStrLit), sfstr]
+""" % [$procName, wts,  ahl, ats, signalName,  $procNameCdecl, $(widget.toStrLit), $p, $(arg.toStrLit), sfstr, sigName]
   #echo r2s
 
   result.add(parseStmt(r2s))
@@ -360,6 +373,6 @@ $1($4)
 """ % [$procName, ats, $procNameCdecl, $arg]
   result = parseStmt(r1s & r2s)
 
-# 362 lines
+# 376 lines
 
 
