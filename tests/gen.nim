@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK4/GTK3 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.9.3 2021-JUN-29
+# v 0.9.4 2021-JUL-19
 # (c) S. Salewski 2018, 2019, 2020, 2021
 
 # usefull for finding death code:
@@ -1652,6 +1652,8 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
           if out2ret:# and genProxy:
             h2 = "result"
 
+        if gArgInfoMayBeNull(arg):
+          nilArgFix.add(h2)
         if gArgInfoIsOptional(arg):
           methodBuffer.writeLine("  if addr($2) != nil:" % [ngrt.namePlain, h2])
           if boxedFreeMeName != "":
@@ -1710,6 +1712,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
   #  echo sym
   #  return
 
+  var nilArgFix: seq[string]
   var pars: GPars
   let p = methodBuffer.getPosition
   let symIsDeprecated = gBaseInfoIsDeprecated(mInfo).int != 0
@@ -2143,7 +2146,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
               else:
                 methodBuffer.writeLine("  " & doCt3nt(ngrRet.name, ngrRet) & '(' & "resul0" & ')')
             else:
-              if pars.tempResFree != "": # ugly, do we have a better test for this case
+              if nilArgFix.len > 0 or pars.tempResFree != "": # ugly, do we have a better test for this case
               #if ngrRet.name != "void":
                 methodBuffer.writeLine("  result = " & doCt3nt(ngrRet.name, ngrRet) & '(' & sym & pars.arglist & ')')
               else:
@@ -2183,6 +2186,11 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
           if asym != "errorQuark" and asym != "getPlugin" and asym != "quark":
             methodBuffer.write("\nproc " & asym & EM & pars.plist)
             methodBuffer.writeLine(" {.\n    importc: \"", sym, "\", ", libprag, ".}")
+
+      for n in nilArgFix: # https://github.com/StefanSalewski/gintro/issues/158
+        methodBuffer.writeLine("  if $1 != nil and $1.impl == nil:" % n)
+        methodBuffer.writeLine("    $1.ignoreFinalizer = true" % n)
+        methodBuffer.writeLine("    $1 = nil" % n)
 
       if pars.tmpoutgobjectarg.len != 0:
         methodBuffer.writeLine("#  dothemagic(" & pars.outgobjectargname)
@@ -4269,7 +4277,7 @@ launch()
 #  if not xcallerAlloc.contains(el):
 #    echo el
 
-# 4263 lines defaultParameters
+# 4280 lines
 # gtk_icon_view_get_tooltip_context bug Candidate
 # gtk_tree_view_get_cursor bug
 #
