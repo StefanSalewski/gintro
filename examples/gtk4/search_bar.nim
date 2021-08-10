@@ -1,8 +1,8 @@
 import gintro/[gtk4, gobject, gio]
+import std/with
 
 proc searchChangedCb(entry: SearchEntry, label: Label) =
   label.text = entry.text
-
 
 proc appActivate(app: Application) =
   let
@@ -17,36 +17,36 @@ proc appActivate(app: Application) =
     label1 = newLabel("Searching for:")
     label2 = newLabel("")
 
+  with searchBar:
+    connectEntry entry
+    showCloseButton = false
+    child = entry
+    keyCaptureWidget = window
 
-  window.titlebar = header
+  with vbox:
+    append searchBar
+    append box
 
-  window.child = vbox
+  box.append hbox
 
-  entry.halign = Align.center
+  with hbox:
+    append label1
+    append label2
 
-  searchBar.connectEntry entry
-  searchBar.showCloseButton = false
-  searchBar.child = entry
-  vbox.append searchBar
-
-  searchBar.keyCaptureWidget = window
-
-  vbox.append box
 
   searchButton.setIconName("system-search-symbolic")
   discard searchButton.bindProperty("active", searchBar, "search-mode-enabled", {bidirectional})
   header.packEnd searchButton
 
-  box.append hbox
-  hbox.append label1
-  hbox.append label2
-
   entry.connect("search-changed", searchChangedCb, label2)
+  entry.halign = Align.center
 
-
-  window.title = "SearchBar Nim"
-  window.defaultSize = (200, 200)
-  show(window)
+  with window:
+    titlebar = header
+    child = vbox
+    title = "SearchBar Nim"
+    defaultSize = (200, 200)
+    show
 
 proc main =
   let app = newApplication("org.gtk.example")
