@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK4/GTK3 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.9.4 2021-JUL-21
+# v 0.9.4 2021-AUG-13
 # (c) S. Salewski 2018, 2019, 2020, 2021
 
 # usefull for finding death code:
@@ -300,6 +300,12 @@ var suppressRaise = false
 # fixedDestroyNames.add("gdk_cairo_region_create_from_surface", "cairo.destroy")
 # fixedDestroyNames.add("gdk_cairo_surface_create_from_pixbuf", "cairo.destroy")
 
+fixedProcNames["gst_video_color_matrix_from_iso"] = "colorMatrixFromIso"
+fixedProcNames["gst_video_color_primaries_from_iso"] = "colorPrimariesFromIso"
+fixedProcNames["gst_video_transfer_function_from_iso"] = "transferFunctionFromIso"
+
+fixedProcNames["gtk_popover_menu_new_from_model"] = "newPopoverMenu" # FromModel"
+
 fixedProcNames["gtk_button_new_with_label"] = "newButton"
 fixedProcNames["gtk_check_button_new_with_label"] = "newCheckButton"
 fixedProcNames["gtk_toggle_button_new_with_label"] = "newToggleButton"
@@ -552,6 +558,7 @@ glib.SList
 glib.List
 nice.Address
 gst.MapInfo
+gstvideo.VideoAlignment
 gstvideo.VideoRectangle
 gstrtsp.RTSPRange
 gstrtsp.RTSPTimeRange
@@ -1090,7 +1097,9 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
     let tag = gTypeInfoGetTag(tt)
     if tag == GITypeTag.INTERFACE:
       let iface = gTypeInfoGetInterface(tt)
-      if gBaseInfoGetType(iface) == GIInfoType.Object and gObjectInfoGetFundamental(iface) == GFalse:
+      if gBaseInfoGetType(iface) == GIInfoType.INTERFACE or (gBaseInfoGetType(iface) == GIInfoType.Object and gObjectInfoGetFundamental(iface) == GFalse): # v0.9.4
+      # https://github.com/StefanSalewski/gintro/issues/172
+      #if gBaseInfoGetType(iface) == GIInfoType.Object and gObjectInfoGetFundamental(iface) == GFalse: # does not work for gtk_tree_selection_get_selected()
         if gArgInfoGetDirection(arg) == GIDirection.OUT:
           isGObject = true
 
@@ -1241,7 +1250,8 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
         result.arglist.add(name.strip(chars = {'`'}) & "_00")
       elif needTypeConv(str, ngr):
         if str == "cstring" and mayBeNil:
-          result.arglist.add("safeStringToCString" & '(' & name & ')')
+          # result.arglist.add("safeStringToCString" & '(' & name & ')')
+          result.arglist.add(name) # v0.9.4
         else:
           if str != "string" and str != "cstring":
             result.arglist.add(str & '(' & name & ')')
@@ -1280,9 +1290,14 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
         if name == h1 and str == h2:
           str.add(" = " & h3)
 
-    if genProxy and (str == "string" or str == "cstring") and mayBeNil and not sym.contains("_button_new_with_label"):
-
+    #if genProxy and (str == "string" or str == "cstring") and mayBeNil and not sym.contains("_button_new_with_label"):
+    #  str.add(" = \"\"")
+    # v0.9.4
+    if genProxy and (str == "string") and mayBeNil and not sym.contains("_button_new_with_label"):
       str.add(" = \"\"")
+    if genProxy and (str == "cstring") and mayBeNil and not sym.contains("_button_new_with_label"):
+      str.add(" = nil")
+
     if genProxy and m == 0:
       if sym.contains("_set_") and str == "bool":
         str.add(" = true")
@@ -1609,7 +1624,8 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
       let tag = gTypeInfoGetTag(tt)
       if tag == GITypeTag.INTERFACE:
         let iface = gTypeInfoGetInterface(tt)
-        if gBaseInfoGetType(iface) == GIInfoType.Object and gObjectInfoGetFundamental(iface) == GFalse:
+        #if gBaseInfoGetType(iface) == GIInfoType.Object and gObjectInfoGetFundamental(iface) == GFalse: # before v0.9.4
+        if gBaseInfoGetType(iface) == GIInfoType.INTERFACE or (gBaseInfoGetType(iface) == GIInfoType.Object and gObjectInfoGetFundamental(iface) == GFalse):
           if gArgInfoGetDirection(arg) == GIDirection.OUT:
             isGObject = true
 
@@ -1659,6 +1675,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
           if boxedFreeMeName != "":
             methodBuffer.writeLine("    fnew(" & h2 & ", " & boxedFreeMeName & ")")
           elif freeMeName == "":
+            # never executed
             methodBuffer.writeLine("    new(" & h2 & ")")
           else:
             methodBuffer.writeLine("    fnew(" & h2 & ", " & freeMeName & ")")
@@ -1666,6 +1683,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
           if boxedFreeMeName != "":
             methodBuffer.writeLine("  fnew(" & h2 & ", " & boxedFreeMeName & ")")
           elif freeMeName == "":
+            # never executed
             methodBuffer.writeLine("  new(" & h2 & ")")
           else:
             methodBuffer.writeLine("  fnew(" & h2 & ", " & freeMeName & ")")
@@ -1728,6 +1746,9 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
 
   # The following functions work with arrays, we should check each carefully -- some may not compile...
   #if sym == "g_io_channel_read_to_end": return # fix later
+
+  if sym == "g_file_enumerator_iterate": return # two gobject var out parameters, hard to support
+
   if sym == "g_boxed_free": return # this is manually added at early position already
   if sym == "gst_param_spec_fraction": return # fix later
   if sym == "gst_param_spec_array": return # fix later
@@ -1882,7 +1903,8 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
           let tag = gTypeInfoGetTag(ret2)
           if tag == GITypeTag.INTERFACE:
             let iface = gTypeInfoGetInterface(ret2)
-            if gBaseInfoGetType(iface) == GIInfoType.Object and gObjectInfoGetFundamental(iface) == GFalse:
+            #if gBaseInfoGetType(iface) == GIInfoType.Object and gObjectInfoGetFundamental(iface) == GFalse: # the same here!
+            if gBaseInfoGetType(iface) == GIInfoType.INTERFACE or (gBaseInfoGetType(iface) == GIInfoType.Object and gObjectInfoGetFundamental(iface) == GFalse):
               isGObject = true
           pars = genPars(mInfo, true, info, tryOut2Ret = tryOut2Ret)
 
@@ -2241,11 +2263,6 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
     delayedMethods.add((info, minfo))
     methodBuffer.cut(p)
 
-#proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
-#
-#  writeMethodImpl(info, minfo)
-#  #writeMethodImpl(info, minfo, false)
-
 template genBoxedFree =
   if not callerAlloc.contains(($gBaseInfoGetNamespace(info)).toLowerAscii & '.' & mangleName(gBaseInfoGetName(info))):
     if gRegisteredTypeInfoGetGType(info) != G_TYPE_NONE and gTypeFundamental(gRegisteredTypeInfoGetGType(info)) ==
@@ -2271,6 +2288,10 @@ template genBoxedFree =
       #output.writeLine("\nwhen compileOption(\"gc\", \"arc\"):") # the when is not really needed, currently default gc ignores destructor
       output.writeLine("\nwhen defined(gcDestructors):")
       output.writeLine("  proc `=destroy`*(self: var typeof(" & mangleName(gBaseInfoGetName(info)) & "()[])) =")
+
+      output.writeLine("    when defined(gintroDebug):")
+      output.writeLine("      echo \"destroy \", $typeof(self), ' ', cast[int](unsafeaddr self)")
+
       output.writeLine("    if not self.ignoreFinalizer and self.impl != nil:")
       output.writeLine("      boxedFree(", getTypeProc, "(), ", "cast[ptr " & mangleName(gBaseInfoGetName(info)) & "00](self.impl))")
       output.writeLine("      self.impl = nil")
@@ -2319,6 +2340,10 @@ template genDestroyFreeUnref =
           # methodBuffer.writeLine("\nwhen compileOption(\"gc\", \"arc\"):")
           methodBuffer.writeLine("\nwhen defined(gcDestructors):")
           methodBuffer.writeLine("  proc `=destroy`*(self: var typeof(" & mangleName(gBaseInfoGetName(info)) & "()[])) =")
+
+          methodBuffer.writeLine("    when defined(gintroDebug):")
+          methodBuffer.writeLine("      echo \"destroy \", $typeof(self), ' ', cast[int](unsafeaddr self)")
+
           methodBuffer.writeLine("    if not self.ignoreFinalizer and self.impl != nil:")
           if gTypeInfoGetTag(xret2) == GITypeTag.VOID:
             methodBuffer.writeLine("      $1(self.impl)" % [$gFunctionInfoGetSymbol(freeMe)])
@@ -2489,7 +2514,10 @@ proc writeStruct(info: GIStructInfo) =
       # echo "XXXXXXXXXXXXX",  gFieldInfoGetSize(field)
     #if mangleName(gBaseInfoGetName(info)) != "TextIter":
   if not callerAlloc.contains(($gBaseInfoGetNamespace(info)).toLowerAscii & '.' & mangleName(gBaseInfoGetName(info))):
-    output.writeLine("  ", mangleName(gBaseInfoGetName(info)) & EM & " = ref object")
+    if moduleNameSpace == "cairo": # see https://forum.nim-lang.org/t/8309
+      output.writeLine("  ", mangleName(gBaseInfoGetName(info)) & EM & " = ref object of RootRef")
+    else:
+      output.writeLine("  ", mangleName(gBaseInfoGetName(info)) & EM & " = ref object")
     output.writeLine("    impl*: ptr " & mangleName(gBaseInfoGetName(info)) & "00")
     output.writeLine("    ignoreFinalizer*: bool")
   writeGetTypeProc()
@@ -2658,9 +2686,9 @@ proc writeEnum(info: GIEnumInfo) =
     return
   type T = tuple[v: int64; n: string]
   var s: seq[T]
-  # var alias: seq[string]
   var alias: HashSet[string] # double entry in gstvideo, see https://discourse.gnome.org/t/gstvideo-1-0-gir-double-entries/5442
   var flags = ($gBaseInfoGetName(info)).endsWith("Flags")
+  var flagDefault: string 
   output.writeLine("type")
   let n = info.gEnumInfoGetNValues()
   for j in 0.cint ..< n:
@@ -2677,7 +2705,8 @@ proc writeEnum(info: GIEnumInfo) =
   for j in 0 .. s.high:
     if s[j].v < 0:
       flags = false
-    if j == 0 and s[j].v == 0: continue
+    if j == 0 and s[j].v == 0:
+      continue
     if bitops.popCount(s[j].v) != 1: flags = false
   if s.len <= 1: flags = false
   var tname = mangleName(gBaseInfoGetName(info))
@@ -2692,7 +2721,12 @@ proc writeEnum(info: GIEnumInfo) =
   for j in 0 .. s.high:
     let i = s[j]
     var val = i.v
-    if flags and j == 0 and val == 0: continue
+    if flags and j == 0 and val == 0:
+      # proc c(t: typedesc[B]): B ={}
+      flagDefault = ("  " & tname & "Flags" & i.n.capitalizeAscii & EM & " = " & tname & "Flags" & "({})")
+      flagDefault.add("\nproc " & i.n & "*(t: typedesc[" & tname & "Flags]): " & tname & "Flags = " & tname & "Flags" & "({})")
+      #echo flagDefault
+      continue
     if j > 0 and i.v == k.v:
       if i.n != k.n:
         let h = if flags: "Flag" else: ""
@@ -2706,10 +2740,12 @@ proc writeEnum(info: GIEnumInfo) =
   if flags:
     output.writeLine("\n  ", tname & "Flags" & EM, " {.size: sizeof(cint).} = set[$1Flag]" % [tname])
 
-  if alias.len > 0:
+  if alias.len > 0 or flagDefault.len > 0:
     output.writeLine("\nconst")
     for i in alias:
       output.writeLine(i)
+    if flagDefault.len > 0:
+      output.writeLine(flagDefault)
 
   for j in 0.cint ..< gEnumInfoGetNMethods(info):
     let mInfo = gEnumInfoGetMethod(info, j)
@@ -2892,6 +2928,10 @@ proc writeObj(info: GIObjectInfo) =
         output.writeLine("    $1(self.impl)" % [freeMeName])
       output.writeLine("\nwhen defined(gcDestructors):")
       output.writeLine("  proc `=destroy`*(self: var typeof(" & mangleName(gBaseInfoGetName(info)) & "()[])) =")
+
+      output.writeLine("    when defined(gintroDebug):")
+      output.writeLine("      echo \"destroy \", $typeof(self), ' ', cast[int](unsafeaddr self)")
+
       output.writeLine("    if not self.ignoreFinalizer and self.impl != nil:")
       if n in ["ParamArray", "ParamFraction"]:
         output.writeLine("      $#(cast[ptr $#00](self.impl))" % [freeMeName, n])
@@ -3425,8 +3465,8 @@ proc gtk_file_chooser_dialog_new*(title: cstring; parent: ptr Window00; action: 
     firstButtonText: cstring = nil): ptr FileChooserDialog00 {.varargs,
     importc: "gtk_file_chooser_dialog_new", libprag.}
 
-proc newFileChooserDialog*(title: string = ""; parent: Window = nil; action: FileChooserAction): FileChooserDialog =
-  let gobj = gtk_file_chooser_dialog_new(safeStringToCString(title), if parent.isNil: nil else: cast[ptr Window00](parent.impl), action)
+proc newFileChooserDialog*(title: cstring = nil; parent: Window = nil; action: FileChooserAction): FileChooserDialog =
+  let gobj = gtk_file_chooser_dialog_new(title, if parent.isNil: nil else: cast[ptr Window00](parent.impl), action)
   if g_object_get_qdata(gobj, Quark) != nil:
     result = cast[type(result)](g_object_get_qdata(gobj, Quark))
     assert(result.impl == gobj)
@@ -3440,9 +3480,9 @@ proc newFileChooserDialog*(title: string = ""; parent: Window = nil; action: Fil
     assert(g_object_get_qdata(result.impl, Quark) == nil)
     g_object_set_qdata(result.impl, Quark, addr(result[]))
 
-proc initFileChooserDialog*[T](result: var T; title: string = ""; parent: Window = nil; action: FileChooserAction) =
+proc initFileChooserDialog*[T](result: var T; title: cstring = nil; parent: Window = nil; action: FileChooserAction) =
   assert(result is FileChooserDialog)
-  let gobj = gtk_file_chooser_dialog_new(safeStringToCString(title), if parent.isNil: nil else: cast[ptr Window00](parent.impl), action)
+  let gobj = gtk_file_chooser_dialog_new(title, if parent.isNil: nil else: cast[ptr Window00](parent.impl), action)
   if g_object_get_qdata(gobj, Quark) != nil:
     result = cast[type(result)](g_object_get_qdata(gobj, Quark))
     assert(result.impl == gobj)
@@ -3685,7 +3725,7 @@ proc cstringArrayToSeq*(s: ptr cstring): seq[string] =
     output.writeLine("proc cogfree*(mem: pointer) {.importc: \"g_free\", libprag.}")
     output.writeLine("proc g_strfreev*(strArray: ptr cstring) {.importc: \"g_strfreev\", libprag.}")
     output.writeLine("proc toBool*(g: gboolean): bool = g.int != 0")
-    output.writeLine("proc safeStringToCString*(s: cstring): cstring = (if s.len == 0: nil else: s)")
+    # output.writeLine("proc safeStringToCString*(s: cstring): cstring = (if s.len == 0: nil else: s)")
     output.writeLine(PRO)
   elif namespace == "Gdk":
     discard
@@ -4278,7 +4318,7 @@ launch()
 #  if not xcallerAlloc.contains(el):
 #    echo el
 
-# 4280 lines
+# 4321 lines
 # gtk_icon_view_get_tooltip_context bug Candidate
 # gtk_tree_view_get_cursor bug
 #

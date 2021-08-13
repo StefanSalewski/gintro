@@ -1,7 +1,7 @@
 # This is the high level cairo module for Nim -- based on the low level ngtk3 module, manually tuned.
 # (c) S. Salewski 2017, cairo 1.15.6
-# v0.7.2
-# 23-FEB-2020
+# v0.9.4
+# 10-AUG-2021
 
 # starting with gintro v.0.6.0 we split cairo into the gobject-introspection generated cairo.nim and this file.
 
@@ -194,7 +194,8 @@ proc newContext*(target: Surface): Context =
   fnew(result, gBoxedFreeCairoContext)
   GC_ref(target)
   result.impl = cairo_create(target.impl)
-  discard cairo_surface_set_user_data(target.impl, NUDK, cast[pointer](target), gcuref)
+  #discard cairo_surface_set_user_data(target.impl, NUDK, cast[pointer](target), gcuref) # that was wrong before v0.9.4
+  discard cairo_set_user_data(result.impl, NUDK, cast[pointer](target), gcuref)
 
 proc cairo_reference*(cr: ptr Context00): ptr Context00 {.importc, libcairo.}
 #
@@ -226,14 +227,12 @@ proc pushGroup*(cr: Context) =
 
 proc cairo_push_group_with_content*(cr: ptr Context00; content: Content) {.importc, libcairo.}
 #
-#proc pushGroupWithContent*(cr: Context; content: Content) =
 proc pushGroup*(cr: Context; content: Content) =
   cairo_push_group_with_content(cr.impl, content)
 
 proc cairo_pattern_destroy*(pattern: ptr Pattern00) {.importc, libcairo.}
 #
 proc patternDestroy*(pattern: Pattern) =
-  #cairo_pattern_destroy(pattern.impl)
   if pattern != nil and pattern.impl != nil:
     cairo_pattern_destroy(pattern.impl)
     pattern.impl = nil
@@ -264,11 +263,57 @@ proc setOperator*(cr: Context; op: Operator) =
 #
 #const `operator=`* = setOperator
 
+proc cairo_pattern_get_reference_count*(pattern: ptr Pattern00): cuint {.importc, libcairo.}
+#
+proc getReferenceCount*(pattern: Pattern): int =
+  cairo_pattern_get_reference_count(pattern.impl).int
+
+proc cairo_pattern_get_user_data*(pattern: ptr Pattern00; key: ptr UserDataKey): pointer {.importc, libcairo.}
+#
+proc getUserData*(pattern: Pattern; key: ptr UserDataKey): pointer =
+  cairo_pattern_get_user_data(pattern.impl, key)
+
+proc cairo_pattern_reference*(pattern: ptr Pattern00): ptr Pattern00 {.importc, libcairo.}
+#
+proc patternReference*(pattern: Pattern): Pattern =
+  discard cairo_pattern_reference(pattern.impl)
+  return pattern
+
+# Returns the current source pattern. This object is owned by cairo.
+# To keep a reference to it, you must call cairo_pattern_reference().
+proc cairo_get_source*(cr: ptr Context00): ptr Pattern00 {.importc, libcairo.}
+#
+proc getSource*(cr: Context): Pattern =
+  let h = cairo_get_source(cr.impl)
+  let d = cairo_pattern_get_user_data(h, NUDK)
+  if d.isNil:
+    fnew(result, gBoxedFreeCairoPattern)
+    result.impl = cairo_pattern_reference(h)
+  else:
+    result = cast[Pattern](d)
+    assert(result.impl == h)
+#
+#const source* = getSource
+
+proc tryReleasePat(crimpl: ptr Context00) =
+  let oldpattern = cairo_get_source(crimpl)
+  if oldpattern != nil:
+    let o = cairo_pattern_get_user_data(oldpattern, NUDK)
+    if o != nil:
+      discard cairo_pattern_set_user_data(oldpattern, NUDK, nil, nil)
+      GC_unref(cast[Pattern](o))
+
 proc cairo_set_source*(cr: ptr Context00; source: ptr Pattern00) {.importc, libcairo.}
 #
 proc setSource*(cr: Context; source: Pattern) =
-  GC_ref(source)
+  # echo cast[int](source), " ", cast[int](source.impl)
+  # new for gintro v0.9.4
+  GC_ref(source) # better before tryReleasePat() ?
+  tryReleasePat(cr.impl)
+  #GC_ref(source)
   cairo_set_source(cr.impl, source.impl)
+  discard cairo_pattern_set_user_data(source.impl, NUDK, cast[pointer](source), nil) # store reference to the Nim proxy object
+  discard cairo_set_user_data(cr.impl, NUDK, cast[pointer](source), gcuref) # When Context gets collected Pattern is unreffed
 #
 #const `source=`* = setSource
 
@@ -276,27 +321,34 @@ proc cairo_set_source_rgb*(cr: ptr Context00; red, green, blue: cdouble) {.impor
 #
 #proc setSourceRgb*(cr: Context; red, green, blue: float) =
 proc setSource*(cr: Context; red, green, blue: float) =
+  #tryReleasePat(cr.impl) # wrong!
+  #echo cast[int](cairo_get_source(cr.impl))
   cairo_set_source_rgb(cr.impl, red.cdouble, green.cdouble, blue.cdouble)
+  #echo cast[int](cairo_get_source(cr.impl)), "++"
 #
 #const `source=`* = setSourceRgb
 proc setSource*(cr: Context; rgb: array[3, float]) =
+  #tryReleasePat(cr.impl)
   cairo_set_source_rgb(cr.impl, rgb[0], rgb[1], rgb[2])
 #
 proc setSource*(cr: Context; rgb: tuple[r, g, b: float]) =
+  #tryReleasePat(cr.impl)
   cairo_set_source_rgb(cr.impl, rgb[0], rgb[1], rgb[2])
 
 proc cairo_set_source_rgba*(cr: ptr Context00; red, green, blue, alpha: cdouble) {.importc, libcairo.}
 #
 proc setSource*(cr: Context; red, green, blue, alpha: float) =
-#proc setSourceRgba*(cr: Context; red, green, blue, alpha: float) =
+  #tryReleasePat(cr.impl)
   cairo_set_source_rgba(cr.impl, red.cdouble, green.cdouble, blue.cdouble, alpha.cdouble)
 #
 #const `sourceRgba=`* = setSourceRgba
 #
 proc setSource*(cr: Context; rgba: array[4, float]) =
+  #tryReleasePat(cr.impl)
   cairo_set_source_rgba(cr.impl, rgba[0],  rgba[1], rgba[2], rgba[3])
 #
 proc setSource*(cr: Context; rgba: tuple[r, g, b, a: float]) =
+  #tryReleasePat(cr.impl)
   cairo_set_source_rgba(cr.impl, rgba[0],  rgba[1], rgba[2], rgba[3])
 
 proc cairo_surface_get_reference_count*(surface: ptr Surface00): cuint {.importc, libcairo.}
@@ -535,11 +587,6 @@ proc cairo_paint_with_alpha*(cr: ptr Context00; alpha: cdouble) {.importc, libca
 #
 proc paintWithAlpha*(cr: Context; alpha: float) =
   cairo_paint_with_alpha(cr.impl, alpha.cdouble)
-
-proc cairo_pattern_get_reference_count*(pattern: ptr Pattern00): cuint {.importc, libcairo.}
-#
-proc getReferenceCount*(pattern: Pattern): int =
-  cairo_pattern_get_reference_count(pattern.impl).int
 
 proc cairo_mask*(cr: ptr Context00; pattern: ptr Pattern00) {.importc, libcairo.}
 #
@@ -1231,33 +1278,6 @@ proc getOperator*(cr: Context): Operator =
   cairo_get_operator(cr.impl)
 #
 #const operator* = getOperator
-
-proc cairo_pattern_get_user_data*(pattern: ptr Pattern00; key: ptr UserDataKey): pointer {.importc, libcairo.}
-#
-proc getUserData*(pattern: Pattern; key: ptr UserDataKey): pointer =
-  cairo_pattern_get_user_data(pattern.impl, key)
-
-proc cairo_pattern_reference*(pattern: ptr Pattern00): ptr Pattern00 {.importc, libcairo.}
-#
-proc patternReference*(pattern: Pattern): Pattern =
-  discard cairo_pattern_reference(pattern.impl)
-  return pattern
-
-# Returns the current source pattern. This object is owned by cairo.
-# To keep a reference to it, you must call cairo_pattern_reference().
-proc cairo_get_source*(cr: ptr Context00): ptr Pattern00 {.importc, libcairo.}
-#
-proc getSource*(cr: Context): Pattern =
-  let h = cairo_get_source(cr.impl)
-  let d = cairo_pattern_get_user_data(h, NUDK)
-  if d.isNil:
-    fnew(result, gBoxedFreeCairoPattern)
-    result.impl = cairo_pattern_reference(h)
-  else:
-    result = cast[Pattern](d)
-    assert(result.impl == h)
-#
-#const source* = getSource
 
 proc cairo_get_tolerance*(cr: ptr Context00): cdouble {.importc, libcairo.}
 #
@@ -2641,5 +2661,5 @@ when CAIRO_HAS_TEE_SURFACE:
     discard cairo_tee_surface_index(surface.impl, index.cuint)
     return surface
 
-# 2644 lines
+# 2664 lines
 
