@@ -29,7 +29,20 @@ with code inserted from files directly.
 NOTE: This work is partly based on earlier works of J. Mansour and has been supported by A. Rumpf, E. Bassi and other _Nim_ and _GTK/Gnome_ developers.
 The `combinatorics` module was kindly provided by R. Behrends.
 
-NOTE: The current version 0.9.3 of the gintro Nim GTK bindings contains some serious changes
+NOTE: This is version 0.9.4 of the gintro Nim GTK bindings. This version contains a lot of fixes.
+Before 0.9.4 some GtkDrawingArea  examples gave crashes with the most recent Nim compiler
+due to a wrong cast from ref object to RootRef. That is fixed, and the drawingarea example works now
+also without manually freeing cairo resources like Context, Surface and Pattern. We have not updated the example,
+so it still contains the manually memory management, but you can comment it out if you want. When you compile your code with
+--gc:arc you really should not have to care for releasing cairo resources. If you still use the default refc GC you may
+release cairo resources manually, as the GC has a delay, which may first allocate some GB before the GC becomes active and frees
+the cairo resources. Note that only a small part of all the cairo functions has been tested yet, so there may still be bugs.
+Strings are now passed to GTK functions as cstrings, so you can pass nil as well as empty strings. The nil value has for GTK in most cases
+a special meaning and is different from an empty "" string. For some function parameters nil is the default value for cstrings.
+Finally we support now named empty flag sets, so instead of
+passing the empty set as {} for default flag set values you can use names like BindingFlagsDefault or BindingFlags.default.
+
+NOTE: Version 0.9.3 of the gintro Nim GTK bindings contains some serious changes
 following the discussion in https://discourse.gnome.org/t/get-ref-function-for-none-gobject-classes-like-gtkexpression/6696.
 With that changes issue https://github.com/StefanSalewski/gintro/issues/135 should be fixed, and the listview_clocks example works
 with a C and a Nim part. For most apps that changes should be invisible, but it is possible that we have introduced
@@ -109,46 +122,6 @@ proxy symbols are needed. Unfortunately discovering these entities by use of gob
 not reliable, so we are using a manually created list, which may contain errors.
 And finally with v0.8.3 the examples from the GTK4 book  (http://ssalewski.de/gtkprogramming.html) should work.
 For the GTK3 examples we had to do some minimal fixes, so you may have to do similar fixes for your own code as well.
-For gintro/examples/gtk3 this was
-
-----
-# examples modifications for v0.8.3:
-$ diff gintronew/examples/gtk3 gintro/examples/gtk3
-diff gintronew/examples/gtk3/celldatafunction.nim gintro/examples/gtk3/celldatafunction.nim
-3c3
-< import gintro/[gtk, gobject, glib]
----
-> import gintro/[gtk, gobject]
-67c67
-<   let store = newListStore(Columns, cast[ptr GType](unsafeaddr gtype)) # ugly cast
----
->   let store = newListStore(Columns, cast[pointer](unsafeaddr gtype)) # ugly cast
-diff gintronew/examples/gtk3/css_colored_listview.nim gintro/examples/gtk3/css_colored_listview.nim
-64c64
-<   var store = newListStore(Columns,  cast[ptr GType]( unsafeaddr h)) # cast is ugly, we should fix it in bindings.
----
->   var store = newListStore(Columns,  cast[pointer]( unsafeaddr h)) # cast is ugly, we should fix it in bindings.
-diff gintronew/examples/gtk3/gearsmenu.nim gintro/examples/gtk3/gearsmenu.nim
-114c114
-<   echo fmt"GTK Version {getMajorVersion()}.{getMinorVersion()}.{getMicroVersion()}"
----
->   echo fmt"GTK Version {majorVersion()}.{minorVersion()}.{microVersion()}"
-diff gintronew/examples/gtk3/listview.nim gintro/examples/gtk3/listview.nim
-61c61
-<   let store = newListStore(N_COLUMNS, cast[ptr GType]( unsafeaddr gtype)) # cast due to bug in gtk.nim
----
->   let store = newListStore(N_COLUMNS, cast[pointer]( unsafeaddr gtype)) # cast due to bug in gtk.nim
-diff gintronew/examples/gtk3/menubar.nim gintro/examples/gtk3/menubar.nim
-101c101
-<   echo "GTK Version $1.$2.$3" % [$getMajorVersion(), $getMinorVersion(), $getMicroVersion()]
----
->   echo "GTK Version $1.$2.$3" % [$majorVersion(), $minorVersion(), $microVersion()]
-diff gintronew/examples/gtk3/overlay_tree1.nim gintro/examples/gtk3/overlay_tree1.nim
-71c71
-<   let store = newListStore(Columns, cast[ptr GType](unsafeaddr h)) # cast is ugly, we should fix it in bindings.
----
->   let store = newListStore(Columns, cast[pointer](unsafeaddr h)) # cast is ugly, we should fix it in bindings.
-----
 
 NOTE: Version 0.8.2 of gintro was only a fix for recent gstreamer 1.18 which added some uncommon
 gobject-introspection stuff which brook the install of 0.8.1 for a few users. We were not yet able to
