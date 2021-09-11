@@ -3811,10 +3811,10 @@ proc cstringArrayToSeq*(s: ptr cstring): seq[string] =
       if n[0] != '_' and not n.endsWith("Private") and not (namespace == "Gdk" and n.startsWith("Event")) and not (namespace ==
           "Pango" and n.startsWith("Attribute")):
         if gBaseInfoGetType(info) == GIInfoType.STRUCT:
-          if not ((gStructInfoIsGtypeStruct(info) and n != "ObjectClass")):
+          if not (gStructInfoIsGtypeStruct(info) or (n == "ObjectClass")):
             var lightObj = true
-            for n in "free unref  get_qdata".split:
-              if gStructInfoFindMethod(info, n) != nil:
+            for m in "free unref  get_qdata".split:
+              if gStructInfoFindMethod(info, m) != nil:
                 lightObj = false
             if lightObj:
               for j in 0.cint ..< gStructInfoGetNMethods(info):
