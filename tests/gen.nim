@@ -445,7 +445,7 @@ privStr.incl("pad")
 privStr.incl("unused")
 privStr.incl("privateData")
 
-# These objects are plain structs like GtkTextIter containing only findamental data types like uint32.
+# These objects are plain structs like GtkTextIter containing only fundamental data types like uint32.
 # They are generally allocated on the stack, so there is no alloc or free function offered by gtk.
 # If all these conditions are met, then we do not need a proxy object. Caution, some objects like
 # TextAttribute has bitfields, which is difficult to map to Nim. Watch for cstrings too!
