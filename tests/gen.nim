@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK4/GTK3 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.9.4 2021-AUG-13
+# v 0.9.4 2021-SEP-15
 # (c) S. Salewski 2018, 2019, 2020, 2021
 
 # usefull for finding death code:
@@ -40,6 +40,8 @@
 
              # CAUTION: some procs are advertised as constructor but do not construct new objects,
               # they just return existing ones as gdk_cursor_new_from_name()
+
+{.warning[CStringConv]: off.}
 
 from os import `/`, paramCount
 import gir, gobject, glib
@@ -295,6 +297,8 @@ var ISGTK3: bool
 var suppressType = false
 var suppressRaise = false
 
+var cairoProvidesRectangle = false # ugly fix for legacy Debian Buster, CairoRectangle was missing
+
 # fixedDestroyNames.add("gdk_window_create_similar_surface", "cairo.destroy")
 # fixedDestroyNames.add("gdk_window_create_similar_image_surface", "cairo.destroy")
 # fixedDestroyNames.add("gdk_cairo_region_create_from_surface", "cairo.destroy")
@@ -445,7 +449,7 @@ privStr.incl("pad")
 privStr.incl("unused")
 privStr.incl("privateData")
 
-# These objects are plain structs like GtkTextIter containing only findamental data types like uint32.
+# These objects are plain structs like GtkTextIter containing only fundamental data types like uint32.
 # They are generally allocated on the stack, so there is no alloc or free function offered by gtk.
 # If all these conditions are met, then we do not need a proxy object. Caution, some objects like
 # TextAttribute has bitfields, which is difficult to map to Nim. Watch for cstrings too!
@@ -2484,6 +2488,10 @@ proc writeStruct(info: GIStructInfo) =
     output.writeLine("  " & mangleName(gBaseInfoGetName(info)) & EM & " = Event")
     return
 
+  # https://github.com/StefanSalewski/gintro/issues/176
+  if gBaseInfoGetName(info) == "Rectangle" and moduleNamespace == "cairo":
+    cairoProvidesRectangle = true
+
   if gBaseInfoGetName(info) == "Address" and moduleNamespace == "nice":
     #import nativesockets
     # See https://gitlab.freedesktop.org/libnice/libnice/-/blob/master/agent/address.h
@@ -3811,10 +3819,12 @@ proc cstringArrayToSeq*(s: ptr cstring): seq[string] =
       if n[0] != '_' and not n.endsWith("Private") and not (namespace == "Gdk" and n.startsWith("Event")) and not (namespace ==
           "Pango" and n.startsWith("Attribute")):
         if gBaseInfoGetType(info) == GIInfoType.STRUCT:
-          if not ((gStructInfoIsGtypeStruct(info) and n != "ObjectClass")):
+          # if not ((gStructInfoIsGtypeStruct(info) and n != "ObjectClass")): # v0.9.4 with Debian Buster crash
+          # if (not gStructInfoIsGtypeStruct(info) or (n == "ObjectClass")): # equivalent to above
+          if (not gStructInfoIsGtypeStruct(info) and (n != "ObjectClass")): # this may work -- the same as suggested by Mr. 1jss 
             var lightObj = true
             for n in "free unref  get_qdata".split:
-              if gStructInfoFindMethod(info, n) != nil:
+              if gStructInfoFindMethod(info, n) != nil: # crash for legacy Debian Buster
                 lightObj = false
             if lightObj:
               for j in 0.cint ..< gStructInfoGetNMethods(info):
@@ -4095,7 +4105,18 @@ proc get$1*(builder: Builder; name: string): $1 =
     output.write(Nice_EPI)
 
   if namespace == "cairo":
-    output.write("include cairoimpl\n")
+    if not cairoProvidesRectangle:
+      output.writeLine("""
+type
+  Rectangle* {.pure, byRef.} = object
+    x*: cdouble
+    y*: cdouble
+    width*: cdouble
+    height*: cdouble
+
+proc cairo_gobject_rectangle_get_type*(): GType {.importc, libprag.}
+""")
+    output.write("\ninclude cairoimpl\n")
 
   if namespace == "GObject":
     output.writeLine("\nproc g_type_invalid_get_type*(): GType = g_type_from_name(\"(null)\")")
@@ -4318,7 +4339,7 @@ launch()
 #  if not xcallerAlloc.contains(el):
 #    echo el
 
-# 4321 lines
+# 4342 lines
 # gtk_icon_view_get_tooltip_context bug Candidate
 # gtk_tree_view_get_cursor bug
 #
