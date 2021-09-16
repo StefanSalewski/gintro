@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK4/GTK3 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.9.4 2021-SEP-15
+# v 0.9.4 2021-SEP-16
 # (c) S. Salewski 2018, 2019, 2020, 2021
 
 # usefull for finding death code:
@@ -41,7 +41,7 @@
              # CAUTION: some procs are advertised as constructor but do not construct new objects,
               # they just return existing ones as gdk_cursor_new_from_name()
 
-{.warning[CStringConv]: off.}
+# {.warning[CStringConv]: off.} # does not work with older compilers
 
 from os import `/`, paramCount
 import gir, gobject, glib
