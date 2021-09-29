@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK4/GTK3 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.9.4 2021-SEP-16
+# v 0.9.5 2021-SEP-29
 # (c) S. Salewski 2018, 2019, 2020, 2021
 
 # usefull for finding death code:
@@ -42,6 +42,8 @@
               # they just return existing ones as gdk_cursor_new_from_name()
 
 # {.warning[CStringConv]: off.} # does not work with older compilers
+
+# isRegisteredTypeInfo(info) was never used before v0.9.5, but may be useful!
 
 from os import `/`, paramCount
 import gir, gobject, glib
@@ -357,6 +359,9 @@ fixedProcNames["gst_gl_buffer_init_once"] = "bufferInitOnce"
 fixedProcNames["gst_gl_memory_init_once"] = "memoryInitOnce"
 fixedProcNames["gst_gl_memory_pbo_init_once"] = "memoryPboInitOnce"
 
+fixedProcNames["g_memory_monitor_dup_default"] = "dupDefaultMemoryMonitor"
+fixedProcNames["g_power_profile_monitor_dup_default"] = "dupDefaultPowerProfileMonitor"
+
 defaultParameters["gtk_window_new"] = "`type` WindowType WindowType.toplevel"
 defaultParameters["gtk_application_new"] = "flags gio.ApplicationFlags {}"
 defaultParameters["gtk_builder_new_from_string"] = "length int64 -1"
@@ -569,7 +574,35 @@ gstrtsp.RTSPTimeRange
 gstrtsp.RTSPTime
 gstrtsp.RTSPTime2
 gtk.CssLocation
+gstvideo.VideoFrame
+gstvideo.VideoMeta
+gstvideo.VideoFormatInfo
+gstvideo.VideoMasteringDisplayInfo
+gstvideo.VideoCaptionMeta
+gstvideo.VideoCropMeta
+gstvideo.VideoTimeCodeConfig
+gstvideo.VideoContentLightLevel
+gstvideo.VideoAncillary
+gstvideo.VideoColorimetry
+gstvideo.VideoMetaTransform
+gstvideo.VideoResampler
+gstsdp.MIKEYEncryptInfo
+gstsdp.MIKEYPayloadKEMAC
+gstsdp.SDPAttribute
+gstsdp.MIKEYPayloadSP
+gstsdp.MIKEYPayloadRAND
+gstsdp.MIKEYPayloadKeyData
+gstsdp.MIKEYPayloadPKE
+gstrtp.RTCPPacket
+gstrtp.RTCPBuffer
+gstrtp.RTPBuffer
+gstcheck.StreamConsistency
+gstcheck.HarnessThread
+gstcheck.CheckABIStruct
+gstcheck.Harness
 """
+
+
 
 const autoCallerAlloc = """
 """
@@ -701,7 +734,82 @@ nice.InputMessage
 nice.OutputMessage
 gio.InputMessage
 gio.OutputMessage
+gstvideo.VideoTimeCodeMeta
+gstvideo.VideoGLTextureUploadMeta
+gstvideo.VideoAFDMeta
+gstvideo.VideoOverlayCompositionMeta
+gstvideo.VideoRegionOfInterestMeta
+gstvideo.VideoAffineTransformationMeta
+gstvideo.VideoColorPrimariesInfo
+gstmpegts.T2DeliverySystemCellExtension
+gstmpegts.SatelliteDeliverySystemDescriptor
+gstmpegts.AtscEITEvent
+gstmpegts.AtscStringSegment
+gstmpegts.AtscETT
+gstmpegts.BAT
+gstmpegts.EIT
+gstmpegts.DvbMultilingualNetworkNameItem
+gstmpegts.ISO639LanguageDescriptor
+gstmpegts.LogicalChannelDescriptor
+gstmpegts.BATStream
+gstmpegts.AtscVCT
+gstmpegts.DVBLinkageEvent
+gstmpegts.T2DeliverySystemCell
+gstmpegts.TOT
+gstmpegts.ExtendedEventItem
+gstmpegts.ComponentDescriptor
+gstmpegts.AtscMultString
+gstmpegts.DVBLinkageMobileHandOver
+gstmpegts.TerrestrialDeliverySystemDescriptor
+gstsdp.SDPBandwidth
+gstsdp.SDPAttribute
+gstsdp.SDPConnection
+gstsdp.MIKEYPayloadSPParam
+gstsdp.SDPZone
+gstsdp.SDPTime
+gstsdp.MIKEYMapSRTP
+gstsdp.SDPOrigin
+gstsdp.SDPKey
+gstrtp.RTPPayloadInfo
+gstrtp.RTPSourceMeta
+soup.MessageHeadersIter
+soup.Range
+soup.Connection
+soup.MessageQueueItem
+soup.MessageQueue
+gstgl.GLMemory
+gstgl.GLFuncs
+gstgl.GLRenderbuffer
+gstgl.GLSyncMeta
+gstgl.GLBuffer
+gstgl.GLMemoryPBO
+gstsdp.MIKEYDecryptInfo
+gstsdp.MIKEYPayloadT
+javascriptcore.ClassVTable
+gstaudio.AudioRingBufferSpec
+gstaudio.AudioDownmixMeta
+gstaudio.AudioCdSrcTrack
+gstaudio.AudioClippingMeta
+gstaudio.AudioMeta
+gstaudio.AudioBuffer
+gstaudio.AudioSinkClassExtension
+gstaudio.AudioFormatInfo
+gdkpixbuf.PixbufModulePattern
+gdkpixbuf.PixbufModule
+glib.TreeNode
+glib.UriParamsIter
+gstvideo.VideoBarMeta
+gstvideo.VideoMasteringDisplayInfoCoordinates
+gstnet.NetControlMessageMeta
+gstnet.NetAddressMeta
+gstbase.CollectData
+gstrtsp.RTSPWatchFuncs
+gstcheck.CheckLogFilter
+gtk.PrintBackend
+gsk.ParseLocation
 """"
+# some structs like glib.TreeNode are hard, as some functions returns pointers to that struct, and still we need field access!
+# same for gtk.PrintBackend
 
 var callerAlloc = (manCallerAlloc & autoCallerAlloc).split.toHashSet
 #var callerAlloc = (autoCallerAlloc).split.toHashSet
@@ -1808,6 +1916,8 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
   if sym == "nice_agent_get_selected_pair": return #  was very wrong, fixed manually
   if sym == "g_hash_table_destroy": return
 
+  if sym == "g_variant_ref_sink": return # we need this early, so add manually early
+
   try:
 
     for tryOut2Ret in [false, true]:
@@ -2016,7 +2126,8 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
                       ### methodBuffer.writeLine("  result.ignoreFinalizer = true") # as we have always to attach one with ARC.
               else: assert false
               if ((gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) != 0 and gBaseInfoGetName(info) == "Variant"):
-                methodBuffer.writeLine("  result.ignoreFinalizer = true")
+                # methodBuffer.writeLine("  result.ignoreFinalizer = true") # before v0.9.5
+                methodBuffer.writeLine("  discard g_variant_ref_sink(result.impl)")
               if (gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) == 0:
                 break
           elif ngrRet.res == glist:
@@ -2559,6 +2670,11 @@ proc writeStruct(info: GIStructInfo) =
     output.writeLine(KeymapKeyProx)
   if mangleName(gBaseInfoGetName(info)) == "PageRange":
     output.writeLine(PageRangeProx)
+
+  if gBaseInfoGetName(info) == "Variant" and moduleNamespace == "glib": # make it available early
+    output.writeLine("\nproc g_variant_ref_sink(self: ptr Variant00): ptr Variant00 {.importc, libprag.}")
+
+
   for i, mInfo in mseq:
     writeMethod(info, minfo)
     if i == 0:
@@ -3809,6 +3925,8 @@ proc cstringArrayToSeq*(s: ptr cstring): seq[string] =
       s.insert([h])
       break
 
+  # NOTE: We may? remove all structs from xcallerAlloc when that struct ever is returned by a function! # v0.9.5
+  # And we may remove all structs with a GType!
   # https://discourse.gnome.org/t/what-is-the-difference-between-gmutex-and-gchecksum/4542
   if namespace notin ["HarfBuzz", "cairo"]: # auto-detecting the "light" entities is too hard, but here we get some candidates
     for info in s:
@@ -3818,38 +3936,41 @@ proc cstringArrayToSeq*(s: ptr cstring): seq[string] =
       let n = gBaseInfoGetName(info)
       if n[0] != '_' and not n.endsWith("Private") and not (namespace == "Gdk" and n.startsWith("Event")) and not (namespace ==
           "Pango" and n.startsWith("Attribute")):
-        if gBaseInfoGetType(info) == GIInfoType.STRUCT:
-          # if not ((gStructInfoIsGtypeStruct(info) and n != "ObjectClass")): # v0.9.4 with Debian Buster crash
-          # if (not gStructInfoIsGtypeStruct(info) or (n == "ObjectClass")): # equivalent to above
-          if (not gStructInfoIsGtypeStruct(info) and (n != "ObjectClass")): # this may work -- the same as suggested by Mr. 1jss 
+
+        if not isRegisteredTypeInfo(info) or gRegisteredTypeInfoGetGType(info) == G_TYPE_NONE: # v0.9.5
+
+          if gBaseInfoGetType(info) == GIInfoType.STRUCT:
+            # if not ((gStructInfoIsGtypeStruct(info) and n != "ObjectClass")): # v0.9.4 with Debian Buster crash
+            # if (not gStructInfoIsGtypeStruct(info) or (n == "ObjectClass")): # equivalent to above
+            if (not gStructInfoIsGtypeStruct(info) and (n != "ObjectClass")): # this may work -- the same as suggested by Mr. 1jss 
+              var lightObj = true
+              for n in "free unref  get_qdata".split:
+                if gStructInfoFindMethod(info, n) != nil: # crash for legacy Debian Buster
+                  lightObj = false
+              if lightObj:
+                for j in 0.cint ..< gStructInfoGetNMethods(info):
+                  let minfo = gStructInfoGetMethod(info, j)
+                  if (gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) != 0:
+                    lightObj = false
+              if lightObj:
+                let el = moduleNamespace & '.' & $n
+                if not manCallerAlloc.contains(el) and not noCallerAlloc.contains(el):
+                  xcallerAlloc.incl(el)
+
+          if gBaseInfoGetType(info) == GIInfoType.UNION:
             var lightObj = true
             for n in "free unref  get_qdata".split:
-              if gStructInfoFindMethod(info, n) != nil: # crash for legacy Debian Buster
+              if gUnionInfoFindMethod(info, n) != nil:
                 lightObj = false
             if lightObj:
-              for j in 0.cint ..< gStructInfoGetNMethods(info):
-                let minfo = gStructInfoGetMethod(info, j)
+              for j in 0.cint ..< gUnionInfoGetNMethods(info):
+                let minfo = gUnionInfoGetMethod(info, j)
                 if (gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) != 0:
                   lightObj = false
             if lightObj:
               let el = moduleNamespace & '.' & $n
               if not manCallerAlloc.contains(el) and not noCallerAlloc.contains(el):
                 xcallerAlloc.incl(el)
-
-        if gBaseInfoGetType(info) == GIInfoType.UNION:
-          var lightObj = true
-          for n in "free unref  get_qdata".split:
-            if gUnionInfoFindMethod(info, n) != nil:
-              lightObj = false
-          if lightObj:
-            for j in 0.cint ..< gUnionInfoGetNMethods(info):
-              let minfo = gUnionInfoGetMethod(info, j)
-              if (gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) != 0:
-                lightObj = false
-          if lightObj:
-            let el = moduleNamespace & '.' & $n
-            if not manCallerAlloc.contains(el) and not noCallerAlloc.contains(el):
-              xcallerAlloc.incl(el)
 
   for info in s:
     if gBaseInfoGetType(info) == GIInfoType.OBJECT:
@@ -4334,12 +4455,16 @@ launch()
 #  if not callerAlloc.contains(el):
 #    echo "maybe add: ", el
 
+#for el in xcallerAlloc:
+#  if not callerAlloc.contains(el):
+#    echo "maybe add: ", el
+
 #echo "---"
 #for el in oldcallerAlloc:
 #  if not xcallerAlloc.contains(el):
 #    echo el
 
-# 4342 lines
+# 4467 lines
 # gtk_icon_view_get_tooltip_context bug Candidate
 # gtk_tree_view_get_cursor bug
 #
