@@ -1,6 +1,6 @@
 = High level GTK4 and GTK3 bindings for the Nim programming language
 //(c) Stefan Salewski                                     
-//Version 0.9.3
+//Version 0.9.5
 :experimental:
 :imagesdir: http://ssalewski.de/tmp
 //:source-highlighter: pygments
@@ -29,7 +29,11 @@ with code inserted from files directly.
 NOTE: This work is partly based on earlier works of J. Mansour and has been supported by A. Rumpf, E. Bassi and other _Nim_ and _GTK/Gnome_ developers.
 The `combinatorics` module was kindly provided by R. Behrends.
 
-NOTE: This is version 0.9.4 of the gintro Nim GTK bindings. This version contains a lot of fixes.
+NOTE: This is version 0.9.5 of the gintro Nim GTK bindings. We added a patch to support very old GTK3 versions
+like Debian Buster, updated the list of "light symbols" like Rectangle, TextIter and such that do not
+need Nim Proxy objects, and finally fixed a recent glib proc name conflict.
+
+NOTE: Version 0.9.4 of the gintro Nim GTK bindings contains a lot of fixes.
 Before 0.9.4 some GtkDrawingArea  examples gave crashes with the most recent Nim compiler
 due to a wrong cast from ref object to RootRef. That is fixed, and the drawingarea example works now
 also without manually freeing cairo resources like Context, Surface and Pattern. We have not updated the example,

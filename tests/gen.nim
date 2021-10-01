@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK4/GTK3 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.9.5 2021-SEP-29
+# v 0.9.5 2021-OCT-01
 # (c) S. Salewski 2018, 2019, 2020, 2021
 
 # usefull for finding death code:
@@ -1322,7 +1322,7 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
       else:
         if isGobject:
           if gArgInfoIsOptional(arg):
-            result.arglist.add("cast[var " & ngr.name00 & "](if addr(" & name & ") == nil: nil else: tmpoutgobjectarg)")
+            result.arglist.add("cast[var " & ngr.name00 & "](if addr(" & name & ") == nil: nil else: addr tmpoutgobjectarg)")
           else:
             result.arglist.add("tmpoutgobjectarg")
           result.tmpoutgobjectarg = "  var tmpoutgobjectarg: " & ngr.name00 & "\n"
@@ -3309,12 +3309,12 @@ const GObject_EPI = """
 #  let p = cast[ptr cuint](cast[int](o.impl) + sizeof(pointer))
 #  return p[].int
 
-
 proc scNotify*(self: Object;  p: proc (self: ptr Object00; paramSpec: ptr ParamSpec00; xdata: pointer) {.cdecl.}, xdata: pointer, cf: gobject.ConnectFlags; sigName: cstring): culong =
   # g_signal_connect_data(self.impl, "notify::cursor-position", cast[GCallback](p), xdata, nil, cf)
   g_signal_connect_data(self.impl, sigName, cast[GCallback](p), xdata, nil, cf)
 
-
+proc typeCheckInstanceIsA*(instance: Object; ifaceType: GType): bool =
+  toBool(g_type_check_instance_is_a(cast[ptr TypeInstance00](instance.impl), ifaceType))
 
 # similar to gobjectTemp()
 proc glistObjects2seq*[T](t: typedesc[T]; l: ptr glib.List; elTransferFull: bool): seq[T] =
