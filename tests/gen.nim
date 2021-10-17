@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK4/GTK3 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.9.3 2021-JUN-29
+# v 0.9.5 2021-OCT-01
 # (c) S. Salewski 2018, 2019, 2020, 2021
 
 # usefull for finding death code:
@@ -40,6 +40,10 @@
 
              # CAUTION: some procs are advertised as constructor but do not construct new objects,
               # they just return existing ones as gdk_cursor_new_from_name()
+
+# {.warning[CStringConv]: off.} # does not work with older compilers
+
+# isRegisteredTypeInfo(info) was never used before v0.9.5, but may be useful!
 
 from os import `/`, paramCount
 import gir, gobject, glib
@@ -295,10 +299,18 @@ var ISGTK3: bool
 var suppressType = false
 var suppressRaise = false
 
+var cairoProvidesRectangle = false # ugly fix for legacy Debian Buster, CairoRectangle was missing
+
 # fixedDestroyNames.add("gdk_window_create_similar_surface", "cairo.destroy")
 # fixedDestroyNames.add("gdk_window_create_similar_image_surface", "cairo.destroy")
 # fixedDestroyNames.add("gdk_cairo_region_create_from_surface", "cairo.destroy")
 # fixedDestroyNames.add("gdk_cairo_surface_create_from_pixbuf", "cairo.destroy")
+
+fixedProcNames["gst_video_color_matrix_from_iso"] = "colorMatrixFromIso"
+fixedProcNames["gst_video_color_primaries_from_iso"] = "colorPrimariesFromIso"
+fixedProcNames["gst_video_transfer_function_from_iso"] = "transferFunctionFromIso"
+
+fixedProcNames["gtk_popover_menu_new_from_model"] = "newPopoverMenu" # FromModel"
 
 fixedProcNames["gtk_button_new_with_label"] = "newButton"
 fixedProcNames["gtk_check_button_new_with_label"] = "newCheckButton"
@@ -346,6 +358,9 @@ fixedProcNames["gst_gl_renderbuffer_init_once"] = "renderbufferInitOnce"
 fixedProcNames["gst_gl_buffer_init_once"] = "bufferInitOnce"
 fixedProcNames["gst_gl_memory_init_once"] = "memoryInitOnce"
 fixedProcNames["gst_gl_memory_pbo_init_once"] = "memoryPboInitOnce"
+
+fixedProcNames["g_memory_monitor_dup_default"] = "dupDefaultMemoryMonitor"
+fixedProcNames["g_power_profile_monitor_dup_default"] = "dupDefaultPowerProfileMonitor"
 
 defaultParameters["gtk_window_new"] = "`type` WindowType WindowType.toplevel"
 defaultParameters["gtk_application_new"] = "flags gio.ApplicationFlags {}"
@@ -439,7 +454,7 @@ privStr.incl("pad")
 privStr.incl("unused")
 privStr.incl("privateData")
 
-# These objects are plain structs like GtkTextIter containing only findamental data types like uint32.
+# These objects are plain structs like GtkTextIter containing only fundamental data types like uint32.
 # They are generally allocated on the stack, so there is no alloc or free function offered by gtk.
 # If all these conditions are met, then we do not need a proxy object. Caution, some objects like
 # TextAttribute has bitfields, which is difficult to map to Nim. Watch for cstrings too!
@@ -552,13 +567,42 @@ glib.SList
 glib.List
 nice.Address
 gst.MapInfo
+gstvideo.VideoAlignment
 gstvideo.VideoRectangle
 gstrtsp.RTSPRange
 gstrtsp.RTSPTimeRange
 gstrtsp.RTSPTime
 gstrtsp.RTSPTime2
 gtk.CssLocation
+gstvideo.VideoFrame
+gstvideo.VideoMeta
+gstvideo.VideoFormatInfo
+gstvideo.VideoMasteringDisplayInfo
+gstvideo.VideoCaptionMeta
+gstvideo.VideoCropMeta
+gstvideo.VideoTimeCodeConfig
+gstvideo.VideoContentLightLevel
+gstvideo.VideoAncillary
+gstvideo.VideoColorimetry
+gstvideo.VideoMetaTransform
+gstvideo.VideoResampler
+gstsdp.MIKEYEncryptInfo
+gstsdp.MIKEYPayloadKEMAC
+gstsdp.SDPAttribute
+gstsdp.MIKEYPayloadSP
+gstsdp.MIKEYPayloadRAND
+gstsdp.MIKEYPayloadKeyData
+gstsdp.MIKEYPayloadPKE
+gstrtp.RTCPPacket
+gstrtp.RTCPBuffer
+gstrtp.RTPBuffer
+gstcheck.StreamConsistency
+gstcheck.HarnessThread
+gstcheck.CheckABIStruct
+gstcheck.Harness
 """
+
+
 
 const autoCallerAlloc = """
 """
@@ -690,7 +734,82 @@ nice.InputMessage
 nice.OutputMessage
 gio.InputMessage
 gio.OutputMessage
+gstvideo.VideoTimeCodeMeta
+gstvideo.VideoGLTextureUploadMeta
+gstvideo.VideoAFDMeta
+gstvideo.VideoOverlayCompositionMeta
+gstvideo.VideoRegionOfInterestMeta
+gstvideo.VideoAffineTransformationMeta
+gstvideo.VideoColorPrimariesInfo
+gstmpegts.T2DeliverySystemCellExtension
+gstmpegts.SatelliteDeliverySystemDescriptor
+gstmpegts.AtscEITEvent
+gstmpegts.AtscStringSegment
+gstmpegts.AtscETT
+gstmpegts.BAT
+gstmpegts.EIT
+gstmpegts.DvbMultilingualNetworkNameItem
+gstmpegts.ISO639LanguageDescriptor
+gstmpegts.LogicalChannelDescriptor
+gstmpegts.BATStream
+gstmpegts.AtscVCT
+gstmpegts.DVBLinkageEvent
+gstmpegts.T2DeliverySystemCell
+gstmpegts.TOT
+gstmpegts.ExtendedEventItem
+gstmpegts.ComponentDescriptor
+gstmpegts.AtscMultString
+gstmpegts.DVBLinkageMobileHandOver
+gstmpegts.TerrestrialDeliverySystemDescriptor
+gstsdp.SDPBandwidth
+gstsdp.SDPAttribute
+gstsdp.SDPConnection
+gstsdp.MIKEYPayloadSPParam
+gstsdp.SDPZone
+gstsdp.SDPTime
+gstsdp.MIKEYMapSRTP
+gstsdp.SDPOrigin
+gstsdp.SDPKey
+gstrtp.RTPPayloadInfo
+gstrtp.RTPSourceMeta
+soup.MessageHeadersIter
+soup.Range
+soup.Connection
+soup.MessageQueueItem
+soup.MessageQueue
+gstgl.GLMemory
+gstgl.GLFuncs
+gstgl.GLRenderbuffer
+gstgl.GLSyncMeta
+gstgl.GLBuffer
+gstgl.GLMemoryPBO
+gstsdp.MIKEYDecryptInfo
+gstsdp.MIKEYPayloadT
+javascriptcore.ClassVTable
+gstaudio.AudioRingBufferSpec
+gstaudio.AudioDownmixMeta
+gstaudio.AudioCdSrcTrack
+gstaudio.AudioClippingMeta
+gstaudio.AudioMeta
+gstaudio.AudioBuffer
+gstaudio.AudioSinkClassExtension
+gstaudio.AudioFormatInfo
+gdkpixbuf.PixbufModulePattern
+gdkpixbuf.PixbufModule
+glib.TreeNode
+glib.UriParamsIter
+gstvideo.VideoBarMeta
+gstvideo.VideoMasteringDisplayInfoCoordinates
+gstnet.NetControlMessageMeta
+gstnet.NetAddressMeta
+gstbase.CollectData
+gstrtsp.RTSPWatchFuncs
+gstcheck.CheckLogFilter
+gtk.PrintBackend
+gsk.ParseLocation
 """"
+# some structs like glib.TreeNode are hard, as some functions returns pointers to that struct, and still we need field access!
+# same for gtk.PrintBackend
 
 var callerAlloc = (manCallerAlloc & autoCallerAlloc).split.toHashSet
 #var callerAlloc = (autoCallerAlloc).split.toHashSet
@@ -1090,7 +1209,9 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
     let tag = gTypeInfoGetTag(tt)
     if tag == GITypeTag.INTERFACE:
       let iface = gTypeInfoGetInterface(tt)
-      if gBaseInfoGetType(iface) == GIInfoType.Object and gObjectInfoGetFundamental(iface) == GFalse:
+      if gBaseInfoGetType(iface) == GIInfoType.INTERFACE or (gBaseInfoGetType(iface) == GIInfoType.Object and gObjectInfoGetFundamental(iface) == GFalse): # v0.9.4
+      # https://github.com/StefanSalewski/gintro/issues/172
+      #if gBaseInfoGetType(iface) == GIInfoType.Object and gObjectInfoGetFundamental(iface) == GFalse: # does not work for gtk_tree_selection_get_selected()
         if gArgInfoGetDirection(arg) == GIDirection.OUT:
           isGObject = true
 
@@ -1201,7 +1322,7 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
       else:
         if isGobject:
           if gArgInfoIsOptional(arg):
-            result.arglist.add("cast[var " & ngr.name00 & "](if addr(" & name & ") == nil: nil else: tmpoutgobjectarg)")
+            result.arglist.add("cast[var " & ngr.name00 & "](if addr(" & name & ") == nil: nil else: addr tmpoutgobjectarg)")
           else:
             result.arglist.add("tmpoutgobjectarg")
           result.tmpoutgobjectarg = "  var tmpoutgobjectarg: " & ngr.name00 & "\n"
@@ -1241,7 +1362,8 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
         result.arglist.add(name.strip(chars = {'`'}) & "_00")
       elif needTypeConv(str, ngr):
         if str == "cstring" and mayBeNil:
-          result.arglist.add("safeStringToCString" & '(' & name & ')')
+          # result.arglist.add("safeStringToCString" & '(' & name & ')')
+          result.arglist.add(name) # v0.9.4
         else:
           if str != "string" and str != "cstring":
             result.arglist.add(str & '(' & name & ')')
@@ -1280,9 +1402,14 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
         if name == h1 and str == h2:
           str.add(" = " & h3)
 
-    if genProxy and (str == "string" or str == "cstring") and mayBeNil and not sym.contains("_button_new_with_label"):
-
+    #if genProxy and (str == "string" or str == "cstring") and mayBeNil and not sym.contains("_button_new_with_label"):
+    #  str.add(" = \"\"")
+    # v0.9.4
+    if genProxy and (str == "string") and mayBeNil and not sym.contains("_button_new_with_label"):
       str.add(" = \"\"")
+    if genProxy and (str == "cstring") and mayBeNil and not sym.contains("_button_new_with_label"):
+      str.add(" = nil")
+
     if genProxy and m == 0:
       if sym.contains("_set_") and str == "bool":
         str.add(" = true")
@@ -1609,7 +1736,8 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
       let tag = gTypeInfoGetTag(tt)
       if tag == GITypeTag.INTERFACE:
         let iface = gTypeInfoGetInterface(tt)
-        if gBaseInfoGetType(iface) == GIInfoType.Object and gObjectInfoGetFundamental(iface) == GFalse:
+        #if gBaseInfoGetType(iface) == GIInfoType.Object and gObjectInfoGetFundamental(iface) == GFalse: # before v0.9.4
+        if gBaseInfoGetType(iface) == GIInfoType.INTERFACE or (gBaseInfoGetType(iface) == GIInfoType.Object and gObjectInfoGetFundamental(iface) == GFalse):
           if gArgInfoGetDirection(arg) == GIDirection.OUT:
             isGObject = true
 
@@ -1652,11 +1780,14 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
           if out2ret:# and genProxy:
             h2 = "result"
 
+        if gArgInfoMayBeNull(arg):
+          nilArgFix.add(h2)
         if gArgInfoIsOptional(arg):
           methodBuffer.writeLine("  if addr($2) != nil:" % [ngrt.namePlain, h2])
           if boxedFreeMeName != "":
             methodBuffer.writeLine("    fnew(" & h2 & ", " & boxedFreeMeName & ")")
           elif freeMeName == "":
+            # never executed
             methodBuffer.writeLine("    new(" & h2 & ")")
           else:
             methodBuffer.writeLine("    fnew(" & h2 & ", " & freeMeName & ")")
@@ -1664,6 +1795,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
           if boxedFreeMeName != "":
             methodBuffer.writeLine("  fnew(" & h2 & ", " & boxedFreeMeName & ")")
           elif freeMeName == "":
+            # never executed
             methodBuffer.writeLine("  new(" & h2 & ")")
           else:
             methodBuffer.writeLine("  fnew(" & h2 & ", " & freeMeName & ")")
@@ -1710,6 +1842,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
   #  echo sym
   #  return
 
+  var nilArgFix: seq[string]
   var pars: GPars
   let p = methodBuffer.getPosition
   let symIsDeprecated = gBaseInfoIsDeprecated(mInfo).int != 0
@@ -1725,6 +1858,9 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
 
   # The following functions work with arrays, we should check each carefully -- some may not compile...
   #if sym == "g_io_channel_read_to_end": return # fix later
+
+  if sym == "g_file_enumerator_iterate": return # two gobject var out parameters, hard to support
+
   if sym == "g_boxed_free": return # this is manually added at early position already
   if sym == "gst_param_spec_fraction": return # fix later
   if sym == "gst_param_spec_array": return # fix later
@@ -1779,6 +1915,8 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
 
   if sym == "nice_agent_get_selected_pair": return #  was very wrong, fixed manually
   if sym == "g_hash_table_destroy": return
+
+  if sym == "g_variant_ref_sink": return # we need this early, so add manually early
 
   try:
 
@@ -1859,7 +1997,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
         # export only low level symbols that are needed internally -- maybe we should export only a private name for them
         if run == 0 and not tryOut2Ret:
           if sym in ["g_quark_from_static_string", "g_error_free", "g_object_get_qdata", "g_object_ref_sink", "g_object_unref", "g_param_spec_ref_sink",
-            "g_timeout_add_full", "g_object_is_floating", "gst_bus_add_watch_full", "g_object_ref", "g_date_time_format", "gdk_event_ref", 
+            "g_timeout_add_full", "g_object_is_floating", "gst_bus_add_watch_full", "g_object_ref", "g_date_time_format", "gdk_event_ref", "g_strdup",  
             "g_type_from_name", "g_type_check_instance_is_a", "g_idle_add_full", "g_quark_try_string", "vte_regex_unref", "gtk_expression_ref",
             "gtk_builder_get_object", "g_action_map_add_action", "gtk_drawing_area_set_draw_func", "g_io_add_watch_full"]:
             methodBuffer.write("\nproc " & sym & EM & pars.plist)
@@ -1879,7 +2017,8 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
           let tag = gTypeInfoGetTag(ret2)
           if tag == GITypeTag.INTERFACE:
             let iface = gTypeInfoGetInterface(ret2)
-            if gBaseInfoGetType(iface) == GIInfoType.Object and gObjectInfoGetFundamental(iface) == GFalse:
+            #if gBaseInfoGetType(iface) == GIInfoType.Object and gObjectInfoGetFundamental(iface) == GFalse: # the same here!
+            if gBaseInfoGetType(iface) == GIInfoType.INTERFACE or (gBaseInfoGetType(iface) == GIInfoType.Object and gObjectInfoGetFundamental(iface) == GFalse):
               isGObject = true
           pars = genPars(mInfo, true, info, tryOut2Ret = tryOut2Ret)
 
@@ -1987,7 +2126,8 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
                       ### methodBuffer.writeLine("  result.ignoreFinalizer = true") # as we have always to attach one with ARC.
               else: assert false
               if ((gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) != 0 and gBaseInfoGetName(info) == "Variant"):
-                methodBuffer.writeLine("  result.ignoreFinalizer = true")
+                # methodBuffer.writeLine("  result.ignoreFinalizer = true") # before v0.9.5
+                methodBuffer.writeLine("  discard g_variant_ref_sink(result.impl)")
               if (gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) == 0:
                 break
           elif ngrRet.res == glist:
@@ -2143,7 +2283,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
               else:
                 methodBuffer.writeLine("  " & doCt3nt(ngrRet.name, ngrRet) & '(' & "resul0" & ')')
             else:
-              if pars.tempResFree != "": # ugly, do we have a better test for this case
+              if nilArgFix.len > 0 or pars.tempResFree != "": # ugly, do we have a better test for this case
               #if ngrRet.name != "void":
                 methodBuffer.writeLine("  result = " & doCt3nt(ngrRet.name, ngrRet) & '(' & sym & pars.arglist & ')')
               else:
@@ -2183,6 +2323,11 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
           if asym != "errorQuark" and asym != "getPlugin" and asym != "quark":
             methodBuffer.write("\nproc " & asym & EM & pars.plist)
             methodBuffer.writeLine(" {.\n    importc: \"", sym, "\", ", libprag, ".}")
+
+      for n in nilArgFix: # https://github.com/StefanSalewski/gintro/issues/158
+        methodBuffer.writeLine("  if $1 != nil and $1.impl == nil:" % n)
+        methodBuffer.writeLine("    $1.ignoreFinalizer = true" % n)
+        methodBuffer.writeLine("    $1 = nil" % n)
 
       if pars.tmpoutgobjectarg.len != 0:
         methodBuffer.writeLine("#  dothemagic(" & pars.outgobjectargname)
@@ -2233,11 +2378,6 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
     delayedMethods.add((info, minfo))
     methodBuffer.cut(p)
 
-#proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
-#
-#  writeMethodImpl(info, minfo)
-#  #writeMethodImpl(info, minfo, false)
-
 template genBoxedFree =
   if not callerAlloc.contains(($gBaseInfoGetNamespace(info)).toLowerAscii & '.' & mangleName(gBaseInfoGetName(info))):
     if gRegisteredTypeInfoGetGType(info) != G_TYPE_NONE and gTypeFundamental(gRegisteredTypeInfoGetGType(info)) ==
@@ -2263,6 +2403,10 @@ template genBoxedFree =
       #output.writeLine("\nwhen compileOption(\"gc\", \"arc\"):") # the when is not really needed, currently default gc ignores destructor
       output.writeLine("\nwhen defined(gcDestructors):")
       output.writeLine("  proc `=destroy`*(self: var typeof(" & mangleName(gBaseInfoGetName(info)) & "()[])) =")
+
+      output.writeLine("    when defined(gintroDebug):")
+      output.writeLine("      echo \"destroy \", $typeof(self), ' ', cast[int](unsafeaddr self)")
+
       output.writeLine("    if not self.ignoreFinalizer and self.impl != nil:")
       output.writeLine("      boxedFree(", getTypeProc, "(), ", "cast[ptr " & mangleName(gBaseInfoGetName(info)) & "00](self.impl))")
       output.writeLine("      self.impl = nil")
@@ -2311,6 +2455,10 @@ template genDestroyFreeUnref =
           # methodBuffer.writeLine("\nwhen compileOption(\"gc\", \"arc\"):")
           methodBuffer.writeLine("\nwhen defined(gcDestructors):")
           methodBuffer.writeLine("  proc `=destroy`*(self: var typeof(" & mangleName(gBaseInfoGetName(info)) & "()[])) =")
+
+          methodBuffer.writeLine("    when defined(gintroDebug):")
+          methodBuffer.writeLine("      echo \"destroy \", $typeof(self), ' ', cast[int](unsafeaddr self)")
+
           methodBuffer.writeLine("    if not self.ignoreFinalizer and self.impl != nil:")
           if gTypeInfoGetTag(xret2) == GITypeTag.VOID:
             methodBuffer.writeLine("      $1(self.impl)" % [$gFunctionInfoGetSymbol(freeMe)])
@@ -2451,6 +2599,10 @@ proc writeStruct(info: GIStructInfo) =
     output.writeLine("  " & mangleName(gBaseInfoGetName(info)) & EM & " = Event")
     return
 
+  # https://github.com/StefanSalewski/gintro/issues/176
+  if gBaseInfoGetName(info) == "Rectangle" and moduleNamespace == "cairo":
+    cairoProvidesRectangle = true
+
   if gBaseInfoGetName(info) == "Address" and moduleNamespace == "nice":
     #import nativesockets
     # See https://gitlab.freedesktop.org/libnice/libnice/-/blob/master/agent/address.h
@@ -2481,7 +2633,10 @@ proc writeStruct(info: GIStructInfo) =
       # echo "XXXXXXXXXXXXX",  gFieldInfoGetSize(field)
     #if mangleName(gBaseInfoGetName(info)) != "TextIter":
   if not callerAlloc.contains(($gBaseInfoGetNamespace(info)).toLowerAscii & '.' & mangleName(gBaseInfoGetName(info))):
-    output.writeLine("  ", mangleName(gBaseInfoGetName(info)) & EM & " = ref object")
+    if moduleNameSpace == "cairo": # see https://forum.nim-lang.org/t/8309
+      output.writeLine("  ", mangleName(gBaseInfoGetName(info)) & EM & " = ref object of RootRef")
+    else:
+      output.writeLine("  ", mangleName(gBaseInfoGetName(info)) & EM & " = ref object")
     output.writeLine("    impl*: ptr " & mangleName(gBaseInfoGetName(info)) & "00")
     output.writeLine("    ignoreFinalizer*: bool")
   writeGetTypeProc()
@@ -2515,6 +2670,11 @@ proc writeStruct(info: GIStructInfo) =
     output.writeLine(KeymapKeyProx)
   if mangleName(gBaseInfoGetName(info)) == "PageRange":
     output.writeLine(PageRangeProx)
+
+  if gBaseInfoGetName(info) == "Variant" and moduleNamespace == "glib": # make it available early
+    output.writeLine("\nproc g_variant_ref_sink(self: ptr Variant00): ptr Variant00 {.importc, libprag.}")
+
+
   for i, mInfo in mseq:
     writeMethod(info, minfo)
     if i == 0:
@@ -2650,9 +2810,9 @@ proc writeEnum(info: GIEnumInfo) =
     return
   type T = tuple[v: int64; n: string]
   var s: seq[T]
-  # var alias: seq[string]
   var alias: HashSet[string] # double entry in gstvideo, see https://discourse.gnome.org/t/gstvideo-1-0-gir-double-entries/5442
   var flags = ($gBaseInfoGetName(info)).endsWith("Flags")
+  var flagDefault: string 
   output.writeLine("type")
   let n = info.gEnumInfoGetNValues()
   for j in 0.cint ..< n:
@@ -2669,7 +2829,8 @@ proc writeEnum(info: GIEnumInfo) =
   for j in 0 .. s.high:
     if s[j].v < 0:
       flags = false
-    if j == 0 and s[j].v == 0: continue
+    if j == 0 and s[j].v == 0:
+      continue
     if bitops.popCount(s[j].v) != 1: flags = false
   if s.len <= 1: flags = false
   var tname = mangleName(gBaseInfoGetName(info))
@@ -2684,7 +2845,12 @@ proc writeEnum(info: GIEnumInfo) =
   for j in 0 .. s.high:
     let i = s[j]
     var val = i.v
-    if flags and j == 0 and val == 0: continue
+    if flags and j == 0 and val == 0:
+      # proc c(t: typedesc[B]): B ={}
+      flagDefault = ("  " & tname & "Flags" & i.n.capitalizeAscii & EM & " = " & tname & "Flags" & "({})")
+      flagDefault.add("\nproc " & i.n & "*(t: typedesc[" & tname & "Flags]): " & tname & "Flags = " & tname & "Flags" & "({})")
+      #echo flagDefault
+      continue
     if j > 0 and i.v == k.v:
       if i.n != k.n:
         let h = if flags: "Flag" else: ""
@@ -2698,10 +2864,12 @@ proc writeEnum(info: GIEnumInfo) =
   if flags:
     output.writeLine("\n  ", tname & "Flags" & EM, " {.size: sizeof(cint).} = set[$1Flag]" % [tname])
 
-  if alias.len > 0:
+  if alias.len > 0 or flagDefault.len > 0:
     output.writeLine("\nconst")
     for i in alias:
       output.writeLine(i)
+    if flagDefault.len > 0:
+      output.writeLine(flagDefault)
 
   for j in 0.cint ..< gEnumInfoGetNMethods(info):
     let mInfo = gEnumInfoGetMethod(info, j)
@@ -2884,6 +3052,10 @@ proc writeObj(info: GIObjectInfo) =
         output.writeLine("    $1(self.impl)" % [freeMeName])
       output.writeLine("\nwhen defined(gcDestructors):")
       output.writeLine("  proc `=destroy`*(self: var typeof(" & mangleName(gBaseInfoGetName(info)) & "()[])) =")
+
+      output.writeLine("    when defined(gintroDebug):")
+      output.writeLine("      echo \"destroy \", $typeof(self), ' ', cast[int](unsafeaddr self)")
+
       output.writeLine("    if not self.ignoreFinalizer and self.impl != nil:")
       if n in ["ParamArray", "ParamFraction"]:
         output.writeLine("      $#(cast[ptr $#00](self.impl))" % [freeMeName, n])
@@ -3137,12 +3309,12 @@ const GObject_EPI = """
 #  let p = cast[ptr cuint](cast[int](o.impl) + sizeof(pointer))
 #  return p[].int
 
-
 proc scNotify*(self: Object;  p: proc (self: ptr Object00; paramSpec: ptr ParamSpec00; xdata: pointer) {.cdecl.}, xdata: pointer, cf: gobject.ConnectFlags; sigName: cstring): culong =
   # g_signal_connect_data(self.impl, "notify::cursor-position", cast[GCallback](p), xdata, nil, cf)
   g_signal_connect_data(self.impl, sigName, cast[GCallback](p), xdata, nil, cf)
 
-
+proc typeCheckInstanceIsA*(instance: Object; ifaceType: GType): bool =
+  toBool(g_type_check_instance_is_a(cast[ptr TypeInstance00](instance.impl), ifaceType))
 
 # similar to gobjectTemp()
 proc glistObjects2seq*[T](t: typedesc[T]; l: ptr glib.List; elTransferFull: bool): seq[T] =
@@ -3261,6 +3433,7 @@ proc seq2GSList*[T](s: seq[T]): ptr glib.SList =
 
 #include gimplgobj
 include gimplglib
+export glib.g_strdup
 
 """
 
@@ -3416,8 +3589,8 @@ proc gtk_file_chooser_dialog_new*(title: cstring; parent: ptr Window00; action: 
     firstButtonText: cstring = nil): ptr FileChooserDialog00 {.varargs,
     importc: "gtk_file_chooser_dialog_new", libprag.}
 
-proc newFileChooserDialog*(title: string = ""; parent: Window = nil; action: FileChooserAction): FileChooserDialog =
-  let gobj = gtk_file_chooser_dialog_new(safeStringToCString(title), if parent.isNil: nil else: cast[ptr Window00](parent.impl), action)
+proc newFileChooserDialog*(title: cstring = nil; parent: Window = nil; action: FileChooserAction): FileChooserDialog =
+  let gobj = gtk_file_chooser_dialog_new(title, if parent.isNil: nil else: cast[ptr Window00](parent.impl), action)
   if g_object_get_qdata(gobj, Quark) != nil:
     result = cast[type(result)](g_object_get_qdata(gobj, Quark))
     assert(result.impl == gobj)
@@ -3431,9 +3604,9 @@ proc newFileChooserDialog*(title: string = ""; parent: Window = nil; action: Fil
     assert(g_object_get_qdata(result.impl, Quark) == nil)
     g_object_set_qdata(result.impl, Quark, addr(result[]))
 
-proc initFileChooserDialog*[T](result: var T; title: string = ""; parent: Window = nil; action: FileChooserAction) =
+proc initFileChooserDialog*[T](result: var T; title: cstring = nil; parent: Window = nil; action: FileChooserAction) =
   assert(result is FileChooserDialog)
-  let gobj = gtk_file_chooser_dialog_new(safeStringToCString(title), if parent.isNil: nil else: cast[ptr Window00](parent.impl), action)
+  let gobj = gtk_file_chooser_dialog_new(title, if parent.isNil: nil else: cast[ptr Window00](parent.impl), action)
   if g_object_get_qdata(gobj, Quark) != nil:
     result = cast[type(result)](g_object_get_qdata(gobj, Quark))
     assert(result.impl == gobj)
@@ -3676,7 +3849,7 @@ proc cstringArrayToSeq*(s: ptr cstring): seq[string] =
     output.writeLine("proc cogfree*(mem: pointer) {.importc: \"g_free\", libprag.}")
     output.writeLine("proc g_strfreev*(strArray: ptr cstring) {.importc: \"g_strfreev\", libprag.}")
     output.writeLine("proc toBool*(g: gboolean): bool = g.int != 0")
-    output.writeLine("proc safeStringToCString*(s: cstring): cstring = (if s.len == 0: nil else: s)")
+    # output.writeLine("proc safeStringToCString*(s: cstring): cstring = (if s.len == 0: nil else: s)")
     output.writeLine(PRO)
   elif namespace == "Gdk":
     discard
@@ -3752,6 +3925,8 @@ proc cstringArrayToSeq*(s: ptr cstring): seq[string] =
       s.insert([h])
       break
 
+  # NOTE: We may? remove all structs from xcallerAlloc when that struct ever is returned by a function! # v0.9.5
+  # And we may remove all structs with a GType!
   # https://discourse.gnome.org/t/what-is-the-difference-between-gmutex-and-gchecksum/4542
   if namespace notin ["HarfBuzz", "cairo"]: # auto-detecting the "light" entities is too hard, but here we get some candidates
     for info in s:
@@ -3761,36 +3936,41 @@ proc cstringArrayToSeq*(s: ptr cstring): seq[string] =
       let n = gBaseInfoGetName(info)
       if n[0] != '_' and not n.endsWith("Private") and not (namespace == "Gdk" and n.startsWith("Event")) and not (namespace ==
           "Pango" and n.startsWith("Attribute")):
-        if gBaseInfoGetType(info) == GIInfoType.STRUCT:
-          if not ((gStructInfoIsGtypeStruct(info) and n != "ObjectClass")):
+
+        if not isRegisteredTypeInfo(info) or gRegisteredTypeInfoGetGType(info) == G_TYPE_NONE: # v0.9.5
+
+          if gBaseInfoGetType(info) == GIInfoType.STRUCT:
+            # if not ((gStructInfoIsGtypeStruct(info) and n != "ObjectClass")): # v0.9.4 with Debian Buster crash
+            # if (not gStructInfoIsGtypeStruct(info) or (n == "ObjectClass")): # equivalent to above
+            if (not gStructInfoIsGtypeStruct(info) and (n != "ObjectClass")): # this may work -- the same as suggested by Mr. 1jss 
+              var lightObj = true
+              for n in "free unref  get_qdata".split:
+                if gStructInfoFindMethod(info, n) != nil: # crash for legacy Debian Buster
+                  lightObj = false
+              if lightObj:
+                for j in 0.cint ..< gStructInfoGetNMethods(info):
+                  let minfo = gStructInfoGetMethod(info, j)
+                  if (gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) != 0:
+                    lightObj = false
+              if lightObj:
+                let el = moduleNamespace & '.' & $n
+                if not manCallerAlloc.contains(el) and not noCallerAlloc.contains(el):
+                  xcallerAlloc.incl(el)
+
+          if gBaseInfoGetType(info) == GIInfoType.UNION:
             var lightObj = true
             for n in "free unref  get_qdata".split:
-              if gStructInfoFindMethod(info, n) != nil:
+              if gUnionInfoFindMethod(info, n) != nil:
                 lightObj = false
             if lightObj:
-              for j in 0.cint ..< gStructInfoGetNMethods(info):
-                let minfo = gStructInfoGetMethod(info, j)
+              for j in 0.cint ..< gUnionInfoGetNMethods(info):
+                let minfo = gUnionInfoGetMethod(info, j)
                 if (gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) != 0:
                   lightObj = false
             if lightObj:
               let el = moduleNamespace & '.' & $n
               if not manCallerAlloc.contains(el) and not noCallerAlloc.contains(el):
                 xcallerAlloc.incl(el)
-
-        if gBaseInfoGetType(info) == GIInfoType.UNION:
-          var lightObj = true
-          for n in "free unref  get_qdata".split:
-            if gUnionInfoFindMethod(info, n) != nil:
-              lightObj = false
-          if lightObj:
-            for j in 0.cint ..< gUnionInfoGetNMethods(info):
-              let minfo = gUnionInfoGetMethod(info, j)
-              if (gFunctionInfoGetFlags(mInfo).int and GIFunctionInfoFlags.IS_CONSTRUCTOR.int) != 0:
-                lightObj = false
-          if lightObj:
-            let el = moduleNamespace & '.' & $n
-            if not manCallerAlloc.contains(el) and not noCallerAlloc.contains(el):
-              xcallerAlloc.incl(el)
 
   for info in s:
     if gBaseInfoGetType(info) == GIInfoType.OBJECT:
@@ -4046,7 +4226,18 @@ proc get$1*(builder: Builder; name: string): $1 =
     output.write(Nice_EPI)
 
   if namespace == "cairo":
-    output.write("include cairoimpl\n")
+    if not cairoProvidesRectangle:
+      output.writeLine("""
+type
+  Rectangle* {.pure, byRef.} = object
+    x*: cdouble
+    y*: cdouble
+    width*: cdouble
+    height*: cdouble
+
+proc cairo_gobject_rectangle_get_type*(): GType {.importc, libprag.}
+""")
+    output.write("\ninclude cairoimpl\n")
 
   if namespace == "GObject":
     output.writeLine("\nproc g_type_invalid_get_type*(): GType = g_type_from_name(\"(null)\")")
@@ -4264,12 +4455,16 @@ launch()
 #  if not callerAlloc.contains(el):
 #    echo "maybe add: ", el
 
+#for el in xcallerAlloc:
+#  if not callerAlloc.contains(el):
+#    echo "maybe add: ", el
+
 #echo "---"
 #for el in oldcallerAlloc:
 #  if not xcallerAlloc.contains(el):
 #    echo el
 
-# 4263 lines defaultParameters
+# 4467 lines
 # gtk_icon_view_get_tooltip_context bug Candidate
 # gtk_tree_view_get_cursor bug
 #

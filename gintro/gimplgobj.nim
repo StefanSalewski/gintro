@@ -200,7 +200,10 @@ proc $1$2 {.cdecl.} =
 
     if resl == "int32":
       resu.add(".int32")
-
+      
+    if resl == "cstring":
+      resu.add(".g_strdup")
+      
     r1s.add(resu & "\n")
     all = all.replace(")", "; user_data: pointer)")
 
