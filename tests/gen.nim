@@ -4401,10 +4401,10 @@ proc launch() =
     main("Adw") # replaces libhandy for GTK4
     main("Nice")
     main("cairo")
-    main("WebKit2", "5.0")
-    main("JavaScriptCore", "5.0")
+    main("WebKit2", "4.0")
+    main("JavaScriptCore", "4.0")
     main("Soup")
-    main("WebKit2WebExtension", "5.0")
+    main("WebKit2WebExtension", "4.0")
     main("Gst")
     main("GstBase")
     main("GstAllocators")
