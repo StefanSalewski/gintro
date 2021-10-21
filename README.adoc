@@ -1,6 +1,6 @@
 = High level GTK4 and GTK3 bindings for the Nim programming language
 //(c) Stefan Salewski                                     
-//Version 0.9.5
+//Version 0.9.6
 :experimental:
 :imagesdir: http://ssalewski.de/tmp
 //:source-highlighter: pygments
@@ -29,7 +29,13 @@ with code inserted from files directly.
 NOTE: This work is partly based on earlier works of J. Mansour and has been supported by A. Rumpf, E. Bassi and other _Nim_ and _GTK/Gnome_ developers.
 The `combinatorics` module was kindly provided by R. Behrends.
 
-NOTE: This is version 0.9.5 of the gintro Nim GTK bindings. We added a patch to support very old GTK3 versions
+NOTE: This is version 0.9.6 of the gintro Nim GTK bindings. We tried to fix a bug related to the appearance of libsoup 3.0.
+When gobject-introspection was first processing libnice, it loads old libsoup 2.4 and when then processing linsoup 3.0
+name conflicts lead to error messages and the install process hung. Now we process always libsoup in version 2.4 and 3.0
+before libnice, this seems to work. For libsoup 2.4 we generate a module called libsoup.nim as before, and the
+libsoup 3.0 module is now called libsoup3.nim.  
+
+NOTE: For version 0.9.5 of the gintro Nim GTK bindings we added a patch to support very old GTK3 versions
 like Debian Buster, updated the list of "light symbols" like Rectangle, TextIter and such that do not
 need Nim Proxy objects, and finally fixed a recent glib proc name conflict.
 
