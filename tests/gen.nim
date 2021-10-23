@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK4/GTK3 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.9.5 2021-OCT-01
+# v 0.9.6 2021-OCT-20
 # (c) S. Salewski 2018, 2019, 2020, 2021
 
 # usefull for finding death code:
@@ -400,6 +400,8 @@ proc fixedModName(s: string): string =
     result &= "5"
   if not ISGTK3 and (s == "gtksource"):
     result &= "5"
+  if not ISGTK3 and (s == "libsoup"):
+    result &= "3"
 
 proc gBaseInfoGetName(info: GIBaseInfo): string =
   result = $(gir.gBaseInfoGetName(info))
@@ -4288,6 +4290,12 @@ proc cairo_gobject_rectangle_get_type*(): GType {.importc, libprag.}
     if version == "5.0":
       suff = "5"
 
+  if namespace == "Soup":
+    if version == "2.4":
+      suff = ""
+    if version == "3.0":
+      suff = "3"
+
   var o = open("nim_gi" / (namespace.toLowerAscii) & suff & ".nim", fmWrite)
   o.write(output.data)
   o.close()
@@ -4345,11 +4353,12 @@ proc launch() =
     main("Vte")
     main("Notify")
     main("Handy")
+    main("Soup", "2.4") # process Soup before Nice, preventing the load of not matching libsoup version
     main("Nice")
     main("cairo")
     main("WebKit2", "4.0")
     main("JavaScriptCore", "4.0")
-    main("Soup")
+    #main("Soup", "2.4")
     main("WebKit2WebExtension", "4.0")
     main("Gst")
     main("GstBase")
@@ -4399,11 +4408,12 @@ proc launch() =
     main("Notify")
     # main("Handy") # not yet available for GTK4
     main("Adw") # replaces libhandy for GTK4
-    main("Nice")
+    main("Soup", "3.0") # process Soup before Nice, preventing the load of not matching libsoup version
+    main("Nice") # https://discourse.gnome.org/t/some-libsoup-3-issue/7807/14 
     main("cairo")
     main("WebKit2", "5.0")
     main("JavaScriptCore", "5.0")
-    main("Soup")
+    #main("Soup", "3.0")
     main("WebKit2WebExtension", "5.0")
     main("Gst")
     main("GstBase")
@@ -4464,7 +4474,7 @@ launch()
 #  if not xcallerAlloc.contains(el):
 #    echo el
 
-# 4467 lines
+# 4477 lines
 # gtk_icon_view_get_tooltip_context bug Candidate
 # gtk_tree_view_get_cursor bug
 #
