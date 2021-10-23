@@ -15,7 +15,7 @@ proc setupCarousel(): Carousel =
   for i in 0 ..< N_PAGES:
     result.append (createPage (i))
 
-proc appActivate(app: Application) =
+proc appActivate(app: adw.Application) =
   let 
     window = adw.newApplicationWindow(app)
     carousel = setupCarousel()
@@ -30,6 +30,7 @@ proc appActivate(app: Application) =
   carousel.vexpand = true
   carouselIndicatorDots.carousel = carousel
   carouselIndicatorLines.carousel = carousel
+
   with mainBox:
     append header
     append carousel
@@ -42,11 +43,11 @@ proc appActivate(app: Application) =
     child = mainBox
     show()
 
-proc initAdw(app: Application) = 
+proc initAdw(app: adw.Application) = 
   adw.init()
 
 proc main =
-  let app = newApplication("org.gtk.example")
+  let app = adw.newApplication("org.gtk.example", {})
   app.connect("startup", initAdw)
   app.connect("activate", appActivate)
   discard run(app)
