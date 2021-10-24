@@ -20,9 +20,8 @@ proc activate(app: gtk4.Application) =
 
   with window:
     title = "hello world"
-    defaultSize = (200, 200)
-    resizable = false
     setChild button
+    window.defaultSize = (200, 200)
     show
 
 
