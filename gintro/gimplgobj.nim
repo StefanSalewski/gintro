@@ -19,7 +19,8 @@ proc findSignal(name, obj: NimNode): string =
   let str = ($name).replace("-", "_") & RecSep
   #echo str
   if str.startsWith("notify::"):
-    return "notify!Object!1!(self: Object; paramSpec: ParamSpec)!(self: ptr Object00; paramSpec: ptr ParamSpec00)"
+    #return "notify!Object!1!(self: Object; paramSpec: ParamSpec)!(self: ptr Object00; paramSpec: ptr ParamSpec00)"
+    return "notify!gobject.Object!1!(self: gobject.Object; paramSpec: gobject.ParamSpec)!(self: ptr gobject.Object00; paramSpec: ptr gobject.ParamSpec00)" # v0.9.7
     # "size_allocate!Widget!1!(self: Widget; allocation: gdk.Rectangle)!(self: ptr Widget00; allocation: gdk.Rectangle)"
 
   var ipros: seq[string]
@@ -37,7 +38,10 @@ proc findSignal(name, obj: NimNode): string =
         var n = obj
         while true:
           if n.kind != nnkBracketExpr: break
-          var h = $getType(n)[1].toStrLit
+          #var h = $getType(n)[1].toStrLit
+          var h = n.getTypeInst.owner.strVal & '.' & $getType(n)[1].toStrLit # v0.9.7
+          #echo n.getTypeInst.owner.strVal
+
           if h.endsWith(":ObjectType"):
             h.setLen(h.len - 11)
           if h == t:
@@ -45,6 +49,8 @@ proc findSignal(name, obj: NimNode): string =
           n = getType(n)[1]
           n = getType(n)[1]
 
+
+# for v0.9.7 we use full qualified symbols -- in mconect() and in the gisup files
 # from file gisup.nim we have:
 # "remove_editable!CellArea!2!(self: CellArea; renderer: CellRenderer; editable: CellEditable | SpinButton | ComboBox | ...
 # so for signal remove_editable third parameter of handler proc can be CellEditable OR SpinButton OR ComboBox OR ...
@@ -80,10 +86,11 @@ macro mconnect(widget: gobject.Object; signal: string; p: typed; arg: typed; ign
   # let wts = getTypeInst(widget).strVal
   let wts = widget.getTypeInst.owner.strVal & '.' & widget.getTypeInst.strVal # new in v0.5.5
 
-  let ats = at.toStrLit.strVal
-
-  #assert ats == $(at.toStrLit)
-  #assert ats == at.toStrLit.strVal
+  var ats: string # v0.9.7
+  if at.kind == nnkRefTy:
+    ats = at.getType[0].strVal  & " " & at.getType[1].owner.strVal & '.' & at.getType[1].strVal
+  else:
+    ats = at.owner.strVal & '.' & at.toStrLit.strVal
 
   var signalName = ($signal).replace("-", "_") # maybe we should just use plain proc names
   var sigName: string # for the notify:: signals
@@ -155,7 +162,9 @@ proc $1$2 {.cdecl.} =
           (names[i], types[i]) = largs[i].split(": ")
           let al = largs[i + 1].split(": ")[0]
           var h = types[i]
-          h[0] = h[0].toLowerAscii
+          # h[0] = h[0].toLowerAscii # before v0.9.7
+          let xxx = h.find('.') + 1 # since v0.9.7
+          h[xxx] = h[xxx].toLowerAscii
           h.add("2seq(" & names[i] & ", " & al & ")")
           names[i] = h
           types[i].setLen(0)
@@ -376,6 +385,6 @@ $1($4)
 """ % [$procName, ats, $procNameCdecl, $arg]
   result = parseStmt(r1s & r2s)
 
-# 376 lines
+# 376 lines owner
 
 

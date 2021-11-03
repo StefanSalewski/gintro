@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK4/GTK3 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.9.6 2021-OCT-20
+# v 0.9.7 2021-NOV-02
 # (c) S. Salewski 2018, 2019, 2020, 2021
 
 # usefull for finding death code:
@@ -402,6 +402,21 @@ proc fixedModName(s: string): string =
     result &= "5"
   if not ISGTK3 and (s == "libsoup"):
     result &= "3"
+
+proc gBaseInfoGetQualifiedName(info: GIBaseInfo; modPrefix: bool = false): string =
+  if modPrefix:
+    result = ($gBaseInfoGetNamespace(info)).toLowerAscii.fixedModName & "." & $(gir.gBaseInfoGetName(info))
+    if result == "gio.Application":
+      result = "gio.GApplication"
+    if result == "gio.File":
+      result = "gio.GFile"
+  else:
+    result = $(gir.gBaseInfoGetName(info))
+    let h = $(gir.gBaseInfoGetNamespace(info))
+    if h == "Gio" and result == "Application":
+      result = "GApplication"
+    if h == "Gio" and result == "File":
+      result = "GFile"
 
 proc gBaseInfoGetName(info: GIBaseInfo): string =
   result = $(gir.gBaseInfoGetName(info))
@@ -871,6 +886,7 @@ type
     namePlain: string
     namePlainNS: string
     name00: string
+    name00NS: string
     flags: RecResFlags
     optOut: bool
 
@@ -889,7 +905,7 @@ type
     outgobjectargisoptional: bool
     outgobjectargmaybenull: bool
 
-proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; genArrayMark = false; tryOut2Ret: bool = false): GPars
+proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; genArrayMark = false; tryOut2Ret: bool = false; modPrefix: bool = false): GPars
 
 # recursive investigate that type -- resolve Arrays and Interfaces
 proc newGenRec(t: GITypeInfo; genProxy = false): RecRes =
@@ -907,14 +923,17 @@ proc newGenRec(t: GITypeInfo; genProxy = false): RecRes =
     if atag == GITypeTag.INTERFACE:
       let aface = gTypeInfoGetInterface(arrayType)
       result[3] = gBaseInfoGetType(aface)
-    var child = newGenRec(arrayType, genProxy = true).namePlain # [0]
+    var rus = newGenRec(arrayType, genProxy = true)
+    var child = rus.namePlain # [0]
     child = mangleType(mangleName(child))
     result[0] = "ptr glib.List"
     result[1] = glist
     result[2] = child
     result.namePlain = result[0]
-    result.namePlainNS = result[0]
+    result.namePlainNS = rus.namePlainNS # does not work
+    result.namePlainNS = result[0] # this is the old one, which is not really correct but works
     result.name00 = result[0]
+    result.name00NS = rus.name00NS
     return
 
   if tag == GITypeTag.GSLIST:
@@ -923,14 +942,19 @@ proc newGenRec(t: GITypeInfo; genProxy = false): RecRes =
     if atag == GITypeTag.INTERFACE:
       let aface = gTypeInfoGetInterface(arrayType)
       result[3] = gBaseInfoGetType(aface)
-    var child = newGenRec(arrayType, genProxy = true).namePlain # [0]
+    var rus = newGenRec(arrayType, genProxy = true)
+    #var child = newGenRec(arrayType, genProxy = true).namePlain # [0]
+    var child = rus.namePlain
     child = mangleType(mangleName(child))
     result[0] = "ptr glib.SList"
     result[1] = gslist
     result[2] = child
     result.namePlain = result[0]
+    result.namePlainNS = rus.namePlainNS # does not work
     result.namePlainNS = result[0]
     result.name00 = result[0]
+    #result.name00NS = result[0] # TODO as above!
+    result.name00NS = rus.name00NS
     return
 
   if tag == GITypeTag.ARRAY:
@@ -942,7 +966,8 @@ proc newGenRec(t: GITypeInfo; genProxy = false): RecRes =
     elif toa == GIArrayType.C:
       let arrayType = gTypeInfoGetParamType(t, 0)
       let arrayFixedSize = gTypeInfoGetArrayFixedSize(t)
-      var child = newGenRec(arrayType).name00 # [0]
+      var rus = newGenRec(arrayType)
+      var child = rus.name00 # [0]
       child = mangleType(mangleName(child))
       if arrayFixedSize != -1:
         result[0] = "array[$1, $2]" % [$arrayFixedSize, child]
@@ -951,6 +976,8 @@ proc newGenRec(t: GITypeInfo; genProxy = false): RecRes =
         result.namePlain = result[0]
         result.namePlainNS = result[0]
         result.name00 = result[0]
+        result.name00NS = "ptr " & rus.name00NS # "ptr " & fixedModName(ns) & '.' &
+        assert result.name00NS.find('.') > 0
         if gTypeInfoIsZeroTerminated(t):
           result.flags.incl(RecResFlag.zeroTerminated)
           result[1] = intA0
@@ -982,6 +1009,7 @@ proc newGenRec(t: GITypeInfo; genProxy = false): RecRes =
         if not (genProxy or callerAlloc.contains(ns & '.' & result[0])):
           rawmark = "00"
       result.namePlainNS = fixedModName(ns) & '.' & result[0]
+      result.name00NS = result.namePlainNS
       if ns != moduleNamespace: #fullQualified or ns != moduleNamespace:
         result[0] = fixedModName(ns) & '.' & result[0]
   else:
@@ -990,6 +1018,9 @@ proc newGenRec(t: GITypeInfo; genProxy = false): RecRes =
   result.namePlain = result[0]
   if result.namePlainNS.len == 0:
     result.namePlainNS = result.namePlain
+
+  result.name00NS = result.namePlainNS
+
   if p and newrawmark.len == 0 and not cAlloc:
     result.namePlain = "ptr " & result.namePlain
     result.namePlainNS = "ptr " & result.namePlainNS
@@ -1000,6 +1031,12 @@ proc newGenRec(t: GITypeInfo; genProxy = false): RecRes =
     result.name00 = "ptr " & result.name00
   result.name00 = mangleType(result.name00)
   result.name00 = result.name00 & newrawmark
+
+  if p:
+    result.name00NS = "ptr " & result.name00NS
+  result.name00NS = mangleType(result.name00NS)
+  result.name00NS = result.name00NS & newrawmark
+
   if p and (not proxyResult):
     result[0] = "ptr " & result[0]
   result[0] = mangleType(result[0]) & rawmark
@@ -1124,7 +1161,7 @@ proc fixedName2(s: string): string =
   else:
     return s
 
-proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; genArrayMark = false; tryOut2Ret: bool = false): GPars =
+proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; genArrayMark = false; tryOut2Ret: bool = false; modPrefix: bool = false): GPars =
 
   proc makePList(s: seq[(string, string)]; self, r: string): string =
     result = self
@@ -1151,6 +1188,7 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
   else:
     var ns = ($gBaseInfoGetNamespace(binfo)).toLowerAscii
     if callerAlloc.contains(ns & '.' & manglename(gBaseInfoGetName(binfo))):
+      # self = "(self: " & manglename(gBaseInfoGetQualifiedName(binfo)) & "; "
       self = "(self: " & manglename(gBaseInfoGetName(binfo)) & "; "
       result.arglist = "(self"
     else:
@@ -1187,18 +1225,19 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
         arg0 = refFunc & "self.impl))"
       else:
         arg0 = "self.impl)"
-      result.arglist = "(cast[ptr " & manglename(gBaseInfoGetName(binfo)) & "00](" &
-          arg0 # "self.impl)" # https://discourse.gnome.org/t/g-arg-info-may-be-null-for-the-instace-itself/3284/7
+      result.arglist = "(cast[ptr " & manglename(gBaseInfoGetName(binfo)) & "00](" & arg0
+      #result.arglist = "(cast[ptr " & manglename(gBaseInfoGetQualifiedName(binfo)) & "00](" & arg0 # "self.impl)" # https://discourse.gnome.org/t/g-arg-info-may-be-null-for-the-instace-itself/3284/7
       # arglist = "(if self.isNil: nil else: cast[ptr " & manglename(gBaseInfoGetName(binfo)) & "00](" & "self.impl)"
       if genProxy:
-        var h = manglename(gBaseInfoGetName(binfo))
+        var h = manglename(gBaseInfoGetQualifiedName(binfo, modPrefix))
         let provider = interfaceProvider.getOrDefault(h, @[])
         if provider.len > 0:
           for i in provider: discard mangleType(i)
           h = h & " | " & provider.join(" | ")
         self = "(self: " & h & "; "
       else:
-        self = "(self: ptr " & manglename(gBaseInfoGetName(binfo)) & "00" & "; "
+        self = "(self: ptr " & manglename(gBaseInfoGetQualifiedName(binfo, modPrefix)) & "00" & "; "
+        #self = "(self: ptr " & manglename(gBaseInfoGetName(binfo)) & "00" & "; "
     if m >= 0:
       result.arglist.add(", ")
   var num = ""
@@ -1258,9 +1297,16 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
     var ngr = newGenRec(t, true)
     var str: string
     if genProxy and not gArgInfoIsCallerAllocates(arg):
-      str = ngr.namePlain
+      if modPrefix:
+        str = ngr.namePlainNS
+      else:
+        str = ngr.namePlain#NS
     else:
-      str = ngr.name00
+      if modPrefix:
+        str = ngr.name00NS
+      else:
+        str = ngr.name00#NS
+
     if genProxy and ngr.res == glist:
       result.tempRes = "  var tempResGL = seq2GList($1)\n" % [argname]
       if gArgInfoGetOwnershipTransfer(arg) == GITransfer.NOTHING:
@@ -1296,7 +1342,10 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
       hhh.delete(3, 3)
     if callerAlloc.contains(hhh):
       userAlloc = true
-      str = ngr.namePlain
+      if modPrefix:
+        str = ngr.namePlainNS
+      else:
+        str = ngr.namePlain
     if genProxy:
       let tag = gTypeInfoGetTag(t)
       if tag == GITypeTag.INTERFACE:
@@ -1478,9 +1527,11 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
       let h = gBaseInfoGetContainer(info)
       if gBaseInfoGetType(h) == GIInfoType.OBJECT:
         if genProxy:
-          resusres = ": " & mangleType(mangleName(gBaseInfoGetName(h)))
+          resusres = ": " & mangleType(mangleName(gBaseInfoGetQualifiedName(h, modPrefix)))
+          #resusres = ": " & mangleType(mangleName(gBaseInfoGetName(h)))
         else:
-          resusres = ": ptr " & mangleType(mangleName(gBaseInfoGetName(h))) & "00"
+          resusres = ": ptr " & mangleType(mangleName(gBaseInfoGetQualifiedName(h, modPrefix))) & "00"
+          #resusres = ": ptr " & mangleType(mangleName(gBaseInfoGetName(h))) & "00"
         if resusLen >= 0:
           result.blex = resus[resusLen][0]
           assert(resusIn)
@@ -2692,24 +2743,24 @@ template writeSignal() =
     memo.add(RecSep)
     var plist, arglist: string
     var replist: TableRef[string, (string, RecRes)]
-    (plist, arglist, replist) = genPars(signalInfo, true, info, genArrayMark = true)
+    (plist, arglist, replist) = genPars(signalInfo, true, info, genArrayMark = true, modPrefix = true)
     memo.add(plist)
     memo.add(RecSep)
-    (plist, arglist, replist) = genPars(signalInfo, false, info, genArrayMark = true)
+    (plist, arglist, replist) = genPars(signalInfo, false, info, genArrayMark = true, modPrefix = true)
     memo.add(plist)
     memo = memo.replace("\n    ", " ")
     memo = memo.replace("\"", "\\\"")
     if moduleNamespace == "gtk" or moduleNamespace == "gdk" or moduleNamespace == "gdkX11" or moduleNamespace == "gtksource":
       if ISGTK3:
-        supmod3.writeLine("    \"" & ($gBaseInfoGetName(signalInfo)).replace("-", "_") & RecSep & $gBaseInfoGetName(info) &
+        supmod3.writeLine("    \"" & ($gBaseInfoGetName(signalInfo)).replace("-", "_") & RecSep & $gBaseInfoGetQualifiedName(info, true) &
             RecSep & memo & "\",")
       else:
-        supmod4.writeLine("    \"" & ($gBaseInfoGetName(signalInfo)).replace("-", "_") & RecSep & $gBaseInfoGetName(info) &
+        supmod4.writeLine("    \"" & (gBaseInfoGetName(signalInfo)).replace("-", "_") & RecSep & $gBaseInfoGetQualifiedName(info, true) &
             RecSep & memo & "\",")
     else:
-      supmod3.writeLine("    \"" & ($gBaseInfoGetName(signalInfo)).replace("-", "_") & RecSep & $gBaseInfoGetName(info) & RecSep &
+      supmod3.writeLine("    \"" & ($gBaseInfoGetName(signalInfo)).replace("-", "_") & RecSep & $gBaseInfoGetQualifiedName(info, true) & RecSep &
           memo & "\",")
-      supmod4.writeLine("    \"" & ($gBaseInfoGetName(signalInfo)).replace("-", "_") & RecSep & $gBaseInfoGetName(info) & RecSep &
+      supmod4.writeLine("    \"" & ($gBaseInfoGetName(signalInfo)).replace("-", "_") & RecSep & $gBaseInfoGetQualifiedName(info, true) & RecSep &
           memo & "\",")
   if gCallableInfoGetNArgs(signalInfo) > 0:
     h = h.replace(")", "; xdata: pointer)")
@@ -3979,7 +4030,7 @@ proc cstringArrayToSeq*(s: ptr cstring): seq[string] =
       let ninterfaces = info.gObjectInfoGetNInterfaces
       if ninterfaces > 0:
         var interf: seq[string]
-        let name = $gBaseInfoGetName(info)
+        let name = gBaseInfoGetQualifiedName(info)
         for i in 0.cint ..< ninterfaces:
           var ns = ($gBaseInfoGetNamespace(info.gObjectInfoGetInterface(i))).toLowerAscii
           if ns != moduleNamespace:
@@ -3988,7 +4039,7 @@ proc cstringArrayToSeq*(s: ptr cstring): seq[string] =
             iname = fixedModName(ns) & "." & iname
             let tname = fixedModName(moduleNamespace) & "." & $gBaseInfoGetName(info)
             externInterfaces.add("proc " & fname & "*(x: " & tname & "): " & iname & " = cast[" & iname & "](x)")
-          interf.add($gBaseInfoGetName(info.gObjectInfoGetInterface(i)))
+          interf.add(gBaseInfoGetQualifiedName(info.gObjectInfoGetInterface(i)))
           let builderinter = info.gObjectInfoGetInterface(i)
           if gBaseInfoGetName(builderinter) == "Buildable":
             buildableList.add($gBaseInfoGetName(info))
@@ -3996,6 +4047,7 @@ proc cstringArrayToSeq*(s: ptr cstring): seq[string] =
           assert false
         else:
           provInt[name] = interf
+          #echo "eeeeeeeeeee", provInt[name]
 
   # Cross module interfaces -- maybe only a few, so we add it manually
   # GSimpleActionGroup implements GActionGroup and GActionMap.
@@ -4011,6 +4063,7 @@ proc cstringArrayToSeq*(s: ptr cstring): seq[string] =
   for obj, ifaces in provInt:
     for i in ifaces:
       if not interfaceProvider.contains(i):
+        #echo "fff", obj
         interfaceProvider[i] = @[obj]
       else:
         interfaceProvider[i].add(obj)
@@ -4474,7 +4527,7 @@ launch()
 #  if not xcallerAlloc.contains(el):
 #    echo el
 
-# 4477 lines
+# 4477 lines gisup4 genPars memo genRec QRS XXX seq List TODO seeq ttempResGL HHHHHH echo
 # gtk_icon_view_get_tooltip_context bug Candidate
 # gtk_tree_view_get_cursor bug
 #
