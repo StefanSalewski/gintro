@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK4/GTK3 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.9.7 2021-NOV-02
+# v 0.9.7 2021-NOV-08
 # (c) S. Salewski 2018, 2019, 2020, 2021
 
 # usefull for finding death code:
@@ -977,7 +977,8 @@ proc newGenRec(t: GITypeInfo; genProxy = false): RecRes =
         result.namePlainNS = result[0]
         result.name00 = result[0]
         result.name00NS = "ptr " & rus.name00NS # "ptr " & fixedModName(ns) & '.' &
-        assert result.name00NS.find('.') > 0
+        #echo result.name00NS
+        #assert result.name00NS.find('.') > 0
         if gTypeInfoIsZeroTerminated(t):
           result.flags.incl(RecResFlag.zeroTerminated)
           result[1] = intA0
