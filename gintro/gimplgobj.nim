@@ -87,7 +87,10 @@ macro mconnect(widget: gobject.Object; signal: string; p: typed; arg: typed; ign
   let wts = widget.getTypeInst.owner.strVal & '.' & widget.getTypeInst.strVal # new in v0.5.5
 
   var ats: string # v0.9.7
-  if at.kind == nnkRefTy:
+  
+  if at.kind == nnkTupleConstr:
+    ats = at.toStrLit.strVal
+  elif at.kind == nnkRefTy:
     ats = at.getType[0].strVal  & " " & at.getType[1].owner.strVal & '.' & at.getType[1].strVal
   else:
     ats = at.owner.strVal & '.' & at.toStrLit.strVal
