@@ -88,7 +88,10 @@ macro mconnect(widget: gobject.Object; signal: string; p: typed; arg: typed; ign
 
   var ats: string # v0.9.7
   
-  if at.kind == nnkTupleConstr:
+  #echo ">>>>>>>>", at.kind
+  #echo at.toStrLit.strVal
+  
+  if at.kind == nnkTupleConstr or at.kind == nnkTupleTy:
     ats = at.toStrLit.strVal
   elif at.kind == nnkRefTy:
     ats = at.getType[0].strVal  & " " & at.getType[1].owner.strVal & '.' & at.getType[1].strVal
