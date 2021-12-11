@@ -37,11 +37,6 @@ proc activate(app: gtk4.Application) =
     columnViewColumn2 = newColumnViewColumn("sus", factory)
     columnViewColumn3 = newColumnViewColumn("sus", factory)
 
-    # treeViewColumn = newTreeViewColumn()
-    # lv = newTreeView(ns)
-  
-  # scr.setChild columnView
-  # lv.enableRubberband = true
   with columnView:
     appendColumn columnViewColumn
     appendColumn columnViewColumn2
