@@ -1,7 +1,7 @@
 # High level gobject-introspection based GTK4/GTK3 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.9.7 2021-NOV-08
-# (c) S. Salewski 2018, 2019, 2020, 2021
+# v 0.9.8 2022-FEB-04
+# (c) S. Salewski 2018, 2019, 2020, 2021, 2022
 
 # usefull for finding death code:
 # https://forum.nim-lang.org/t/5898
@@ -552,7 +552,6 @@ glib.SequenceIter
 rsvg.Length
 gtk.TargetPair
 gtk.RequestedSize
-gdk.Atom
 gtk.TableChild
 glib.Dir
 glib.LogField
@@ -2186,8 +2185,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
                 break
           elif ngrRet.res == glist:
             var elTransferFull = gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING
-            if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo) or gCallableInfoGetCallerOwns(minfo) !=
-                GITransfer.NOTHING:
+            if gCallableInfoCanThrowGerror(minfo) or gCallableInfoMayReturnNull(minfo) or gCallableInfoGetCallerOwns(minfo) != GITransfer.NOTHING:
               methodBuffer.writeLine("  let resul0 = " & sym & pars.arglist)
               checkForGerror()
               if gCallableInfoMayReturnNull(minfo):
@@ -2197,8 +2195,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
                 methodBuffer.writeLine("  result = glistObjects2seq($1, resul0, $2)" % [ngrRet.childName, $elTransferFull])
               if ngrRet.infoType == GIInfoType.STRUCT:
                 if gBaseInfoGetName(gTypeInfoGetInterface(gTypeInfoGetParamType(ret2, 0))) notin ["Atom", "Variant", "TimedValue"]: # care later
-                  methodBuffer.writeLine("  result = glistStructs2seq[$1](resul0, $2)" % [ngrRet.childName, $(
-                      gCallableInfoGetCallerOwns(minfo) != GITransfer.EVERYTHING)])
+                  methodBuffer.writeLine("  result = glistStructs2seq[$1](resul0, $2)" % [ngrRet.childName, $(gCallableInfoGetCallerOwns(minfo) != GITransfer.EVERYTHING)])
                   # caution TimedValue is a "light" entity, so we need a different glistStructs2seq() for that!
               if gCallableInfoGetCallerOwns(minfo) != GITransfer.NOTHING:
                 methodBuffer.writeLine("  g_list_free(resul0)") # only free the list itself, the elements are moved to the seq
@@ -2206,10 +2203,17 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
               if ngrRet.infoType == GIInfoType.OBJECT or ngrRet.infoType == GIInfoType.INTERFACE:
                 if ngrRet.infoType != GIInfoType.INTERFACE:
                   assert findFreeObject(gTypeInfoGetInterface(gTypeInfoGetParamType(ret2, 0))).len == 0
-                methodBuffer.writeLine("  result = glistObjects2seq($1, $2, $3)" % [ngrRet.childName, sym & pars.arglist,
-                    $elTransferFull])
+                methodBuffer.writeLine("  result = glistObjects2seq($1, $2, $3)" % [ngrRet.childName, sym & pars.arglist, $elTransferFull])
+              elif ngrRet.infoType == GIInfoType.STRUCT:
+                if gBaseInfoGetName(gTypeInfoGetInterface(gTypeInfoGetParamType(ret2, 0))) in ["Atom"]:##notin ["Atom", "Variant", "TimedValue"]: # care later
+                  methodBuffer.writeLine("  result = glistStructs2seq[$1]($2, $3)" % [ngrRet.childName, sym & pars.arglist, $(gCallableInfoGetCallerOwns(minfo) != GITransfer.EVERYTHING)])
+                  # caution TimedValue is a "light" entity, so we need a different glistStructs2seq() for that!
+                else:
+                  methodBuffer.writeLine("  discard")
               else:
                 methodBuffer.writeLine("  discard")
+              if gCallableInfoGetCallerOwns(minfo) != GITransfer.NOTHING:
+                methodBuffer.writeLine("  g_list_free(resul0)") # only free the list itself, the elements are moved to the seq
             assert(gCallableInfoGetCallerOwns(minfo) in {GITransfer.EVERYTHING, GITransfer.NOTHING, GITransfer.CONTAINER})
           elif ngrRet.res == gslist:
             var elTransferFull = gCallableInfoGetCallerOwns(minfo) == GITransfer.EVERYTHING
@@ -2488,9 +2492,11 @@ template genBoxedFree =
             freeMe = gStructInfoFindMethod(info, "unref")
 
 template genDestroyFreeUnref =
+
   if not callerAlloc.contains(($gBaseInfoGetNamespace(info)).toLowerAscii & '.' & mangleName(gBaseInfoGetName(info))):
+
     if gRegisteredTypeInfoGetGType(info) == G_TYPE_NONE or gTypeFundamental(gRegisteredTypeInfoGetGType(info)) != G_TYPE_BOXED or
-      gBaseInfoGetName(info) == "VariantType": # we have no g_variant_type_get_gtype
+      gBaseInfoGetName(info) == "VariantType" or gBaseInfoGetName(info) == "Atom": # we have no g_variant_type_get_gtype
       if gBaseInfoGetType(info) == GIInfoType.UNION or gBaseInfoGetType(info) == GIInfoType.STRUCT and
         gBaseInfoGetName(info) != "ObjectClass" and gBaseInfoGetName(info) != "TypeFind":
         var freeMe: GIFunctionInfo
@@ -2520,6 +2526,8 @@ template genDestroyFreeUnref =
             methodBuffer.writeLine("      discard $1(self.impl)" % [$gFunctionInfoGetSymbol(freeMe)])
           methodBuffer.writeLine("      self.impl = nil")
 
+
+        if freeMe != nil and gCallableInfoGetNArgs(freeMe) == (if gCallableInfoIsMethod(freeMe): 0 else: 1):
           # new in v0.8.5 # CAUTION: newWithFinalizer() seems to be rarely used, can we remove it fully?
           methodBuffer.writeLine("\nproc newWithFinalizer*(x: var " & mangleName(gBaseInfoGetName(info)) & ") =")
           methodBuffer.writeLine("  when defined(gcDestructors):")
@@ -2527,6 +2535,10 @@ template genDestroyFreeUnref =
           methodBuffer.writeLine("  else:")
           # methodBuffer.writeLine("    new(x, $1)" % [$gBaseInfoGetName(freeMe)])
           methodBuffer.writeLine("    new(x, finalizer$1)" % [$gBaseInfoGetName(freeMe)]) # for v0.8.6
+        else: # new for v0.9.7: create dummy newWithFinalizer() for GdkAtom, as there is no free()
+          if $gBaseInfoGetName(info) in ["Atom"]: # actually we need only this one
+            methodBuffer.writeLine("\nproc newWithFinalizer*(x: var " & mangleName(gBaseInfoGetName(info)) & ") =")
+            methodBuffer.writeLine("    new(x)")
 
 template writeGetTypeProc =
   var getTypeProc {.inject.}: string
@@ -2805,7 +2817,7 @@ proc writeInterface(info: GIInterfaceInfo) =
 # write a few of the strange enum sets
 proc writeModifierType(info: GIEnumInfo) =
   let we = gBaseInfoGetName(info)
-  assert(we in ["ModifierType", "EventMask", "AccelFlags", "AttachOptions", "MessageType", "WindowHints", "IOCondition"])
+  assert(we in ["ModifierType", "EventMask", "AccelFlags", "AttachOptions", "MessageType", "WindowHints", "IOCondition", "DragAction", "DestDefaults"])
   type T = tuple[v: int64; n: string]
   var s: seq[T]
   var alias: seq[string]
@@ -2858,7 +2870,7 @@ proc writeModifierType(info: GIEnumInfo) =
 
 proc writeEnum(info: GIEnumInfo) =
   if mangleName(gBaseInfoGetName(info)) in ["ModifierType", "EventMask", "AccelFlags", "AttachOptions", "WindowHints",
-      "IOCondition"] or
+      "IOCondition", "DragAction", "DestDefaults"] or
     (moduleNameSpace == "gst" and mangleName(gBaseInfoGetName(info)) == "MessageType"):
     writeModifierType(info)
     return
@@ -4528,16 +4540,12 @@ launch()
 #  if not xcallerAlloc.contains(el):
 #    echo el
 
-# 4477 lines gisup4 genPars memo genRec QRS XXX seq List TODO seeq ttempResGL HHHHHH echo
+# 4543 lines
 # gtk_icon_view_get_tooltip_context bug Candidate
 # gtk_tree_view_get_cursor bug
 #
 # troubles: gTypeFundamental(gRegisteredTypeInfoGetGType(info)) == G_TYPE_BOXED:
 #[
-
-salewski@nuc ~/gintrotest/tests $ grep -A6 "listTargets\*" nim_gi/*
-nim_gi/gdk.nim:proc listTargets*(self: DragContext): seq[Atom] =
-nim_gi/gdk.nim-  discard
 
 proc gst_structure_take(oldstrPtr: var ptr Structure00; newstr: ptr Structure00): gboolean {.
   importc, libprag.}
