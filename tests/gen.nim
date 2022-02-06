@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK4/GTK3 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.9.8 2022-FEB-04
+# v 0.9.8 2022-FEB-06
 # (c) S. Salewski 2018, 2019, 2020, 2021, 2022
 
 # usefull for finding death code:
@@ -1728,7 +1728,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
           freeMeName = fixedDestroyNames[sym]
       else:
         assert (not fixedDestroyNames.contains(sym))
-        freeMeName = "finalizer" & $gBaseInfoGetName(freeMe)
+        freeMeName = "finalizer" & $gBaseInfoGetName(freeMe) # puh
       if gRegisteredTypeInfoGetGType(info) != G_TYPE_NONE and gTypeFundamental(gRegisteredTypeInfoGetGType(info)) == G_TYPE_BOXED:
         boxedFreeMeName = "gBoxedFree" & $gRegisteredTypeInfoGetTypeName(info)
       else:
@@ -2331,7 +2331,8 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
                 GITransfer.EVERYTHING:
               methodBuffer.writeLine("  let resul0 = " & sym & pars.arglist)
               checkForGerror()
-              if gCallableInfoMayReturnNull(minfo):
+              # if gCallableInfoMayReturnNull(minfo): # see https://discourse.gnome.org/t/gtk-selection-data-get-uris-null-result/8867
+              if gCallableInfoMayReturnNull(minfo) or ngrRet.flags.contains(RecResFlag.array):
                 methodBuffer.writeLine("  if resul0.isNil:")
                 methodBuffer.writeLine("    return")
               if ngrRet.name == "ptr cstring" and ngrRet.flags.contains(RecResFlag.array) and gCallableInfoGetCallerOwns(minfo) ==
@@ -4540,7 +4541,7 @@ launch()
 #  if not xcallerAlloc.contains(el):
 #    echo el
 
-# 4543 lines
+# 4543 lines gBoxedFree nice gBoxedFreeNiceCandidate template finalizerfree cstringArrayToSeq puh
 # gtk_icon_view_get_tooltip_context bug Candidate
 # gtk_tree_view_get_cursor bug
 #
