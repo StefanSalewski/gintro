@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK4/GTK3 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.9.8 2022-FEB-06
+# v 0.9.8 2022-APR-01
 # (c) S. Salewski 2018, 2019, 2020, 2021, 2022
 
 # usefull for finding death code:
@@ -1952,6 +1952,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
   if sym == "gtk_selection_data_get_targets": return
   if sym == "g_strfreev": return
   if sym == "g_signal_emitv": return
+
   #if sym == "g_object_ref": return # supress Hint: 'g_object_ref' is declared but not used
 
   if sym == "gtk_container_get_focus_chain": return # GList transfer CONTAINER, hard, deprecated
@@ -1985,7 +1986,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
 
       pars = genPars(mInfo, false, info)#, tryOut2Ret = tryOut2Ret)
       processedFunctions.incl(sym)
-      if not sym.startsWith("g_param_spec_uref"):
+      if not (sym.startsWith("g_param_spec_uref") or sym.startsWith("g_param_spec_unref")): # v0.9.8, uref/unref fix in latest gobject
         if sym.startsWith("g_param_spec_", "g_type_interface_", "g_object_interface_"): return
       if sym in ["gtk_widget_class_find_style_property", "gtk_container_class_find_child_property",
         "gtk_cell_area_class_find_cell_property"]: return
@@ -3081,6 +3082,7 @@ proc writeObj(info: GIObjectInfo) =
 
   if gBaseInfoGetName(info) == "ParamSpec" and moduleNamespace == "gobject":
     ## for ParamSpec no unref proc is provided by gobject-introspection, and it asks for uref!
+    #[
     output.writeLine("\nproc g_param_spec_unref*(self: ptr ParamSpec00) {.")
     output.writeLine("    importc, libprag.}")
 
@@ -3095,6 +3097,7 @@ proc writeObj(info: GIObjectInfo) =
 
     output.writeLine("\nproc generic_g_param_spec_uref*(self: ParamSpec) =")
     output.writeLine("  g_param_spec_unref(cast[ptr ParamSpec00](self.impl))")
+    ]#
 
     output.writeLine("\nproc g_param_spec_ref_sink*(self: ptr ParamSpec00): ptr ParamSpec00 {.")
     output.writeLine("    importc, libprag.}")
@@ -3108,11 +3111,13 @@ proc writeObj(info: GIObjectInfo) =
       if h == nil:
         break
       parent = h
-    let freeMeName = $g_object_info_get_unref_function(parent)
+    var freeMeName = $g_object_info_get_unref_function(parent)
+    if freeMeName == "g_param_spec_uref":
+      freeMeName = "g_param_spec_unref"
 
     if freeMeName != "":
       let n = mangleName(gBaseInfoGetName(info))
-      if freeMeName != "g_param_spec_uref":
+      if true:#freeMeName != "g_param_spec_uref" and freeMeName != "g_param_spec_unref": # v0.9.8, latest gobject fixed name to unref
         output.writeLine("\nproc " & freeMeName & "*(self: ptr " & n & "00) {.importc, libprag.}")
         output.writeLine("\nproc generic_$1*(self: $2) =" % [freeMeName, n])
         output.writeLine("  if not self.ignoreFinalizer:")
@@ -3769,7 +3774,7 @@ proc main(namespace: string; version: cstring = nil) =
   strfreev(dep)
   let idep: cstringArray = gi.gIrepositoryGetImmediateDependencies(namespace)
   output.writeLine("# immediate dependencies:")
-  for j in 0 .. 12:
+  for j in 0 .. 12: # puh
     if idep[j].isNil: break
     output.writeLine("# ", idep[j])
   strfreev(idep)
@@ -4376,6 +4381,9 @@ proc cairo_gobject_rectangle_get_type*(): GType {.importc, libprag.}
     echo " delayed:"
   for el in delayedMethods:
     echo gBaseInfoGetName(el[1])
+  if false: # namespace in ["Nice", "Soup"]: # this gives other issues!
+    gTypelibFree(typelib) # v0.9.8, try to fix libnice/libsoup conflict
+
 
 proc launch() =
   when defined(gcDestructors):
@@ -4476,7 +4484,7 @@ proc launch() =
     # main("Handy") # not yet available for GTK4
     main("Adw") # replaces libhandy for GTK4
     main("Soup", "3.0") # process Soup before Nice, preventing the load of not matching libsoup version
-    main("Nice") # https://discourse.gnome.org/t/some-libsoup-3-issue/7807/14 
+    # main("Nice") # https://discourse.gnome.org/t/some-libsoup-3-issue/7807/14 no nice for GTK4 in v0.9.8
     main("cairo")
     main("WebKit2", "5.0")
     main("JavaScriptCore", "5.0")
@@ -4541,7 +4549,7 @@ launch()
 #  if not xcallerAlloc.contains(el):
 #    echo el
 
-# 4543 lines gBoxedFree nice gBoxedFreeNiceCandidate template finalizerfree cstringArrayToSeq puh
+# 4543 lines gBoxedFree nice gBoxedFreeNiceCandidate template finalizerfree cstringArrayToSeq puh xxxg_param_spec_unref g_param_spec_uref
 # gtk_icon_view_get_tooltip_context bug Candidate
 # gtk_tree_view_get_cursor bug
 #
