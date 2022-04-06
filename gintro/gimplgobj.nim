@@ -93,6 +93,10 @@ macro mconnect(widget: gobject.Object; signal: string; p: typed; arg: typed; ign
   
   if at.kind == nnkTupleConstr or at.kind == nnkTupleTy:
     ats = at.toStrLit.strVal
+
+  elif at.kind == nnkProcTy: # v0.9.8
+    ats = at.toStrLit.strVal
+
   elif at.kind == nnkRefTy:
     ats = at.getType[0].strVal  & " " & at.getType[1].owner.strVal & '.' & at.getType[1].strVal
   else:
