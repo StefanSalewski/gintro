@@ -1616,6 +1616,8 @@ proc findFreeObject(info: GIBaseInfo): string =
       break
     parent = h
   var f = $g_object_info_get_unref_function(parent)
+  if f == "g_param_spec_uref":
+    f = "g_param_spec_unref"
   return f # empty string for all true gobjects, only not empty for GParamSpec and a few more, see grep "unref-func" /usr/share/gir-1.0/*
 
 proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
@@ -1759,7 +1761,12 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
           break
         parent = h
       boxedFreeMeName = ""
-      freeMeName = "generic_" & $g_object_info_get_unref_function(parent)
+
+      var hf = $g_object_info_get_unref_function(parent)
+      if hf == "g_param_spec_uref":
+        hf = "g_param_spec_unref"
+
+      freeMeName = "generic_" & hf # $g_object_info_get_unref_function(parent)
       assert(freeMeName != "")
 
   template block8(prochead: string; errorcheckadd: bool; tryOut2Ret: bool): untyped =
@@ -4549,7 +4556,7 @@ launch()
 #  if not xcallerAlloc.contains(el):
 #    echo el
 
-# 4543 lines gBoxedFree nice gBoxedFreeNiceCandidate template finalizerfree cstringArrayToSeq puh xxxg_param_spec_unref g_param_spec_uref
+# 4559 lines gBoxedFree nice gBoxedFreeNiceCandidate template finalizerfree cstringArrayToSeq puh xxxg_param_spec_unref g_param_spec_unref generic_
 # gtk_icon_view_get_tooltip_context bug Candidate
 # gtk_tree_view_get_cursor bug
 #
