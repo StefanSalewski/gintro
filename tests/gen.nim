@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK4/GTK3 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.9.8 2022-APR-01
+# v 0.9.9 2022-MAY-17
 # (c) S. Salewski 2018, 2019, 2020, 2021, 2022
 
 # usefull for finding death code:
@@ -4276,11 +4276,12 @@ proc get$1*(builder: Builder; name: string): $1 =
     assert(result.impl == gobj)
   else:
     fnew(result, $3.finalizeGObject)
-    result.impl = gobj
-    result.ignoreFinalizer = true
-    GC_ref(result) # as following g_object_unref() call will also  execute a GC_unref(result) call
+    result.impl = gobj # not floating, with ref count == 1
+    #result.ignoreFinalizer = true
+    #discard g_object_ref(result.impl) # v0.99, try to fix issue
+    GC_ref(result) # when builder instance goes out and is destroyed, it unrefs its childs...
     g_object_add_toggle_ref(result.impl, toggleNotify, addr(result[])) # do toggle_refs make sense at all for builder objects?
-    g_object_unref(result.impl) # new for v0.8.4 and GTK4, make close main windows working
+    #g_object_unref(result.impl) # new for v0.8.4 and GTK4, make close main windows working
     assert(g_object_get_qdata(result.impl, Quark) == nil)
     g_object_set_qdata(result.impl, Quark, addr(result[]))
   assert(toBool(g_type_check_instance_is_a(cast[ptr TypeInstance00](result.impl), gt)))
@@ -4557,8 +4558,8 @@ launch()
 #    echo el
 
 # 4559 lines gBoxedFree nice gBoxedFreeNiceCandidate template finalizerfree cstringArrayToSeq puh xxxg_param_spec_unref g_param_spec_unref generic_
-# gtk_icon_view_get_tooltip_context bug Candidate
-# gtk_tree_view_get_cursor bug
+# gtk_icon_view_get_tooltip_context bug Candidate ignoreFinalizer
+# gtk_tree_view_get_cursor bug getBox
 #
 # troubles: gTypeFundamental(gRegisteredTypeInfoGetGType(info)) == G_TYPE_BOXED:
 #[
