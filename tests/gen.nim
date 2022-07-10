@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK4/GTK3 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.9.9 2022-MAY-17
+# v 0.9.9 2022-JUL-10
 # (c) S. Salewski 2018, 2019, 2020, 2021, 2022
 
 # usefull for finding death code:
@@ -914,7 +914,15 @@ proc newGenRec(t: GITypeInfo; genProxy = false): RecRes =
   var cAlloc = false
   var newrawmark = ""
   var proxyResult = false
-  let p = gTypeInfoIsPointer(t)
+  var p = gTypeInfoIsPointer(t)
+
+  if not p:
+    let tag = gTypeInfoGetTag(t)
+    if tag == GITypeTag.INTERFACE:
+      let iface = gTypeInfoGetInterface(t)
+      if gBaseInfoGetNamespace(iface) == "freetype2" and gBaseInfoGetName(iface) == "Face":
+        p = true # see issue https://discourse.gnome.org/t/the-gintro-nim-bindings-do-not-compile-with-latest-harfbuzz-4-4-1/10408
+
   let tag = gTypeInfoGetTag(t)
   if tag == GITypeTag.GLIST:
     let arrayType = gTypeInfoGetParamType(t, 0)
