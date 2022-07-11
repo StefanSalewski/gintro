@@ -1,6 +1,6 @@
 = High level GTK4 and GTK3 bindings for the Nim programming language
 //(c) Stefan Salewski                                     
-//Version 0.9.8
+//Version 0.9.9
 :experimental:
 :imagesdir: http://ssalewski.de/tmp
 //:source-highlighter: pygments
@@ -29,7 +29,19 @@ with code inserted from files directly.
 NOTE: This work is partly based on earlier works of J. Mansour and has been supported by E. Bassi and other _GTK/Gnome_ developers.
 The `combinatorics` module was kindly provided by R. Behrends.
 
-NOTE: This is version 0.9.8 of the gintro Nim GTK bindings. It contains some small fixes,
+NOTE: This is finally version 0.9.9 of the gintro Nim GTK bindings. It contains some small fixes, that
+we applied in the last months. Note that gintro's version numbers are unsigned integers and so wrap around, so
+whenever there should be one more new release, that may get the tag 0.1 again.
+(More seriously, we hesitate to call next gintro version 1.0 already, because 1.0 would indicate some final state,
+which gintro can never archive. All the GTK related libraries are so complex, that it is nearly impossible to
+create perfect bindings.)
+But as the number of serious
+gintro users is tiny, we may fully remove gintro from GitHub by end of 2022. This will save us some work
+of continous bug fixes, and users can choose one of the 20 other Nim GUI toolkits. It is indeed very questionable
+if gintro would work with Nim 2.0 or GTK 5.0 at all. And after having worked on gintro for more than 1600 hours,
+it may be a good decision to just retire now.
+
+NOTE: Version 0.9.8 of the gintro Nim GTK bindings contains some small fixes,
 including a fix for the latest uref/unref name change in gobject.
 
 NOTE: In version 0.9.7 of the gintro Nim GTK bindings we tried to fix an
