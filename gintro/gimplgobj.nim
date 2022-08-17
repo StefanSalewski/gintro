@@ -395,6 +395,53 @@ $1($4)
 """ % [$procName, ats, $procNameCdecl, $arg]
   result = parseStmt(r1s & r2s)
 
-# 376 lines owner
+#####################################################
 
+#[
+void
+(* GtkCallback) (
+  GtkWidget* widget,
+  gpointer data
+)
 
+void
+gtk_container_foreach (
+  GtkContainer* container,
+  GtkCallback callback,
+  gpointer callback_data
+)
+]#
+# https://docs.gtk.org/gtk3/method.Container.foreach.html
+macro foreach*(container: gtk.Container; p: untyped; arg: typed): untyped =
+  var foreachID {.compileTime, global.}: int
+  inc(foreachID)
+  var ats = $getTypeInst(arg).toStrLit
+  let procName = "foreach_" & $foreachID
+  let procNameCdecl = "foreach_cdecl_" & $foreachID
+  var r1s = """
+proc $1(c: ptr gtk.Widget00; p: pointer) {.cdecl.} =
+  let a = cast[$3](p) # OK for refs and maybe basic types like int, but wrong for string
+  let h: pointer = g_object_get_qdata(c, Quark)
+  assert(h != nil)
+  let cn: gtk.Container = cast[gtk.Container](h)
+  $2(cn, a)
+""" % [$procNameCdecl, $p, ats]
+ 
+  let r2s ="""
+proc $1(container: gtk.Container; a: $2) =
+  when a is ref:
+    GC_ref(a)
+    gtk_container_foreach(cast[ptr gtk.Container00](container.impl), $3, cast[pointer](a))
+  else:
+    var ar: ref $2 # this branch has issues, as the Nim proc p expects a value type
+    new(ar)
+    ar[] = a
+    GC_ref(ar)
+    gtk_container_foreach(cast[ptr gtk.Container00](container.impl), $3, cast[pointer](ar))
+$1($5, $4)
+""" % [$procName, ats, $procNameCdecl, $arg, $container]
+  echo r1s
+  echo r2s
+  result = parseStmt(r1s & r2s)
+
+# 447 lines
