@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK4/GTK3 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.9.9 2022-JUL-11
+# v 0.9.9 2022-AUG-17
 # (c) S. Salewski 2018, 2019, 2020, 2021, 2022
 
 # usefull for finding death code:
@@ -2072,7 +2072,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
           if sym in ["g_quark_from_static_string", "g_error_free", "g_object_get_qdata", "g_object_ref_sink", "g_object_unref", "g_param_spec_ref_sink",
             "g_timeout_add_full", "g_object_is_floating", "gst_bus_add_watch_full", "g_object_ref", "g_date_time_format", "gdk_event_ref", "g_strdup",  
             "g_type_from_name", "g_type_check_instance_is_a", "g_idle_add_full", "g_quark_try_string", "vte_regex_unref", "gtk_expression_ref",
-            "gtk_builder_get_object", "g_action_map_add_action", "gtk_drawing_area_set_draw_func", "g_io_add_watch_full"]:
+            "gtk_builder_get_object", "g_action_map_add_action", "gtk_drawing_area_set_draw_func", "g_io_add_watch_full", "gtk_container_foreach"]:
             methodBuffer.write("\nproc " & sym & EM & pars.plist)
             methodBuffer.writeLine(" {.\n    importc, ", libprag, ".}")
             if sym.startsWith("vte_regex_unref"): # this function is special, as it returns the object
@@ -2082,7 +2082,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
           elif b7:
             methodBuffer.write("\nproc " & sym & pars.plist)
             methodBuffer.writeLine(" {.\n    importc, ", libprag, ".}")
-          if sym in ["g_object_ref_sink", "g_object_ref"]:
+          if sym in ["g_object_ref_sink", "g_object_ref", "gtk_container_foreach"]:
             return
 
         if b7:
@@ -4582,6 +4582,6 @@ proc gst_structure_take(oldstrPtr: var ptr Structure00; newstr: ptr Structure00)
 proc take*(oldstrPtr: var Structure; newstr: Structure = nil): bool =
   toBool(gst_structure_take(if oldstrPtr.isNil: nil else: cast[ptr Structure00](oldstrPtr.impl), if newstr.isNil: nil else: cast[ptr Structure00](newstr.impl)))
 
-gtk4 CssLocation may be userAlloc ! Face
+gtk4 CssLocation may be userAlloc ! Face idleAdd g_idle_add_full
 
 ]#
