@@ -411,43 +411,46 @@ gtk_container_foreach (
   gpointer callback_data
 )
 ]#
-# https://docs.gtk.org/gtk3/method.Container.foreach.html
-macro foreach*(container: gtk.Container; p: untyped; arg: typed): untyped =
-  var foreachID {.compileTime, global.}: int
-  inc(foreachID)
-  var ats = $getTypeInst(arg).toStrLit
-  let procName = "foreach_" & $foreachID
-  let procNameCdecl = "foreach_cdecl_" & $foreachID
-  var r1s = """
-proc $1(c: ptr gtk.Widget00; p: pointer) {.cdecl.} =
-  when $3 is ref:
-    let a = cast[$3](p)
-  else:
-    let a = cast[ref $3](p)
-  let h: pointer = g_object_get_qdata(c, Quark)
-  assert(h != nil)
-  let cn: gtk.Container = cast[gtk.Container](h)
-  when $3 is ref:
-    $2(cn, a)
-  else:
-    $2(cn, a[])
-""" % [$procNameCdecl, $p, ats]
- 
-  let r2s ="""
-proc $1(container: gtk.Container; a: $2) =
-  when a is ref:
-    GC_ref(a)
-    gtk_container_foreach(cast[ptr gtk.Container00](container.impl), $3, cast[pointer](a))
-  else:
-    var ar: ref $2
-    new(ar)
-    ar[] = a
-    GC_ref(ar)
-    gtk_container_foreach(cast[ptr gtk.Container00](container.impl), $3, cast[pointer](ar))
-$1($5, $4)
-""" % [$procName, ats, $procNameCdecl, $arg, $container]
-  #echo r1s
-  #echo r2s
-  result = parseStmt(r1s & r2s)
 
-# 453 lines
+when not declared(gtk4): # only for old gtk3, gtk4 has no gtk.Container widget.
+
+  # https://docs.gtk.org/gtk3/method.Container.foreach.html
+  macro foreach*(container: gtk.Container; p: untyped; arg: typed): untyped =
+    var foreachID {.compileTime, global.}: int
+    inc(foreachID)
+    var ats = $getTypeInst(arg).toStrLit
+    let procName = "foreach_" & $foreachID
+    let procNameCdecl = "foreach_cdecl_" & $foreachID
+    var r1s = """
+  proc $1(c: ptr gtk.Widget00; p: pointer) {.cdecl.} =
+    when $3 is ref:
+      let a = cast[$3](p)
+    else:
+      let a = cast[ref $3](p)
+    let h: pointer = g_object_get_qdata(c, Quark)
+    assert(h != nil)
+    let cn: gtk.Container = cast[gtk.Container](h)
+    when $3 is ref:
+      $2(cn, a)
+    else:
+      $2(cn, a[])
+  """ % [$procNameCdecl, $p, ats]
+   
+    let r2s ="""
+  proc $1(container: gtk.Container; a: $2) =
+    when a is ref:
+      GC_ref(a)
+      gtk_container_foreach(cast[ptr gtk.Container00](container.impl), $3, cast[pointer](a))
+    else:
+      var ar: ref $2
+      new(ar)
+      ar[] = a
+      GC_ref(ar)
+      gtk_container_foreach(cast[ptr gtk.Container00](container.impl), $3, cast[pointer](ar))
+  $1($5, $4)
+  """ % [$procName, ats, $procNameCdecl, $arg, $container]
+    #echo r1s
+    #echo r2s
+    result = parseStmt(r1s & r2s)
+
+# 456 lines
