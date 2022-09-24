@@ -1475,7 +1475,11 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
       if sym.contains("_set_") and str == "bool":
         str.add(" = true")
     if genProxy and isProxyCandidate(t) and mayBeNil and gArgInfoGetDirection(arg) notin {GIDirection.OUT, INOUT}:
-      str.add(" = nil")
+      let h = str.split(" | ")
+      if h.len > 1:# echo "aaaaaaaaaaa ", h[0], " ", str
+        str.add(" = " & h[0] & "(nil)")
+      else:
+        str.add(" = nil") # provider
     when false:
       if genProxy and gArgInfoIsOptional(arg) and gArgInfoGetDirection(arg) == GIDirection.INOUT:
         # very few like argc and argv -- we ignore them for now
@@ -3052,6 +3056,13 @@ proc writeObj(info: GIObjectInfo) =
     output.writeLine("    importc: \"g_object_remove_toggle_ref\", libprag.}")
     output.writeLine("\nproc g_object_set_qdata*(self: ptr Object00; quark: uint32; p: pointer) {.")
     output.writeLine("    importc: \"g_object_set_qdata\", libprag.}")
+
+#proc getQdata*(self: Object; quark: int): pointer =
+#  g_object_get_qdata(cast[ptr Object00](self.impl), uint32(quark))
+
+
+    #output.writeLine("\nproc setQdata*(self: Object; quark: int; p: pointer) =")
+    #output.writeLine("    g_object_set_qdata(cast[ptr Object00](self.impl), uint32(quark), p)")
     output.writeLine("proc toggleNotify*(data: pointer; obj: ptr Object00; isLastRef: gboolean) {.cdecl.} =")
     output.writeLine("  if isLastRef.int == 0:")
     output.writeLine("    GC_ref(cast[RootRef](data))")
@@ -3085,6 +3096,9 @@ proc writeObj(info: GIObjectInfo) =
     output.writeLine("\nproc refCount*(o: gobject.Object): int =")
     output.writeLine("  let p = cast[ptr cuint](cast[int](o.impl) + sizeof(pointer))")
     output.writeLine("  return p[].int")
+
+    output.writeLine("\nproc setQdata*(self: gobject.Object; quark: int; p: pointer) =")
+    output.writeLine("    g_object_set_qdata(cast[ptr Object00](self.impl), uint32(quark), p)")
 
   if gObjectInfoGetFundamental(info) == GFalse: # guess work, ignore fake GObjects like GParamSpec and such
     #output.writeLine("\nwhen compileOption(\"gc\", \"arc\"):")
@@ -4582,6 +4596,6 @@ proc gst_structure_take(oldstrPtr: var ptr Structure00; newstr: ptr Structure00)
 proc take*(oldstrPtr: var Structure; newstr: Structure = nil): bool =
   toBool(gst_structure_take(if oldstrPtr.isNil: nil else: cast[ptr Structure00](oldstrPtr.impl), if newstr.isNil: nil else: cast[ptr Structure00](newstr.impl)))
 
-gtk4 CssLocation may be userAlloc ! Face idleAdd g_idle_add_full
+gtk4 CssLocation may be userAlloc ! Face idleAdd g_idle_add_full nil str.add | provider nilb g_object_set_qdata g_object_get_qdata
 
 ]#
