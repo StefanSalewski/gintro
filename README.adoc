@@ -29,6 +29,9 @@ with code inserted from files directly.
 NOTE: This work is partly based on earlier works of J. Mansour and has been supported by E. Bassi and other _GTK/Gnome_ developers.
 The `combinatorics` module was kindly provided by R. Behrends.
 
+NOTE: As we have already reached version 0.9.9, we have stopped doing releases for now. So you should do a #head install
+with "nimble uninstall gintro; nimble install gintro@#head" to get an up to date version.
+
 NOTE: This is finally version 0.9.9 of the gintro Nim GTK bindings. It contains some small fixes, that
 we applied in the last months. Note that gintro's version numbers are unsigned integers and so wrap around, so
 whenever there should be one more new release, that may get the tag 0.1 again.

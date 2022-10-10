@@ -1,7 +1,7 @@
 # High level gobject-introspection based GTK4/GTK3 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.9.9 2022-AUG-17
-# (c) S. Salewski 2018, 2019, 2020, 2021, 2022
+# v 0.9.9 2022-OCT-10
+# (c) S. Salewski 2018, 2019, 2020, 2021, 2022, 2023
 
 # usefull for finding death code:
 # https://forum.nim-lang.org/t/5898
@@ -1604,6 +1604,11 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
   #if gTypeInfoIsPointer(ret) and callerAlloc.contains(hhh) and (not r.startsWith("ptr")):
   if fixedgTypeInfoIsPointer(ret) and callerAlloc.contains(hhh) and (not r.startsWith("ptr")):
     r = "ptr " & r
+
+  if isSignalInfo(info) and isProxyCandidate(ret) and not genProxy and (not r.startsWith("ptr")): # for v0.9.9
+    r.insert("ptr ")
+    #echo "aaaaaaaaaaaaaaaaaaaaaa ", r
+
   if r != "void":
     if genProxy:
       let h = doTypeConv(r, ngrRet)
@@ -4583,9 +4588,9 @@ launch()
 #  if not xcallerAlloc.contains(el):
 #    echo el
 
-# 4559 lines gBoxedFree nice gBoxedFreeNiceCandidate template finalizerfree cstringArrayToSeq puh xxxg_param_spec_unref g_param_spec_unref generic_
+# 4591 lines
 # gtk_icon_view_get_tooltip_context bug Candidate ignoreFinalizer
-# gtk_tree_view_get_cursor bug getBox
+# gtk_tree_view_get_cursor bug getBox genRec gisup4
 #
 # troubles: gTypeFundamental(gRegisteredTypeInfoGetGType(info)) == G_TYPE_BOXED:
 #[

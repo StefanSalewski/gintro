@@ -217,11 +217,18 @@ proc $1$2 {.cdecl.} =
     if resl == "gboolean":
       resu.add(".ord.gboolean")
 
-    if resl == "int32":
+    elif resl == "int32":
       resu.add(".int32")
       
-    if resl == "cstring":
+    elif resl == "cstring":
       resu.add(".g_strdup")
+
+    elif resl.len != 0: # result is heavy proxy object. Actually this is an ugly guess currently.
+      r1s.add("  let tmp = " & resu[2 .. ^1] & "\n")
+      r1s.add("  tmp.ignoreFinalizer = true\n")
+      resu = "  cast[typeof(result)](tmp.impl)"
+      #resu.add(".impl)")
+      #resu = "  cast[typeof(result)](" & resu
       
     r1s.add(resu & "\n")
     all = all.replace(")", "; user_data: pointer)")
@@ -238,7 +245,7 @@ proc $1$2 {.cdecl.} =
       el = a & ": " & b
     all = h.join(";")
 
-  #echo all
+  #echo all cdecl
 
   # https://forum.nim-lang.org/t/6775#42155
   const matcher = "Array" # is this good enough?
@@ -453,4 +460,4 @@ when not declared(gtk4): # only for old gtk3, gtk4 has no gtk.Container widget.
     #echo r2s
     result = parseStmt(r1s & r2s)
 
-# 456 lines
+# 463 lines
