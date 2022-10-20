@@ -1,7 +1,9 @@
 # High level gobject-introspection based GTK4/GTK3 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.9.9 2022-OCT-10
+# v 0.9.9 2022-OCT-20
 # (c) S. Salewski 2018, 2019, 2020, 2021, 2022, 2023
+
+# https://gnome.pages.gitlab.gnome.org/gobject-introspection/girepository/
 
 # usefull for finding death code:
 # https://forum.nim-lang.org/t/5898
@@ -373,6 +375,7 @@ defaultParameters["pango_layout_set_text"] = "length int -1"
 
 for i in keywords: mangledNames[i] = '`' & i & '`'
 
+mangledNames["object"] = "obj"
 mangledNames["CSET_A_2_Z"] = "CSET_A_2_Z_U"
 mangledNames["CSET_a_2_z"] = "CSET_a_2_z_L"
 mangledNames["2big"] = "tooBig"
@@ -2908,7 +2911,8 @@ proc writeEnum(info: GIEnumInfo) =
   var s: seq[T]
   var alias: HashSet[string] # double entry in gstvideo, see https://discourse.gnome.org/t/gstvideo-1-0-gir-double-entries/5442
   var flags = ($gBaseInfoGetName(info)).endsWith("Flags")
-  var flagDefault: string 
+  var flagDefault: string
+  var lags: string
   output.writeLine("type")
   let n = info.gEnumInfoGetNValues()
   for j in 0.cint ..< n:
@@ -2922,15 +2926,26 @@ proc writeEnum(info: GIEnumInfo) =
     result = cmp(x.v, y.v)
     if result == 0:
       result = cmp(x.n, y.n)
+
+  if not flags and s[^1].v > 2:
+    flags = true
+    for j in 0 .. s.high: # v0.9.9, pull in some more flags?
+      if bitops.popCount(s[j].v) > 1:
+        flags = false
+        break
+
   for j in 0 .. s.high:
     if s[j].v < 0:
       flags = false
-    if j == 0 and s[j].v == 0:
+    # if j == 0 and s[j].v == 0: # wrong for GApplicationFlags for glib >= 2.74
+    if s[j].v == 0:
       continue
     if bitops.popCount(s[j].v) != 1: flags = false
   if s.len <= 1: flags = false
   var tname = mangleName(gBaseInfoGetName(info))
-  if flags: tname = tname[0 .. ^6]
+  if flags and tname.endsWith("Flags"):
+    tname = tname[0 .. ^6]
+    lags = "Flags"
   if flags:
     output.writeLine("  ", tname & "Flag" & EM, " {.size: sizeof(cint), pure.} = enum")
     if s[0].v != 0 and s[0].v != 1: # flags may start with none = 0 or with flag1 = 1
@@ -2943,14 +2958,21 @@ proc writeEnum(info: GIEnumInfo) =
     var val = i.v
     if flags and j == 0 and val == 0:
       # proc c(t: typedesc[B]): B ={}
-      flagDefault = ("  " & tname & "Flags" & i.n.capitalizeAscii & EM & " = " & tname & "Flags" & "({})")
-      flagDefault.add("\nproc " & i.n & "*(t: typedesc[" & tname & "Flags]): " & tname & "Flags = " & tname & "Flags" & "({})")
+      flagDefault = ("  " & tname & lags & i.n.capitalizeAscii & EM & " = " & tname & lags & "({})")
+      flagDefault.add("\nproc " & i.n & "*(t: typedesc[" & tname & lags & "]): " & tname & lags & " = " & tname & lags & "({})")
       #echo flagDefault
+      k = i
       continue
     if j > 0 and i.v == k.v:
       if i.n != k.n:
         let h = if flags: "Flag" else: ""
-        alias.incl("  " & tname & i.n.capitalizeAscii & EM & " = " & tname & h & '.' & k.n)
+        var vv: string
+        if flags and k.v == 0:
+          vv = tname & lags & "({})"
+        else:
+          vv = tname & h & '.' & k.n
+
+        alias.incl("  " & tname & i.n.capitalizeAscii & EM & " = " & vv)
       continue
     if flags:
       val = countTrailingZeroBits(val) # firstSetBit(val)
@@ -2958,7 +2980,7 @@ proc writeEnum(info: GIEnumInfo) =
     k = i
 
   if flags:
-    output.writeLine("\n  ", tname & "Flags" & EM, " {.size: sizeof(cint).} = set[$1Flag]" % [tname])
+    output.writeLine("\n  ", tname & lags & EM, " {.size: sizeof(cint).} = set[$1Flag]" % [tname])
 
   if alias.len > 0 or flagDefault.len > 0:
     output.writeLine("\nconst")
@@ -4588,7 +4610,7 @@ launch()
 #  if not xcallerAlloc.contains(el):
 #    echo el
 
-# 4591 lines
+# 4613 lines
 # gtk_icon_view_get_tooltip_context bug Candidate ignoreFinalizer
 # gtk_tree_view_get_cursor bug getBox genRec gisup4
 #

@@ -201,13 +201,17 @@ proc $1$2 {.cdecl.} =
         if types[i] == "":
           resu.add(", " & names[i])
         else:
-          resu.add(", " & names[i] & "1")
-          r1s.add("  var " & names[i] & "1 {.global.}: " & types[i] & "\n")
-          r1s.add("  if " & names[i] & "1" & ".isNil:\n")
-          r1s.add("    new " & names[i] & "1" & "\n")
-          r1s.add("    GC_ref(" & names[i] & "1)" & "\n") # never call destroy/finalizer on this global variable
-          r1s.add("    " & names[i] & "1.ignoreFinalizer = true" & "\n")
-          r1s.add("  " & names[i] & "1.impl = " & names[i] & "\n")
+          var namesi = names[i]
+          if namesi[0] == '`':
+            assert(namesi[^1] == '`')
+            namesi = namesi[1 .. ^2]
+          resu.add(", " & namesi & "1")
+          r1s.add("  var " & namesi & "1 {.global.}: " & types[i] & "\n")
+          r1s.add("  if " & namesi & "1" & ".isNil:\n")
+          r1s.add("    new " & namesi & "1" & "\n")
+          r1s.add("    GC_ref(" & namesi & "1)" & "\n") # never call destroy/finalizer on this global variable
+          r1s.add("    " & namesi & "1.ignoreFinalizer = true" & "\n")
+          r1s.add("  " & namesi & "1.impl = " & names[i] & "\n")
     if not ignoreArg.boolVal:
       if getTypeInst(arg).typeKind == ntyRef:
         resu.add(", cast[$5](user_data)")
