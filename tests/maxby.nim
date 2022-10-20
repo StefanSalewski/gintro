@@ -95,7 +95,7 @@ template minIndex*(seq1, el, op: untyped): untyped =
     result = cmp(a, b))
   result
 
-func maxValueBy*[T](s: openArray[T], cmp: proc (x, y: T): int {.closure.}): T =
+func maxValueBy*[T](s: openArray[T], cmp: proc (x, y: T): int {.closure, noSideEffect.}): T =
   ## Returns the maximum value of all elements in s.
   ## Comparison is done by cmp() proc.
   ##
@@ -110,7 +110,7 @@ func maxValueBy*[T](s: openArray[T], cmp: proc (x, y: T): int {.closure.}): T =
       if cmp(s[i], result) > 0:
         result = s[i]
 
-func minValueBy*[T](s: openArray[T], cmp: proc (x, y: T): int {.closure.}): T =
+func minValueBy*[T](s: openArray[T], cmp: proc (x, y: T): int {.closure, noSideEffect.}): T =
   ## Returns the minimum value of all elements in s.
   ## Comparison is done by cmp() proc.
   ##
@@ -189,7 +189,7 @@ template minValue*(seq1, el, op: untyped): untyped =
     result = cmp(a, b))
   result
 
-func minMaxValueBy*[T](s: openArray[T], cmp: proc (x, y: T): int {.closure.}): (T, T) =
+func minMaxValueBy*[T](s: openArray[T], cmp: proc (x, y: T): int {.closure, noSideEffect.}): (T, T) =
   ## Returns the minimum and maximum values of all elements in s.
   ## Comparison is done by cmp() proc.
   ##
