@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK4/GTK3 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.9.9 2022-OCT-20
+# v 0.9.9 2022-OCT-28
 # (c) S. Salewski 2018, 2019, 2020, 2021, 2022, 2023
 
 # https://gnome.pages.gitlab.gnome.org/gobject-introspection/girepository/
@@ -2017,7 +2017,7 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
 
       pars = genPars(mInfo, false, info)#, tryOut2Ret = tryOut2Ret)
       processedFunctions.incl(sym)
-      if not (sym.startsWith("g_param_spec_uref") or sym.startsWith("g_param_spec_unref")): # v0.9.8, uref/unref fix in latest gobject
+      if not (sym.startsWith("g_param_spec_uref") or sym.startsWith("g_param_spec_unref") or sym.startsWith("g_param_spec_get_name")): # v0.9.8, uref/unref fix in latest gobject
         if sym.startsWith("g_param_spec_", "g_type_interface_", "g_object_interface_"): return
       if sym in ["gtk_widget_class_find_style_property", "gtk_container_class_find_child_property",
         "gtk_cell_area_class_find_cell_property"]: return

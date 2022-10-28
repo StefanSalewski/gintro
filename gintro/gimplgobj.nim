@@ -18,7 +18,7 @@ proc ct5nt(s: string): string =
 proc findSignal(name, obj: NimNode): string =
   let str = ($name).replace("-", "_") & RecSep
   #echo str
-  if str.startsWith("notify::"):
+  if str == "notify!" or str.startsWith("notify::"):
     #return "notify!Object!1!(self: Object; paramSpec: ParamSpec)!(self: ptr Object00; paramSpec: ptr ParamSpec00)"
     return "notify!gobject.Object!1!(self: gobject.Object; paramSpec: gobject.ParamSpec)!(self: ptr gobject.Object00; paramSpec: ptr gobject.ParamSpec00)" # v0.9.7
     # "size_allocate!Widget!1!(self: Widget; allocation: gdk.Rectangle)!(self: ptr Widget00; allocation: gdk.Rectangle)"
@@ -105,7 +105,7 @@ macro mconnect(widget: gobject.Object; signal: string; p: typed; arg: typed; ign
   var signalName = ($signal).replace("-", "_") # maybe we should just use plain proc names
   var sigName: string # for the notify:: signals
 
-  if signalName.startsWith("notify::"):
+  if signalName == "notify" or signalName.startsWith("notify::"):
     #sfstr.add(", " & signalName)
     sigName = ", \"" & signalName.replace("_", "-") & "\"" # https://mail.gnome.org/archives/gtk-app-devel-list/2008-March/msg00197.html
     signalName = "notify" # https://discourse.gnome.org/t/notify-signal-and-underscore-vs-hyphen/6835
@@ -297,12 +297,17 @@ proc $1$2 {.cdecl.} =
 
   ahl = ahl.replace(": cstring", ": string")
 
+
+  #if signalName.startsWith("notify"):
+  #  sigName = ", \"notify\""
+
+
   # maybe we write this better this way:
   let r2s =
     if ignoreArg.boolVal:
       """
 proc $1(self: $2;  p: proc $3): culong {.discardable.} =
-  sc$4(self, $5, nil, $8)
+  sc$4(self, $5, nil, $8 $9)
 $1($6, $7)
 """ % [$procName, wts, ahl, signalName,  $procNameCdecl, $(widget.toStrLit), $p, sfstr, sigName]
     elif getTypeInst(arg).typeKind == ntyRef:
