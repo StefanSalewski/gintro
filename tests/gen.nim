@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK4/GTK3 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.9.9 2022-OCT-28
+# v 0.9.9 2022-DEC-23
 # (c) S. Salewski 2018, 2019, 2020, 2021, 2022, 2023
 
 # https://gnome.pages.gitlab.gnome.org/gobject-introspection/girepository/
@@ -47,7 +47,7 @@
 
 # isRegisteredTypeInfo(info) was never used before v0.9.5, but may be useful!
 
-from os import `/`, paramCount
+from os import `/`, paramCount, getTempDir, joinPath, removeFile, fileExists
 import gir, gobject, glib
 import strutils
 import sequtils
@@ -403,8 +403,10 @@ proc fixedModName(s: string): string =
     result &= "5"
   if not ISGTK3 and (s == "gtksource"):
     result &= "5"
-  if not ISGTK3 and (s == "libsoup"):
+  if not ISGTK3 and (s == "soup"):
     result &= "3"
+  if not ISGTK3 and (s == "vte"):
+    result &= "_gtk4"
 
 proc gBaseInfoGetQualifiedName(info: GIBaseInfo; modPrefix: bool = false): string =
   if modPrefix:
@@ -1007,6 +1009,7 @@ proc newGenRec(t: GITypeInfo; genProxy = false): RecRes =
   elif tag == GITypeTag.INTERFACE:
     let iface = gTypeInfoGetInterface(t)
     var ns = ($gBaseInfoGetNamespace(iface)).toLowerAscii
+    #echo "AAAAAAAAAAAAA", ns
     if gBaseInfoGetType(iface) == GIInfoType.CALLBACK:
       if gBaseInfoGetName(iface)[0].isLowerAscii:
         result[0] = "proc" & genPars(iface)[0] & " {.cdecl.}"
@@ -3299,7 +3302,8 @@ proc processInfo(i: GIBaseInfo) =
   elif gBaseInfoGetType(i) == GIInfoType.CONSTANT:
     writeConst(i)
   elif gBaseInfoGetType(i) == GIInfoType.Boxed:
-    if $gBaseInfoGetName(i) notin ["TreeRowData", "ByteArray", "FileList"]: # hide ugly output for v0.8.7, investgate later
+    if  moduleNameSpace != "gupnp" and
+      $gBaseInfoGetName(i) notin ["TreeRowData", "ByteArray", "FileList"]: # hide ugly output for v0.8.7, investgate later
       echo "gBaseInfoGetType(i) == GIInfoType.Boxed: ", gBaseInfoGetName(i)
     # echo "++++++++ ", g_registered_type_info_get_g_type(i), g_registered_type_info_get_type_name(i)
     # assert false executed for gtk4
@@ -4429,6 +4433,12 @@ proc cairo_gobject_rectangle_get_type*(): GType {.importc, libprag.}
     if version == "3.0":
       suff = "3"
 
+  if namespace == "Vte":
+    if version == "2.91":
+      suff = ""
+    if version == "3.91":
+      suff = "_gtk4"
+
   var o = open("nim_gi" / (namespace.toLowerAscii) & suff & ".nim", fmWrite)
   o.write(output.data)
   o.close()
@@ -4444,7 +4454,6 @@ proc cairo_gobject_rectangle_get_type*(): GType {.importc, libprag.}
     echo gBaseInfoGetName(el[1])
   if false: # namespace in ["Nice", "Soup"]: # this gives other issues!
     gTypelibFree(typelib) # v0.9.8, try to fix libnice/libsoup conflict
-
 
 proc launch() =
   when defined(gcDestructors):
@@ -4464,14 +4473,14 @@ proc launch() =
   # as typelib does not support reloading, we have to generate all libs twice
   # note cairo is handcrafted!
 
-  if ISGTK3:
-    echo "Generating bindings for GTK3..."
-    main("Gtk", "3.0") # the 3 new 4.0 releases in old version
+  if ISGTK3: # this process is executed first, we use libsoup 2.4, or when available, libsoup 3
+    echo "Generating bindings for GTK3 first."
+    main("Gtk", "3.0")
     main("Gdk", "3.0")
     main("GdkX11", "3.0")
     # main("Gsk") # not available for GTK3
     main("Graphene")
-    main("GObject") # and the old common onces. GObject before Glib!
+    main("GObject") # GObject before Glib!
     main("GLib")
     main("Gio")
     main("GdkPixbuf")
@@ -4486,16 +4495,28 @@ proc launch() =
     main("HarfBuzz")
     main("Rsvg")
     main("xlib")
-    main("Vte")
+    main("Vte", "2.91")
     main("Notify")
     main("Handy")
-    main("Soup", "2.4") # process Soup before Nice, preventing the load of not matching libsoup version
-    main("Nice")
+
+    main("GUPnP") # pulls in libsoup, lets see which version
+    let gi = gIrepositoryGetDefault()
+    let soup24ForGTK3 = g_irepository_is_registered(gi, "Soup", "2.4")
+    var webkitver = "4.1" # that version uses already libsoup3
+    if soup24ForGTK3 == GTrue: # legacy
+      main("Soup", "2.4")
+      webkitver = "4.0"
+    else:
+      var f: File = open(joinPath(getTempDir(), "libniceUseslibsoup3"), fmWrite)
+      f.write("libniceUseslibsoup3") # remember status for GTK4 process
+      f.close
+      main("Soup", "3.0")
+
+    main("Nice") # libnice pulls in libsoup indirectly by GUPnP
     main("cairo")
-    main("WebKit2", "4.0")
-    main("JavaScriptCore", "4.0")
-    #main("Soup", "2.4")
-    main("WebKit2WebExtension", "4.0")
+    main("WebKit2", webkitver)
+    main("JavaScriptCore", webkitver)
+    main("WebKit2WebExtension", webkitver)
     main("Gst")
     main("GstBase")
     main("GstAllocators")
@@ -4517,15 +4538,15 @@ proc launch() =
     main("GstApp")
     main("GstPbutils")
     main("GtkLayerShell")
-  else:
-    echo "First we try generating bindings for GTK4, this may fail when GTK4 is not properly installed"
+  else: # this process uses libsoup3 only
+    echo "Try generating bindings for GTK4, this may fail when GTK4 is not properly installed"
     echo "on your computer. But don't worry, you can still use GTK3"
-    main("Gtk", "4.0") # the 3 new 4.0 releases
+    main("Gtk", "4.0")
     main("Gdk", "4.0")
     main("GdkX11", "4.0")
-    main("Gsk") # and two new ones for gtk4
+    main("Gsk")
     main("Graphene")
-    main("GObject") # and the old common onces. GObject before Glib!
+    main("GObject") # GObject before Glib!
     main("GLib")
     main("Gio")
     main("GdkPixbuf")
@@ -4540,16 +4561,24 @@ proc launch() =
     main("HarfBuzz")
     main("Rsvg")
     main("xlib")
-    # main("Vte") # not yet available for GTK4
+    main("Vte", "3.91") # Arch Linux has it already, we will call it vte_gtk4
     main("Notify")
-    # main("Handy") # not yet available for GTK4
+    # main("Handy") # not available for GTK4
     main("Adw") # replaces libhandy for GTK4
-    main("Soup", "3.0") # process Soup before Nice, preventing the load of not matching libsoup version
-    # main("Nice") # https://discourse.gnome.org/t/some-libsoup-3-issue/7807/14 no nice for GTK4 in v0.9.8
+
+    let fileName = joinPath(getTempDir(), "libniceUseslibsoup3")
+    if fileExists(fileName):
+      var f: File = open(fileName, fmRead)
+      if f.readLine == "libniceUseslibsoup3":
+        main("GUPnP") # we do not really need this one
+        main("Nice") # otherwise, we have no libnice for GTK4 available
+      f.close
+      removeFile(fileName)
+
+    main("Soup", "3.0")
     main("cairo")
     main("WebKit2", "5.0")
     main("JavaScriptCore", "5.0")
-    #main("Soup", "3.0")
     main("WebKit2WebExtension", "5.0")
     main("Gst")
     main("GstBase")
@@ -4610,7 +4639,7 @@ launch()
 #  if not xcallerAlloc.contains(el):
 #    echo el
 
-# 4613 lines
+# 4642 lines
 # gtk_icon_view_get_tooltip_context bug Candidate ignoreFinalizer
 # gtk_tree_view_get_cursor bug getBox genRec gisup4
 #
