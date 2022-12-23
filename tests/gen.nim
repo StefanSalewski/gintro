@@ -1383,7 +1383,8 @@ proc genPars(info: GICallableInfo; genProxy = false; binfo: GIBaseInfo = nil; ge
 
     if isProxyCandidate(t) and not gArgInfoIsCallerAllocates(arg) and not userAlloc:
 
-      if mayBeNil and gArgInfoGetDirection(arg) != GIDirection.OUT:
+      #if mayBeNil and gArgInfoGetDirection(arg) != GIDirection.OUT: #puh
+      if mayBeNil and gArgInfoGetDirection(arg) != GIDirection.OUT and gArgInfoGetDirection(arg) != GIDirection.INOUT:
         # result.arglist.add("if " & name & ".isNil: nil else: cast[" & ngr.name00 & "](" & name & ".impl)")
         result.arglist.add("if " & name & ".isNil: nil else: cast[" & ngr.name00 & "](" & (nameimpl % [name]) & ")")
       else:
@@ -1646,6 +1647,10 @@ proc findFreeObject(info: GIBaseInfo): string =
   if f == "g_param_spec_uref":
     f = "g_param_spec_unref"
   return f # empty string for all true gobjects, only not empty for GParamSpec and a few more, see grep "unref-func" /usr/share/gir-1.0/*
+
+
+proc typeIsReallyVoidAndNotPointer(t: GITypeInfo): bool =
+  gTypeInfoGetTag(t) == GITypeTag.VOID and gTypeInfoIsPointer(t) == GFalse
 
 proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
 
@@ -2008,13 +2013,14 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
 
   try:
 
-    for tryOut2Ret in [false, true]:
+    for tryOut2Ret in [false, true]: # puh
 
       if tryOut2Ret:
         var ret2 = gCallableInfoGetReturnType(minfo)
+
         let match = if gCallableInfoIsMethod(minfo): 1 else: 0
         let arg = gCallableInfoGetArg(minfo, (1 - match).cint)
-        let out2ret = (gCallableInfoGetNArgs(minfo) + match) == 2 and  gTypeInfoGetTag(ret2) == GITypeTag.VOID and gArgInfoGetDirection(arg) == GIDirection.OUT
+        let out2ret = (gCallableInfoGetNArgs(minfo) + match) == 2 and  typeIsReallyVoidAndNotPointer(ret2) and gArgInfoGetDirection(arg) == GIDirection.OUT
         if not out2Ret:
           break
 
@@ -4639,7 +4645,7 @@ launch()
 #  if not xcallerAlloc.contains(el):
 #    echo el
 
-# 4642 lines
+# 4648 lines
 # gtk_icon_view_get_tooltip_context bug Candidate ignoreFinalizer
 # gtk_tree_view_get_cursor bug getBox genRec gisup4
 #
