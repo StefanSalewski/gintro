@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK4/GTK3 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.9.9 2022-DEC-23
+# v 0.9.9 2022-DEC-25
 # (c) S. Salewski 2018, 2019, 2020, 2021, 2022, 2023
 
 # https://gnome.pages.gitlab.gnome.org/gobject-introspection/girepository/
@@ -388,6 +388,8 @@ mangledNames["2dAffine"] = "d2Affine"
 mangledNames["2dTranslate"] = "d2Translate"
 mangledNames["true"] = "true1"
 mangledNames["false"] = "false0"
+mangledNames["cairo"] = "ct"
+
 
 const someEvent: HashSet[string] = """"
   EventAny EventKey EventButton EventTouch EventScroll EventMotion EventExpose EventVisibility
@@ -623,7 +625,10 @@ gstcheck.CheckABIStruct
 gstcheck.Harness
 """
 
-
+#poppler.Rectangle
+#poppler.ImageMapping
+#Caution, these structs should be heavy symbols
+#gtk.PageRange see https://docs.gtk.org/gtk4/method.PrintSettings.get_page_ranges.html
 
 const autoCallerAlloc = """
 """
@@ -2726,10 +2731,11 @@ proc writeStruct(info: GIStructInfo) =
   if WriteFields or callerAlloc.contains(($gBaseInfoGetNamespace(info)).toLowerAscii & '.' & mangleName(gBaseInfoGetName(
       info))) or
     mangleName(gBaseInfoGetName(info)) == "TargetEntry" or
-      ["gst.Message", "gst.MiniObject", "glib.List", "pango.Attribute", "nice.Address", "nice.Candidate"].contains((
+    #mangleName(gBaseInfoGetName(info)) == "TargetEntry" or mangleName(gBaseInfoGetName(info)) == "TargetEntry" or
+      ["poppler.ImageMapping", "poppler.Rectangle", "gst.Message", "gst.MiniObject", "glib.List", "pango.Attribute", "nice.Address", "nice.Candidate"].contains((
           $gBaseInfoGetNamespace(info)).toLowerAscii & '.' & mangleName(gBaseInfoGetName(info))):
     #if gBaseInfoGetName(info) == "Address":
-    #  echo "kkk", info.gStructInfoGetNFields()
+    #  echo "kkk", info.gStructInfoGetNFields() # puh
     for j in 0.cint ..< info.gStructInfoGetNFields():
       let field = info.gStructInfoGetField(j)
       let name = manglename(gBaseInfoGetName(field)) & EM
@@ -3609,6 +3615,24 @@ include gimplgst
 
 """
 
+const Poppler_EPI = """
+
+proc x1*(r: Rectangle): float = r.impl.x1.float
+
+proc y1*(r: Rectangle): float = r.impl.y1.float
+
+proc x2*(r: Rectangle): float = r.impl.x2.float
+
+proc y2*(r: Rectangle): float = r.impl.y2.float
+
+
+proc area*(im: ImageMapping): Rectangle00 = im.impl.area
+
+proc imageId*(im: ImageMapping): int = im.impl.imageId.int
+
+"""
+
+
 const Pango_EPI = """
 
 when not declared(ATTR_INDEX_TO_TEXT_END):
@@ -3860,8 +3884,18 @@ proc main(namespace: string; version: cstring = nil) =
   for el in mitems(hlibs):
     let p = skipUntil(el, {'0' .. '9', '.'})
     el.setLen(p)
-  var Lib = hhlibs[maxby.minIndexByIt(hlibs, editDistanceAscii(it.toLowerAscii, moduleNamespace))]
+
+  var bestMatchName = moduleNamespace
+  if namespace == "Poppler":
+    bestMatchName = "libpoppler-glib"
+
+  var Lib = hhlibs[maxby.minIndexByIt(hlibs, editDistanceAscii(it.toLowerAscii, bestMatchName))]
   # see https://discourse.gnome.org/t/title-in-text-due-to-discourse-bug/4477
+
+  #if namespace == "Poppler" and Lib == "libpoppler":
+  #  Lib &= "-glib"
+
+
   if namespace == "PangoCairo" and Lib.startsWith("libpango-"):
     echo moduleNamespace
     echo Lib
@@ -4364,6 +4398,9 @@ proc get$1*(builder: Builder; name: string): $1 =
   if namespace == "Pango":
     output.write(Pango_EPI)
 
+  if namespace == "Poppler":
+    output.write(Poppler_EPI)
+
   if namespace == "GLib":
     output.write(GLib_EPI)
 
@@ -4544,6 +4581,7 @@ proc launch() =
     main("GstApp")
     main("GstPbutils")
     main("GtkLayerShell")
+    main("Poppler")
   else: # this process uses libsoup3 only
     echo "Try generating bindings for GTK4, this may fail when GTK4 is not properly installed"
     echo "on your computer. But don't worry, you can still use GTK3"
@@ -4606,6 +4644,7 @@ proc launch() =
     main("GstWebRTC")
     main("GstApp")
     main("GstPbutils")
+    main("Poppler")
 
   if ISGTK3:
     supmod3.writeLine("  ]")
@@ -4645,7 +4684,7 @@ launch()
 #  if not xcallerAlloc.contains(el):
 #    echo el
 
-# 4648 lines
+# 4687 lines
 # gtk_icon_view_get_tooltip_context bug Candidate ignoreFinalizer
 # gtk_tree_view_get_cursor bug getBox genRec gisup4
 #
