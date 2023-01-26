@@ -5,6 +5,8 @@
 # proc cellDataFunc(column00: ptr TreeViewColumn00; renderer00: ptr CellRenderer00;
 #   model00: ptr TreeModel00; iter: TreeIter; data: pointer) {.cdecl.}
 
+import std/macros
+
 # unset -- the macro can do this already
 proc unsetCellDataFunc*(column: TreeViewColumn; renderer: CellRenderer) =
   setCellDataFunc(column, renderer, nil, nil, nil)
@@ -199,32 +201,33 @@ template setDrawFunc*(da: DrawingArea; p: untyped; arg: typed): untyped =
 template setDrawFunc*(da: DrawingArea; p: untyped): untyped =
   msetDrawFunc(da, p, "", true)
 
-proc newTreeListModel*(root: ListModel; passthrough: bool; autoexpand: bool;
-    createFunc: proc(data: Object): ListModel): TreeListModel =
+macro newTreeListModelt*(root: ListModel; passthrough: bool; autoexpand: bool;
+    createFunc: untyped): untyped =
 
-  proc realCreateFunc (self: ptr gobject.Object00;
-      ignore: pointer): ptr ListModel00 {.cdecl.} =
-    let h: pointer = g_object_get_qdata(self, Quark)
-    let returnedList = createFunc(cast[Object](h))
-    result = cast[ptr ListModel00](returnedList.impl)
-
-  result = newTreeListModel(root, passthrough, autoexpand, realCreateFunc, nil, nil)
+  result = quote do:
+    proc realCreateFunc (self: ptr gobject.Object00;
+        ignore: pointer): ptr ListModel00 {.cdecl.} =
+      let h: pointer = g_object_get_qdata(self, Quark)
+      let returnedList = `createFunc`(cast[Object](h))
+      result = cast[ptr ListModel00](returnedList.impl)
+    newTreeListModel(`root`, `passthrough`, `autoexpand`, realCreateFunc, nil, nil)
 
 proc newTreeListModel*[T](root: ListModel; passthrough: bool; autoexpand: bool;
     createFunc: proc(item: Object; userData: ptr T): ListModel;
     userData: ptr T; destroyNotify: proc(userData: ptr T)): TreeListModel =
 
-  proc realCreateFunc (self: ptr gobject.Object00;
+  result = quote do:
+    proc realCreateFunc (self: ptr gobject.Object00;
       userData: pointer): ptr ListModel00 {.cdecl.} =
-    let h: pointer = g_object_get_qdata(self, Quark)
-    let returnedList = createFunc(cast[Object](h), cast[ptr T](userData))
-    result = cast[ptr ListModel00](returnedList.impl)
+      let h: pointer = g_object_get_qdata(self, Quark)
+      let returnedList = `createFunc`(cast[Object](h), cast[ptr T](userData))
+      result = cast[ptr ListModel00](returnedList.impl)
 
-  proc realDestroyNotify(userData: pointer) =
-    destroyNotify(cast[ptr T](userData))
+    proc realDestroyNotify(userData: pointer) =
+      `destroyNotify`(cast[ptr T](userData))
 
-  result = newTreeListModel(root, passthrough, autoexpand, realCreateFunc,
-      userData, realDestroyNotify)
+    newTreeListModel(`root`, `passthrough`, `autoexpand`, realCreateFunc,
+        `userData`, realDestroyNotify)
 
 
 # 196 lines
