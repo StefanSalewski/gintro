@@ -15,7 +15,8 @@ proc unsetCellDataFunc*(column: TreeViewColumn; renderer: CellRenderer) =
 # if arg is a ref, then we apply GC_ref() and pass it
 # if arg is a ptr, then we pass it. (but we never free that object)
 # if arg is a value type, then we replace it with a copy of a ref type to guaranty lifetime
-macro setCellDataFunc*(column: TreeViewColumn; renderer: CellRenderer; fn: untyped = nil; arg: typed = nil): untyped =
+macro setCellDataFunc*(column: TreeViewColumn; renderer: CellRenderer;
+    fn: untyped = nil; arg: typed = nil): untyped =
 
   if fn == nil: # unset
     result = parseStmt("setCellDataFunc($1, $2, nil, nil, nil)" % [$column, $renderer])
@@ -25,7 +26,7 @@ macro setCellDataFunc*(column: TreeViewColumn; renderer: CellRenderer; fn: untyp
   inc(CdfID)
   var ats: string # the type of optional argument as string (arg type string)
   var argStr: string # the value of optional argument as string
-  var atsfix: string # we have to prefix with "ref " if arg is avalue type 
+  var atsfix: string # we have to prefix with "ref " if arg is avalue type
   if arg == nil: # no optional argument, so fake a nil pointer
     argStr = "nil"
     ats = "pointer"
@@ -39,13 +40,13 @@ macro setCellDataFunc*(column: TreeViewColumn; renderer: CellRenderer; fn: untyp
   let procName = "celldatafunc_" & $CdfID # our init code
   let procNameCdecl = "celldatafunc_cdecl_" & $CdfID # the proc that is called from GTK
   var procNameDestroy: string # the proc that GTK calls when we unset the cellDataFunc
-  # first we generate the destroy proc
+ # first we generate the destroy proc
   var r0s: string
 
   # GTK should unref the optional argument later, so we generate a destroy proc which GTK can call
   if arg != nil and getTypeInst(arg).typeKind != ntyPtr:
     procNameDestroy = "celldatafunc_destroy" & $CdfID
-    r0s ="""
+    r0s = """
 proc $1(p: pointer) {.cdecl.} =
   # echo "GC_Unref(arg)"
   GC_Unref(cast[$2](p))
@@ -82,27 +83,30 @@ proc $1(column00: ptr TreeViewColumn00; renderer00: ptr CellRenderer00;
 # making a deep copy of optional argument when argumant is not a ref
   var r2s: string
   if arg == nil:
-    r2s ="""
+    r2s = """
 proc $1(column: TreeViewColumn; renderer: CellRenderer; pdata: $2) =
     setCellDataFunc($3, $4, $5, nil, nil)
 $1(column, renderer, $6)
-""" % [$procName, ats, $column, $renderer, $procNameCdecl, argStr, $procNameDestroy]
+""" % [$procName, ats, $column, $renderer, $procNameCdecl, argStr,
+        $procNameDestroy]
   elif getTypeInst(arg).typeKind == ntyPtr:
-    r2s ="""
+    r2s = """
 proc $1(column: TreeViewColumn; renderer: CellRenderer; pdata: $2) =
     setCellDataFunc($3, $4, $5, cast[pointer](pdata), $7)
 $1(column, renderer, $6)
-""" % [$procName, ats, $column, $renderer, $procNameCdecl, argStr, $procNameDestroy]
+""" % [$procName, ats, $column, $renderer, $procNameCdecl, argStr,
+        $procNameDestroy]
   elif getTypeInst(arg).typeKind == ntyRef:
-    r2s ="""
+    r2s = """
 proc $1(column: TreeViewColumn; renderer: CellRenderer; pdata: $2) =
     if not pdata.isNil: # or pdata is pointer):
       GC_ref(pdata)
     setCellDataFunc($3, $4, $5, cast[pointer](pdata), $7)
 $1(column, renderer, $6)
-""" % [$procName, ats, $column, $renderer, $procNameCdecl, argStr, $procNameDestroy]
+""" % [$procName, ats, $column, $renderer, $procNameCdecl, argStr,
+        $procNameDestroy]
   else: # arg is value object
-    r2s ="""
+    r2s = """
 proc $1(column: TreeViewColumn; renderer: CellRenderer; pdata: $2) =
     var ar: ref $2
     new(ar)
@@ -111,7 +115,8 @@ proc $1(column: TreeViewColumn; renderer: CellRenderer; pdata: $2) =
     GC_ref(ar)
     setCellDataFunc($3, $4, $5, cast[pointer](ar), $7)
 $1(column, renderer, $6)
-""" % [$procName, ats, $column, $renderer, $procNameCdecl, argStr, $procNameDestroy]
+""" % [$procName, ats, $column, $renderer, $procNameCdecl, argStr,
+        $procNameDestroy]
 
   result = parseStmt(r0s & r1s & r2s)
 
@@ -128,7 +133,8 @@ proc setDrawFunc*(self: DrawingArea; drawFunc: DrawingAreaDrawFunc;
   gtk_drawing_area_set_draw_func(cast[ptr DrawingArea00](self.impl), drawFunc, userData, destroy)
 ]#
 #
-macro msetDrawFunc(da: DrawingArea; p: untyped; arg: typed; ignoreArg: bool): untyped =
+macro msetDrawFunc(da: DrawingArea; p: untyped; arg: typed;
+    ignoreArg: bool): untyped =
   var IdleID {.compileTime, global.}: int
   inc(IdleID)
   let ats = $getTypeInst(arg).toStrLit
@@ -145,7 +151,7 @@ proc $1(self: ptr DrawingArea00; cr: ptr cairo.Context00; width, height: int32; 
     cr1.ignoreFinalizer = true
   cr1.impl = cr
   $2(cast[DrawingArea](h), cr1, width, height"""
- 
+
   if not ignoreArg.boolVal:
     if getTypeInst(arg).typeKind == ntyRef:
       r1s.add(", cast[$3](userdata)")
@@ -192,6 +198,34 @@ template setDrawFunc*(da: DrawingArea; p: untyped; arg: typed): untyped =
 
 template setDrawFunc*(da: DrawingArea; p: untyped): untyped =
   msetDrawFunc(da, p, "", true)
+
+proc newTreeListModel*(root: ListModel; passthrough: bool; autoexpand: bool;
+    createFunc: proc(data: Object): ListModel): TreeListModel =
+
+  proc realCreateFunc (self: ptr gobject.Object00;
+      ignore: pointer): ptr ListModel00 {.cdecl.} =
+    let h: pointer = g_object_get_qdata(self, Quark)
+    let returnedList = createFunc(cast[Object](h))
+    result = cast[ptr ListModel00](returnedList.impl)
+
+  result = newTreeListModel(root, passthrough, autoexpand, realCreateFunc, nil, nil)
+
+proc newTreeListModel*[T](root: ListModel; passthrough: bool; autoexpand: bool;
+    createFunc: proc(item: Object; userData: ptr T): ListModel;
+    userData: ptr T; destroyNotify: proc(userData: ptr T)): TreeListModel =
+
+  proc realCreateFunc (self: ptr gobject.Object00;
+      userData: pointer): ptr ListModel00 {.cdecl.} =
+    let h: pointer = g_object_get_qdata(self, Quark)
+    let returnedList = createFunc(cast[Object](h), cast[ptr T](userData))
+    result = cast[ptr ListModel00](returnedList.impl)
+
+  proc realDestroyNotify(userData: pointer) =
+    destroyNotify(cast[ptr T](userData))
+
+  result = newTreeListModel(root, passthrough, autoexpand, realCreateFunc,
+      userData, realDestroyNotify)
+
 
 # 196 lines
 
