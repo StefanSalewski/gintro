@@ -219,7 +219,8 @@ macro newTreeListModel*(root: ListModel; passthrough: bool; autoexpand: bool;
 
   result = quote do:
 
-    proc realCreateFunc (self: ptr gobject.Object00; userData: pointer): ptr ListModel00 {.cdecl.} =
+    proc realCreateFunc (self: ptr gobject.Object00;
+        userData: pointer): ptr ListModel00 {.cdecl.} =
       let h: pointer = g_object_get_qdata(self, Quark)
       when (`userData` is ref object):
         let returnedList = `createFunc`(cast[Object](h), cast[`userDataType`](userData))
@@ -230,12 +231,14 @@ macro newTreeListModel*(root: ListModel; passthrough: bool; autoexpand: bool;
 
     when (`userData` is ref object):
       GC_ref(`userData`)
-      newTreeListModel(`root`, `passthrough`, `autoexpand`, realCreateFunc, cast[pointer](`userData`), nil)
+      newTreeListModel(`root`, `passthrough`, `autoexpand`, realCreateFunc,
+          cast[pointer](`userData`), nil)
     else:
       var reffed: ref `userDataType` = new(ref `userDataType`)
       reffed[] = `userData`
       GC_ref(reffed)
-      newTreeListModel(`root`, `passthrough`, `autoexpand`, realCreateFunc, cast[pointer](reffed), nil)
+      newTreeListModel(`root`, `passthrough`, `autoexpand`, realCreateFunc,
+          cast[pointer](reffed), nil)
 
 # 196 lines
 
