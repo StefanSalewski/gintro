@@ -1,9 +1,8 @@
 
-import ../../gintro/[gtk4, gobject, gio, glib]
+import gintro/[gtk4, gobject, gio, glib]
 
-# this is called from GTK, so all data types are the 00 onces.
-proc createChildLists(item: gobject.Object): ListModel =
-  let list = newStringList("test1", "test2")
+proc createChildLists(item: gobject.Object, userData: (string, string)): ListModel =
+  let list = newStringList("test1", "test2", userData[0], userData[1])
   list.ignoreFinalizer = true # because GTK frees it itself
   return cast[ListModel](list)
 
@@ -27,9 +26,8 @@ proc bnd(self: SignalListItemFactory; obj: Object) =
 
 proc getTreeView: ListView =
   let list = newStringList("test1", "test2")
-  #proc newTreeListModel*(root: gio.ListModel; passthrough: bool; autoexpand: bool;
-  #  createFunc: TreeListModelCreateModelFunc; userData: pointer; userDestroy: DestroyNotify): TreeListModel =
-  let treeList = newTreeListModelt(cast[ListModel](list), false, false, createChildLists)
+  let s = ("hello", "hiiii")
+  let treeList = newTreeListModel(cast[ListModel](list), false, false, createChildLists, s, nil)
   let selectionModel = newSingleSelection(cast[ListModel](treeList))
   let factory = newSignalListItemFactory()
   factory.connect("setup", setup)
@@ -41,7 +39,7 @@ proc activate(app: Application) =
   window.title = "Window"
   window.defaultSize = (200, 200)
   window.setChild(getTreeView())
-  window.present # gtk_widget_show(GTK_WIDGET(window));
+  window.present
 
 proc main =
   let app = newApplication("org.gtk.example")

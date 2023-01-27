@@ -201,7 +201,7 @@ template setDrawFunc*(da: DrawingArea; p: untyped; arg: typed): untyped =
 template setDrawFunc*(da: DrawingArea; p: untyped): untyped =
   msetDrawFunc(da, p, "", true)
 
-macro newTreeListModelt*(root: ListModel; passthrough: bool; autoexpand: bool;
+macro newTreeListModel*(root: ListModel; passthrough: bool; autoexpand: bool;
     createFunc: untyped): untyped =
 
   result = quote do:
@@ -212,23 +212,30 @@ macro newTreeListModelt*(root: ListModel; passthrough: bool; autoexpand: bool;
       result = cast[ptr ListModel00](returnedList.impl)
     newTreeListModel(`root`, `passthrough`, `autoexpand`, realCreateFunc, nil, nil)
 
-proc newTreeListModel*[T](root: ListModel; passthrough: bool; autoexpand: bool;
-    createFunc: proc(item: Object; userData: ptr T): ListModel;
-    userData: ptr T; destroyNotify: proc(userData: ptr T)): TreeListModel =
+macro newTreeListModel*(root: ListModel; passthrough: bool; autoexpand: bool;
+    createFunc: untyped; userData: typed; destroyNotify: untyped): untyped =
+
+  let userDataType = getTypeInst(userData)
 
   result = quote do:
-    proc realCreateFunc (self: ptr gobject.Object00;
-      userData: pointer): ptr ListModel00 {.cdecl.} =
+
+    proc realCreateFunc (self: ptr gobject.Object00; userData: pointer): ptr ListModel00 {.cdecl.} =
       let h: pointer = g_object_get_qdata(self, Quark)
-      let returnedList = `createFunc`(cast[Object](h), cast[ptr T](userData))
+      when (`userData` is ref object):
+        let returnedList = `createFunc`(cast[Object](h), cast[`userDataType`](userData))
+      else:
+        var reffed: ref `userDataType` = cast[ref `userDataType`](userData)
+        let returnedList = `createFunc`(cast[Object](h), reffed[])
       result = cast[ptr ListModel00](returnedList.impl)
 
-    proc realDestroyNotify(userData: pointer) =
-      `destroyNotify`(cast[ptr T](userData))
-
-    newTreeListModel(`root`, `passthrough`, `autoexpand`, realCreateFunc,
-        `userData`, realDestroyNotify)
-
+    when (`userData` is ref object):
+      GC_ref(`userData`)
+      newTreeListModel(`root`, `passthrough`, `autoexpand`, realCreateFunc, cast[pointer](`userData`), nil)
+    else:
+      var reffed: ref `userDataType` = new(ref `userDataType`)
+      reffed[] = `userData`
+      GC_ref(reffed)
+      newTreeListModel(`root`, `passthrough`, `autoexpand`, realCreateFunc, cast[pointer](reffed), nil)
 
 # 196 lines
 
