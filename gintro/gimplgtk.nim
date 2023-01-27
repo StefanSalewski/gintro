@@ -213,7 +213,7 @@ macro newTreeListModel*(root: ListModel; passthrough: bool; autoexpand: bool;
     newTreeListModel(`root`, `passthrough`, `autoexpand`, realCreateFunc, nil, nil)
 
 macro newTreeListModel*(root: ListModel; passthrough: bool; autoexpand: bool;
-    createFunc: untyped; userData: typed; destroyNotify: untyped): untyped =
+    createFunc: untyped; userData: typed): untyped =
 
   let userDataType = getTypeInst(userData)
 
