@@ -27,7 +27,7 @@ proc bnd(self: SignalListItemFactory; obj: Object) =
 proc getTreeView: ListView =
   let list = newStringList("test1", "test2")
   let s = ("hello", "hiiii")
-  let treeList = newTreeListModel(cast[ListModel](list), false, false, createChildLists, s, nil)
+  let treeList = newTreeListModel(cast[ListModel](list), false, false, createChildLists, s)
   let selectionModel = newSingleSelection(cast[ListModel](treeList))
   let factory = newSignalListItemFactory()
   factory.connect("setup", setup)
