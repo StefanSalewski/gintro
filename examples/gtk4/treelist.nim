@@ -1,9 +1,8 @@
 
-import gintro/[gtk4, gobject, gio, glib]
+import ../../gintro/[gtk4, gobject, gio, glib]
 
 proc createChildLists(item: gobject.Object, userData: (string, string)): ListModel =
   let list = newStringList("test1", "test2", userData[0], userData[1])
-  list.ignoreFinalizer = true # because GTK frees it itself
   return cast[ListModel](list)
 
 proc setup(self: SignalListItemFactory; obj: Object) =

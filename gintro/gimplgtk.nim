@@ -227,9 +227,10 @@ macro newTreeListModel*(root: ListModel; passthrough: bool; autoexpand: bool;
       else:
         var reffed: ref `userDataType` = cast[ref `userDataType`](userData)
         let returnedList = `createFunc`(cast[Object](h), reffed[])
+      returnedList.ignoreFinalizer = true
       result = cast[ptr ListModel00](returnedList.impl)
 
-    when (`userData` is ref object):
+    when (`userData` is ref):
       GC_ref(`userData`)
       newTreeListModel(`root`, `passthrough`, `autoexpand`, realCreateFunc,
           cast[pointer](`userData`), nil)
