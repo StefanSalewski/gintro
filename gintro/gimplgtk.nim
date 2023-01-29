@@ -222,7 +222,7 @@ macro newTreeListModel*(root: ListModel; passthrough: bool; autoexpand: bool;
     proc realCreateFunc (self: ptr gobject.Object00;
         userData: pointer): ptr ListModel00 {.cdecl.} =
       let h: pointer = g_object_get_qdata(self, Quark)
-      when (`userData` is ref object):
+      when (`userData` is ref):
         let returnedList = `createFunc`(cast[Object](h), cast[`userDataType`](userData))
       else:
         var reffed: ref `userDataType` = cast[ref `userDataType`](userData)
