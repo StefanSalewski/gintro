@@ -1,9 +1,10 @@
 # High level gobject-introspection based GTK4/GTK3 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.9.9 2022-DEC-25
+# v 0.9.9 2023-JAN-31
 # (c) S. Salewski 2018, 2019, 2020, 2021, 2022, 2023
 
 # https://gnome.pages.gitlab.gnome.org/gobject-introspection/girepository/
+# https://gi.readthedocs.io/en/latest/annotations/giannotations.html
 
 # usefull for finding death code:
 # https://forum.nim-lang.org/t/5898
@@ -4352,6 +4353,7 @@ proc init* =
       output.write("include gisup4\n")
       output.write("include gimplgobj\n")
       output.write("include gimplgtk\n")
+      output.write("include gimplgtk4\n")
     buildableList.add("MenuModel")
     buildableList.add("FileChooserNative")
     for i in buildableList:
