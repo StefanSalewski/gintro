@@ -28,12 +28,21 @@ macro gobjectWrapperNew*(data: typed): untyped =
     let internalObject = cast[ptr GObjectWrapper00](internal)
     GObjectWrapper[`dataType`](impl: internalObject, ignoreFinalizer: true)
 
-proc gobjectWrapperGetData*[T](wrapper: GObjectWrapper[T]): T =
+proc data*[T](wrapper: GObjectWrapper[T]): T =
   let internal = cast[ptr GObjectWrapper00](wrapper.impl)
   when T is (ref or ptr):
     result = cast[T](gobjectWrapper00GetData(internal))
   else:
     result = cast[ref T](gobjectWrapper00GetData(internal))[]
+
+proc `data=`*[T](wrapper: var GObjectWrapper[T], data: T) =
+  let internal = cast[ptr GObjectWrapper00](wrapper.impl)
+  when T is (ref or ptr):
+    let temp = cast[T](gobjectWrapper00GetData(internal))
+  else:
+    let temp = cast[ref T](gobjectWrapper00GetData(internal))
+  temp[] = data
+
 
 # for testing purposes
 var five = 5
