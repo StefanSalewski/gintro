@@ -9,7 +9,7 @@ G_DECLARE_FINAL_TYPE (GObjectWrapper, gobject_wrapper, GOBJECT, WRAPPER, GObject
 
 struct _GObjectWrapper {
     GObject parent_instance;
-    char* data;
+    void* data;
 };
 
 GObjectWrapper *gobject_wrapper_new(void *data);
