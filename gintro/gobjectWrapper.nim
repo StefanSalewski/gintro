@@ -28,7 +28,7 @@ macro gobjectWrapperNew*(data: typed): untyped =
     let internalObject = cast[ptr GObjectWrapper00](internal)
     GObjectWrapper[`dataType`](impl: internalObject, ignoreFinalizer: true)
 
-proc gobjectWrapperGetData*[T](wrapper: GObjectWrapper[T]): var T =
+proc gobjectWrapperGetData*[T](wrapper: GObjectWrapper[T]): T =
   let internal = cast[ptr GObjectWrapper00](wrapper.impl)
   when T is (ref or ptr):
     result = cast[T](gobjectWrapper00GetData(internal))
