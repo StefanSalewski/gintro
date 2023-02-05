@@ -7,35 +7,35 @@ import gintro/gobject
 import std/[genasts, macros]
 
 type
-  InternalGObjectWrapper[T] {.importc: "GObjectWrapper", header: "gobjectWrapper.h".} = object of InitiallyUnowned00
-    data: pointer
+  GObjectWrapper00 = object of Object00
+  GObjectWrapper*[T] = ref object of Object
 
-  GObjectWrapper*[T] = ref object of InitiallyUnowned
+proc gobjectWrapper00New(data: pointer): pointer {.importc: "gobject_wrapper_new", header: "gobjectWrapper.h".}
 
-proc internalGObjectWrapperNew(data: pointer): pointer {.importc: "gobject_wrapper_new", header: "gobjectWrapper.h".}
+# I could implement this with gobject properties on the C side instead, which might be nicer, but it also requires a lot more boilerplate code
+proc gobjectWrapper00GetData(self: ptr GObjectWrapper00): pointer {.importc: "gobject_wrapper_get_data", header: "gobjectWrapper.h".}
 
 macro gobjectWrapperNew*(data: typed): untyped =
   let dataType = getTypeInst(data)
   result = genAst(data, dataType):
     when `data` is (ref or ptr):
-      let internal: pointer = internalGObjectWrapperNew(cast[pointer](`data`))
+      let internal: pointer = gobjectWrapper00New(cast[pointer](`data`))
     else:
       let reffed: ref `dataType` = new(ref `dataType`)
       reffed[] = `data`
       GC_ref(reffed)
-      let internal: pointer = internalGObjectWrapperNew(cast[pointer](reffed))
-    let internalObject = cast[ptr InternalGObjectWrapper[`dataType`]](internal)
+      let internal: pointer = gobjectWrapper00New(cast[pointer](reffed))
+    let internalObject = cast[ptr GObjectWrapper00](internal)
     GObjectWrapper[`dataType`](impl: internalObject, ignoreFinalizer: true)
 
-
 proc gobjectWrapperGetData*[T](wrapper: GObjectWrapper[T]): var T =
-  let internal = cast[ptr InternalGObjectWrapper[T]](wrapper.impl)
+  let internal = cast[ptr GObjectWrapper00](wrapper.impl)
   when T is (ref or ptr):
-    result = cast[T](internal.data)
+    result = cast[T](gobjectWrapper00GetData(internal))
   else:
-    result = cast[ref T](internal.data)[]
+    result = cast[ref T](gobjectWrapper00GetData(internal))[]
 
+# for testing purposes
 var five = 5
-
 let gobectWrapper = gobjectWrapperNew(five)
 echo gobectWrapper.gobjectWrapperGetData()

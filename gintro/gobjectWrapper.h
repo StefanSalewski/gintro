@@ -14,4 +14,6 @@ struct _GObjectWrapper {
 
 GObjectWrapper *gobject_wrapper_new(void *data);
 
+void* gobject_wrapper_get_data(GObjectWrapper* self);
+
 G_END_DECLS
