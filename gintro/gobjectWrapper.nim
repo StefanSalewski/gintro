@@ -10,10 +10,10 @@ type
   GObjectWrapper00 = object of Object00
   GObjectWrapper*[T] = ref object of Object
 
-proc gobjectWrapper00New(data: pointer): pointer {.importc: "gobject_wrapper_new", header: "gobjectWrapper.h".}
+proc gobjectWrapper00New(data: pointer): pointer {.importc: "gobject_wrapper_new".}
 
 # I could implement this with gobject properties on the C side instead, which might be nicer, but it also requires a lot more boilerplate code
-proc gobjectWrapper00GetData(self: ptr GObjectWrapper00): pointer {.importc: "gobject_wrapper_get_data", header: "gobjectWrapper.h".}
+proc gobjectWrapper00GetData(self: ptr GObjectWrapper00): pointer {.importc: "gobject_wrapper_get_data".}
 
 macro gobjectWrapperNew*(data: typed): untyped =
   let dataType = getTypeInst(data)
