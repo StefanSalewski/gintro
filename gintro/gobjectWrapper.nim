@@ -12,7 +12,7 @@ type
 
 proc gobjectWrapper00New(data: pointer): pointer {.importc: "gobject_wrapper_new".}
 
-# I could implement this with gobject properties on the C side instead, which might be nicer, but it also requires a lot more boilerplate code
+# I could implement this with gobject properties instead, which might be nicer, but it also requires a lot more boilerplate code
 proc gobjectWrapper00GetData(self: ptr GObjectWrapper00): pointer {.importc: "gobject_wrapper_get_data".}
 
 macro gobjectWrapperNew*(data: typed): untyped =
@@ -42,9 +42,3 @@ proc `data=`*[T](wrapper: var GObjectWrapper[T], data: T) =
   else:
     let temp = cast[ref T](gobjectWrapper00GetData(internal))
   temp[] = data
-
-
-# for testing purposes
-var five = 5
-let gobectWrapper = gobjectWrapperNew(five)
-echo gobectWrapper.gobjectWrapperGetData()
