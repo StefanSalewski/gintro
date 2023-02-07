@@ -3,7 +3,7 @@
   passl: gorge("pkg-config gobject-2.0 --libs")
   .}
 
-import gintro/gobject
+import gintro/[gobject, glib]
 import std/[genasts, macros]
 
 type
@@ -14,6 +14,7 @@ proc gobjectWrapper00New(data: pointer): pointer {.importc: "gobject_wrapper_new
 
 # I could implement this with gobject properties instead, which might be nicer, but it also requires a lot more boilerplate code
 proc gobjectWrapper00GetData(self: ptr GObjectWrapper00): pointer {.importc: "gobject_wrapper_get_data".}
+proc gobjectWrapperGetType*(): GType {.importc: "gobject_wrapper_get_type".}
 
 macro gobjectWrapperNew*(data: typed): untyped =
   let dataType = getTypeInst(data)
