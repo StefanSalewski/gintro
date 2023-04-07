@@ -1,6 +1,6 @@
 # High level gobject-introspection based GTK4/GTK3 bindings for the Nim programming language
 # nimpretty --maxLineLen:130 gen.nim
-# v 0.9.9 2023-JAN-31
+# v 0.9.9 2023-APR-07
 # (c) S. Salewski 2018, 2019, 2020, 2021, 2022, 2023
 
 # https://gnome.pages.gitlab.gnome.org/gobject-introspection/girepository/
@@ -458,6 +458,8 @@ mangledTypes["ptr ghash"] = "ptr HashTable00"
 mangledTypes["ptr glist"] = "ptr pointer"
 mangledTypes["ptr gslist"] = "ptr pointer"
 mangledTypes["ptr utf8"] = "cstring"
+#mangledTypes["ptr HarnessPrivate00"] = "pointer"
+
 
 #utf8StringArrays.incl("g_strv_length") # bugs in GIR files # TODO needs investigation
 #utf8StringArrays.incl("g_strfreev")
@@ -2016,6 +2018,9 @@ proc writeMethod(info: GIBaseInfo; minfo: GIFunctionInfo) =
   if sym == "g_hash_table_destroy": return
 
   if sym == "g_variant_ref_sink": return # we need this early, so add manually early
+
+  if sym == "gst_bit_writer_get_data": return # no chance for automatic generation, so we have to do it manually
+
 
   try:
 
@@ -3616,6 +3621,17 @@ include gimplgst
 
 """
 
+const GstBase_EPI = """
+
+# GstBase_EPI
+proc gst_bit_writer_get_data(self: ptr BitWriter00): ptr uint8 {.
+    importc, libprag.}
+
+proc getData*(self: BitWriter): seq[uint8] =
+  result = uint8ArrayToSeq(gst_bit_writer_get_data(cast[ptr BitWriter00](self.impl)), gst_bit_writer_get_size(self.impl).int)
+
+"""
+
 const Poppler_EPI = """
 
 proc x1*(r: Rectangle): float = r.impl.x1.float
@@ -3914,6 +3930,9 @@ proc main(namespace: string; version: cstring = nil) =
     output.writeLine("    importc: \"g_boxed_free\", libprag.}")
     output.writeLine("\nproc g_boxed_copy*(boxedType: GType; boxed: pointer): pointer {.")
     output.writeLine("    importc , libprag.}")
+
+  elif namespace == "GstCheck":
+    output.writeLine("type\n  HarnessPrivate00 = object")
 
   elif namespace == "GLib":
     # we need gobject.
@@ -4397,6 +4416,9 @@ proc get$1*(builder: Builder; name: string): $1 =
   if namespace == "Gst":
     output.write(Gst_EPI)
 
+  if namespace == "GstBase":
+    output.write(GstBase_EPI)
+
   if namespace == "Pango":
     output.write(Pango_EPI)
 
@@ -4686,7 +4708,7 @@ launch()
 #  if not xcallerAlloc.contains(el):
 #    echo el
 
-# 4687 lines
+# 4711 lines
 # gtk_icon_view_get_tooltip_context bug Candidate ignoreFinalizer
 # gtk_tree_view_get_cursor bug getBox genRec gisup4
 #
