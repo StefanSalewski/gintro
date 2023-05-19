@@ -437,6 +437,23 @@ proc cairo_rotate*(cr: ptr Context00; angle: cdouble) {.importc, libcairo.}
 proc rotate*(cr: Context; angle: float) =
   cairo_rotate(cr.impl, angle.cdouble)
 
+#[
+typedef struct {
+    double xx; double yx;
+    double xy; double yy;
+    double x0; double y0;
+} cairo_matrix_t;
+]#
+
+type
+  Matrix* {.pure, byRef.} = object    
+    xx*: cdouble
+    yx*: cdouble
+    xy*: cdouble
+    yy*: cdouble
+    x0*: cdouble
+    y0*: cdouble
+
 proc cairo_transform*(cr: ptr Context00; matrix: Matrix) {.importc, libcairo.}
 #
 proc transform*(cr: Context; matrix: Matrix) =
@@ -2661,5 +2678,5 @@ when CAIRO_HAS_TEE_SURFACE:
     discard cairo_tee_surface_index(surface.impl, index.cuint)
     return surface
 
-# 2664 lines
+# 2681 lines
 

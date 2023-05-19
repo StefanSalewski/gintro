@@ -529,6 +529,7 @@ graphene.Ray
 graphene.Euler
 cairo.Rectangle
 cairo.RectangleInt
+cairo.Matrix
 gsk.RoundedRect
 glib.Mutex
 glib.Cond
@@ -2702,6 +2703,8 @@ proc keymapKeyArrayToSeq(s: ptr KeymapKey; n: int):  seq[KeymapKey] =
 """ % [$StringArrayEntries]
 
 proc writeStruct(info: GIStructInfo) =
+  if gBaseInfoGetName(info) == "Matrix" and moduleNamespace == "cairo":
+    return # https://discourse.gnome.org/t/gir-definition-of-cairo-matrix/15393
 
   if gBaseInfoGetName(info) in ["_ContextMenu", "_ContextMenuItem"]:
     return # WebKit2WebExtension-4.0.gir bug
